@@ -29,7 +29,7 @@ namespace SPHERE.Blockchain
 
         }
 
-        public void RelpaceBlock(string blockID, string encryptedContact, string signature)
+        public void ReplaceBlock(string blockID, string encryptedContact, string signature)
         {
             Block block = GetBlock(blockID);
             if (block == null)

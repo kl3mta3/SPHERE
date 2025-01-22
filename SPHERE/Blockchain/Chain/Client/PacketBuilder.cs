@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using static SPHERE.Blockchain.Client.Packet;
-using static SPHERE.Client.PacketBuilder;
+
 
 namespace SPHERE.Client
 {

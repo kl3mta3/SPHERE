@@ -16,7 +16,7 @@ namespace SPHERE.Blockchain.Client
         public string Signature;
 
 
-        public class PacketHeader()
+        public class PacketHeader
         {
             public string NodeId { get; set; }
             public string IPAddress { get; set; }

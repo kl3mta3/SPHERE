@@ -125,7 +125,7 @@ namespace SPHERE.Client
                 while (client.Connected)
                 {
                     // Read the incoming message using the PacketReader
-                    string message = reader.ReadMessage();
+                    string message = await reader.ReadMessage();
                     Console.WriteLine($"Received message: {message}");
 
 

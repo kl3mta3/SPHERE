@@ -17,7 +17,7 @@ namespace SPHERE.Client
 
             }
 
-            public string ReadMessage()
+            public async Task<string>  ReadMessage()
             {
                 Byte[] buffer;
                 var length = ReadInt32();
