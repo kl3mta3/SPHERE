@@ -1,83 +1,132 @@
-# SPHERE: Secure Peer-to-Peer Hosted Encryption Record Exchange
+# SPHERE Project
 
-## Overview
-SPHERE (Secure Peer-to-Peer Hosted Encryption Record Exchange) is a blockchain-powered platform designed to give users total control over their contact information and communications. It enables users to securely store contact data on the blockchain, share it selectively, and allow encrypted messaging that ensures only the intended recipient can access the content.
-
-SPHERE also empowers developers to build innovative applications on top of its blockchain, fostering a decentralized ecosystem for social interactions and data management.
+Welcome to the SPHERE Project repository! SPHERE (Secure Peer-to-Peer Hosted Encryption Record Exchange) is a robust framework designed for secure, decentralized communication and data sharing. The framework prioritizes user privacy, data integrity, and seamless encryption management while allowing for versatile application development.
 
 ---
+## (Active Work in Progress)
 
 ## Features
-- **User-Centric Data Privacy**:
-  - Store contact information securely on the blockchain.
-  - Control access to your data with customizable permissions.
 
-- **End-to-End Encrypted Messaging**:
-  - Enable trusted contacts to send you fully encrypted messages.
-  - Messages are stored securely and can only be decrypted by the intended recipient.
+### 1. **Secure Contact List Management**
+- Unified contact management across all applications built on the SPHERE framework.
+- Users have full control over their contact information and can modify it as needed.
+- Peer-to-peer (P2P) architecture ensures data is not stored on centralized servers.
 
-- **Application Ecosystem**:
-  - Allow developers to build apps that interact with SPHERE's blockchain.
-  - Enable seamless migration of followers and connections across platforms.
+### 2. **End-to-End Encryption**
+- All communications are encrypted using robust algorithms, ensuring privacy and security.
+- Each communication session uses unique, dynamically generated keys.
 
-- **Verification Without Access**:
-  - Verify data integrity using cryptographic hashes without exposing the actual content.
+### 3. **Decentralized Networking**
+- Utilizes a Distributed Hash Table (DHT) for node discovery and data exchange.
+- Eliminates single points of failure and enhances system resilience.
 
-- **Freedom of Speech and Security**:
-  - Ensure messages remain encrypted outside third-party platforms, maintaining privacy and freedom of expression.
+### 4. **Modular Design**
+- Highly extensible with components for encryption, authentication, and data handling.
+- Developers can easily add new features or adapt the framework to specific use cases.
 
----
+### 5. **Digital Signature Verification**
+- Ensures the integrity and authenticity of messages and files exchanged.
+- Prevents tampering and verifies sender identity.
 
-## Architecture
-SPHERE is composed of several key modules:
+### 6. **Built-in Encryption Record Management**
+- Encryption records are securely stored and shared only with authorized parties.
+- Prevents unauthorized access and data leaks.
 
-1. **Blockchain Layer**:
-   - Serves as the foundation for storing contact information and encrypted messages.
-   - Provides a decentralized, immutable ledger for all operations.
-
-2. **Access Control Module**:
-   - Manages permissions for who can view or interact with your data.
-   - Implements secure sharing mechanisms to enforce user-defined rules.
-
-3. **Encryption Framework**:
-   - Handles all cryptographic operations, including encryption, decryption, and digital signature generation.
-   - Modules include:
-     - **KeyGenerator**: Generates secure cryptographic keys.
-       - File: `KeyGenerator.cs`
-     - **SignatureGenerator**: Creates digital signatures to validate data authenticity.
-       - File: `SignatureGenerator.cs`
-     - **Encryption**: Performs encryption and decryption operations.
-       - File: `Encryption.cs`
-
-4. **Integration Layer**:
-   - Provides APIs and tools for developers to build applications on top of SPHERE.
-   - Ensures compatibility with third-party platforms while maintaining data security.
+### 7. **High Scalability**
+- Optimized for performance, even in large-scale, distributed environments.
+- Lightweight components ensure low resource consumption.
 
 ---
 
-## Usage
+## Technical Breakdown
 
-1. **Secure Contact Management**:
-   - Store and share your contact information securely on the blockchain.
+### Core Components
 
-2. **Encrypted Communication**:
-   - Enable selected contacts to send messages that only you can decrypt.
+#### 1. **Distributed Hash Table (DHT)**
+The DHT is the backbone of the SPHERE network, providing efficient node discovery and data exchange. Each node maintains a local table of other nodes, enabling:
+- Fast lookup of peers and resources.
+- Redundancy through distributed storage.
 
-3. **Application Development**:
-   - Utilize SPHERE's blockchain for building decentralized applications with integrated contact and messaging functionality.
+#### 2. **Encryption Module**
+The `Encryption.cs` file contains:
+- Symmetric encryption for message confidentiality.
+- Asymmetric encryption for key exchange and authentication.
+- A hybrid approach that combines the strengths of both.
 
-4. **Data Integrity Verification**:
-   - Verify the integrity of contact data using cryptographic hashes without exposing sensitive information.
+#### 3. **Digital Signature System**
+Implemented in `SignatureGenerator.cs`:
+- Generates and verifies cryptographic signatures.
+- Protects data integrity and authenticates communication origins.
+
+#### 4. **Packet Management**
+- `Packet.cs`: Defines the structure of data packets used in communication.
+- `PacketBuilder.cs` and `PacketReader.cs`: Handle serialization and deserialization of packets, ensuring efficient data exchange.
+
+#### 5. **Credential and Key Management**
+- `CredentialManager.cs` ensures secure handling of user credentials.
+- `KeyGenerator.cs` dynamically generates cryptographic keys for secure sessions.
+
+#### 6. **Node and Client Management**
+- `Node.cs`: Defines the core behavior of SPHERE nodes, including message routing and data storage.
+- `Client.cs`: Manages client interactions, providing an interface for user applications to interact with the network.
+
+#### 7. **Block Contact System**
+- `BlockContact.cs`: Implements a mechanism for storing contact info in a secure way and provide access only to those with provided access.
+
+### Security Features
+
+#### End-to-End Encryption
+- Ensures that only intended recipients can decrypt messages.
+- Uses ephemeral session keys to minimize the risk of long-term key exposure.
+
+#### Secure Key Exchange
+- Diffie-Hellman key exchange for secure initial handshake.
+- Keys are never transmitted in plaintext, ensuring confidentiality.
+
+#### Authentication and Integrity
+- Digital signatures verify the sender's identity and ensure data has not been tampered with.
+- Hash-based Message Authentication Code (HMAC) provides an additional layer of integrity.
+
+#### Resistance to Attacks
+- Decentralized architecture mitigates risks associated with single points of failure.
+- Replay attacks are prevented through timestamped messages and nonce usage.
 
 ---
+
+## Getting Started
+
+### Prerequisites
+- Visual Studio 2022 or later.
+- .NET Core SDK.
+- A basic understanding of C# and distributed systems.
+
+### Installation
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/SPHERE.git
+   ```
+2. Open `SPHERE.sln` in Visual Studio.
+3. Build the solution to restore dependencies.
+4. Start the project by running the desired module or application.
+
+---
+
+## Contributing
+We welcome contributions to SPHERE! If you have ideas for improvements or want to report issues, feel free to contact us. 
+
+---
+
 
 ## License
 This project is licensed under the [GPLv3 License](LICENSE). See the `LICENSE` file in the repository for more details.
 
 ---
 
-## Contributing
-We welcome contributions to SPHERE! If you have ideas for improvements or want to report issues, feel free to contact us. 
+## Acknowledgments
+- Inspired by the need for secure and decentralized communication.
+- Special thanks to contributors and the open-source community for their support.
+
+For questions or feedback, feel free to open an issue or contact the repository maintainer.
 
 ---
 
