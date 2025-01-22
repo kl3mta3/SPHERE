@@ -12,7 +12,7 @@ namespace SPHERE.Blockchain
     {
         private readonly Dictionary<string, Node> Peers = new Dictionary<string, Node>();
         public NodeHeader Header;
-
+        private DHT chain;
 
 
 
@@ -31,19 +31,16 @@ namespace SPHERE.Blockchain
             return Peers.ContainsKey(nodeId) ? Peers[Header.NodeId] : null;
         }
 
-
     }
-
-
-
 
     public class NodeHeader
     {
 
         public string NodeId { get; set; }
         public string NodeIP { get; set; }
-        public string NodePort { get; set; }
+        public int NodePort { get; set; }
         public string PreviousNodesHash { get; set; }
+        public string PublicSignatureKey {  get; set; }
 
 
     }

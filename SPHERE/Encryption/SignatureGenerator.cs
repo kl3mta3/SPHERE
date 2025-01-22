@@ -10,7 +10,7 @@ namespace SPHERE
 {
     public class SignatureGenerator
     {
-        public static string SignBlock(string blockId)
+        public static string CreateBlockSignature(string blockId)
         {
             // Convert the block ID to bytes
             byte[] blockBytes = Encoding.UTF8.GetBytes(blockId);
@@ -19,6 +19,21 @@ namespace SPHERE
             using (var ecdsa = ECDsa.Create())
             {
                 ecdsa.ImportPkcs8PrivateKey(Convert.FromBase64String(Encryption.RetrieveKeyFromContainer("PRISIGK")), out _);
+                byte[] signature = ecdsa.SignData(blockBytes, HashAlgorithmName.SHA256);
+
+                // Return the signature as a Base64-encoded string
+                return Convert.ToBase64String(signature);
+            }
+        }
+        public static string CreateNodeSignature(string nodeId)
+        {
+            // Convert the block ID to bytes
+            byte[] blockBytes = Encoding.UTF8.GetBytes(nodeId);
+
+            // Create the signature using the private key
+            using (var ecdsa = ECDsa.Create())
+            {
+                ecdsa.ImportPkcs8PrivateKey(Convert.FromBase64String(Encryption.RetrieveKeyFromContainer("PRINODK")), out _);
                 byte[] signature = ecdsa.SignData(blockBytes, HashAlgorithmName.SHA256);
 
                 // Return the signature as a Base64-encoded string

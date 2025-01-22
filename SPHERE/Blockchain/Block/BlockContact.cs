@@ -96,7 +96,5 @@ namespace SPHERE.Blockchain
             public string Name { get; set; }
         }
 
-
-
     }
 }

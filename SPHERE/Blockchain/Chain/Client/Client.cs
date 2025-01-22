@@ -10,12 +10,16 @@ namespace SPHERE.Client
 {
     public class Client
     {
+        private const int StartPort = 5000;                     // Start of the port range
+        private const int EndPort = 6000;                       // End of the port range
         public TcpClient client;
+        public TcpListener Listener;
         public PacketBuilder packetBuilder;
         public PacketReader packetReader;
 
         public string clientIP ;
-        public int clientPort;
+        public int clientListenerPort=0;                             //Port for listening to incoming messages Should be static and provided to other clinets 
+        public int clientCommunicationPort;
 
 
         public static async Task SendMessageToPeerAsync(string ip, int port, string message)
@@ -39,21 +43,70 @@ namespace SPHERE.Client
             }
         }
 
-
-        public static async Task StartServerAsync(int port)
+        public static void SetRandomListenerPort(Client client)
         {
-            TcpListener server = new TcpListener(IPAddress.Any, port);
-            server.Start();
-            Console.WriteLine($"Async server is listening on port {port}");
+
+            int port = FindAvailablePort();
+
+            client.clientListenerPort = port;
+
+
+        }
+
+        public static int FindAvailablePort()
+        {
+            for (int port = StartPort; port <= EndPort; port++)
+            {
+                if ( IsPortAvailableAsync(port))
+                {
+                    return port;
+                }
+
+
+            }
+            throw new Exception("No available ports found in the specified range.");
+        }
+
+        private static bool IsPortAvailableAsync(int port)
+        {
+            
+                try
+                {
+                    using (var listener = new TcpListener(IPAddress.Any, port))
+                    {
+                        listener.Start();
+                        listener.Stop();
+                        return true;
+                    }
+                }
+                catch (SocketException)
+                {
+                    return false;
+                }
+           
+        }
+
+        public static async Task StartClientListenerAsync(Client client)
+        {
+            
+            if(client.clientListenerPort==0)
+            {
+                client.clientListenerPort = FindAvailablePort();
+
+            }
+            
+            client.Listener = new TcpListener(IPAddress.Any, client.clientListenerPort);
+            client.Listener.Start();
+            Console.WriteLine($"Async server is listening on port {client.clientListenerPort}");
 
             while (true)
             {
                 try
                 {
-                    TcpClient client = await server.AcceptTcpClientAsync();
-                    Console.WriteLine($"Connection established with {client.Client.RemoteEndPoint}");
+                    client.client = await client.Listener.AcceptTcpClientAsync();
+                    Console.WriteLine($"Connection established with {client.client.Client.RemoteEndPoint}");
 
-                    _ = HandleClientAsync(client); // Fire-and-forget the client handler
+                    _ = HandleClientAsync(client.client); 
                 }
                 catch (Exception ex)
                 {
@@ -61,7 +114,6 @@ namespace SPHERE.Client
                 }
             }
         }
-
 
         private static async Task HandleClientAsync(TcpClient client)
         {
@@ -76,7 +128,11 @@ namespace SPHERE.Client
                     string message = reader.ReadMessage();
                     Console.WriteLine($"Received message: {message}");
 
-                    // You can handle the message further here, e.g., log, forward, or process it.
+
+                    // message needs to be sent to node processed encrypted. 
+
+                    //(Missing Fucntionality) will add. 
+                  
                 }
             }
             catch (Exception ex)
