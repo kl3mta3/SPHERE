@@ -1,6 +1,8 @@
 # SPHERE Project
 
-Welcome to the SPHERE Project repository! SPHERE (Secure Peer-to-Peer Hosted Encryption Record Exchange) is a robust framework designed for secure, decentralized communication and data sharing. The framework prioritizes user privacy, data integrity, and seamless encryption management while allowing for versatile application development.
+Welcome to the SPHERE Project repository! 
+
+SPHERE (Secure Peer-to-Peer Hosted Encryption Record Exchange) is a robust framework designed for secure, decentralized communication and data sharing. The framework prioritizes user privacy, data integrity, and seamless encryption management while allowing for versatile application development.
 
 ---
 ## (Active Work in Progress)
