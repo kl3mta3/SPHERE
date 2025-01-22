@@ -14,7 +14,7 @@ namespace SPHERE
     {
         internal static string ServiceAccountName = AppIdentifier.GetOrCreateAppIdentifier();
 
-        public static void ServiceAccountLogon()
+        public static void ServiceAccountLogon()   // Starts or creats the Service Account
         {
             try
             {
@@ -95,10 +95,15 @@ namespace SPHERE
             throw new InvalidOperationException($"Failed to authenticate service account '{username}' with all provided passwords.");
         }
 
-        public static void ChangeServiceAccountPassword(string accountName, string newPassword)
+        public static void ChangeServiceAccountPassword(string accountName, string newPassword, string currentPassword) //used to change the service account password.
             {
                 try
                 {
+                    if (!CredentialManager.VerifyCurrentPassword(AppIdentifier.GetOrCreateAppIdentifier(), currentPassword))
+                    {
+                        throw new InvalidOperationException($"Failed to verify current credential.");
+                    
+                    }
                     using (var context = new PrincipalContext(ContextType.Machine))
                     {
                         // Find the service account

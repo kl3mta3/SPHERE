@@ -20,6 +20,8 @@ namespace SPHERE
         private static extern void CredFree(IntPtr credentialPtr);
         private const uint CRED_TYPE_GENERIC = 1;
 
+
+        //Base structure of a Credential.
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         private struct Credential
         {
@@ -46,6 +48,7 @@ namespace SPHERE
             public string UserName;
         }
 
+        //Returns the username and password [] containing the current and previous 5 passwords.
         public static (string Username, string[] Password) GetOrCreateCredentials(string target)
         {
             var username = "";
@@ -75,6 +78,7 @@ namespace SPHERE
 
         }
 
+        //Saves a credential.  (Primarially used for the first set up of the service account and initial save of the Credentials.  For existing Credentials CycleandUpdate is prefered. As the Service Account relies on cycling passwords to maintain a smaller attack window ) 
         public static void SaveCredential(string target, string username, string[] password)
         {
 
@@ -131,6 +135,7 @@ namespace SPHERE
             }
         }
 
+        //Used To change the password for the service account upon use and update the credential cycling the passwords down.(We keep the last 5 incase there is an error in updating it and new is not added correctly we ensure we have the previous ones it would still be set to.)
         public static void CycleAndUpdateCredentialPassword(string target)
         {
             IntPtr currentBlob = IntPtr.Zero;
@@ -139,18 +144,22 @@ namespace SPHERE
             IntPtr lastBlobThree = IntPtr.Zero;
             IntPtr lastBlobFour = IntPtr.Zero;
             IntPtr lastBlobFive = IntPtr.Zero;
+            uint credentialBlobLength=0;
             string username = "";
+            Credential existingCredential;
 
             try
             {
                 // Retrieve existing credential if it exists
                 if (CredRead(target, CRED_TYPE_GENERIC, 0, out IntPtr credentialPtr))
                 {
-                    var existingCredential = (Credential)Marshal.PtrToStructure(credentialPtr, typeof(Credential));
+                     existingCredential = (Credential)Marshal.PtrToStructure(credentialPtr, typeof(Credential));
 
                     // Preserve current and historical blobs
                     currentBlob = existingCredential.CredentialBlob;
+
                     lastBlob = existingCredential.CredentialBlobLast;
+                    credentialBlobLength = existingCredential.CredentialBlobSize;
                     lastBlobTwo = existingCredential.CredentialBlobLastTwo;
                     lastBlobThree = existingCredential.CredentialBlobLastThree;
                     lastBlobFour = existingCredential.CredentialBlobLastFour;
@@ -163,8 +172,8 @@ namespace SPHERE
                 // Generate a new password
                 var newPassword = Guid.NewGuid().ToString();
 
-                // Change the password on the service account
-                ServiceAccountManager.ChangeServiceAccountPassword(username, newPassword);
+                // Change the password on the service account.  (requires the most recent current password.) 
+                ServiceAccountManager.ChangeServiceAccountPassword(username, newPassword, Marshal.PtrToStringUni(currentBlob, (int)(credentialBlobLength / 2)));
 
                 // Encrypt the password before adding to Credential
                 byte[] newPasswordBytes = Encoding.Unicode.GetBytes(newPassword);
@@ -215,6 +224,7 @@ namespace SPHERE
             }
         }
 
+        //User to get the Credentials for logging on to the serviceAccount. 
         public static (string Username, string[] Passwords) GetCredential(string target)
         {
             if (!CredRead(target, CRED_TYPE_GENERIC, 0, out IntPtr credentialPtr))
@@ -262,6 +272,7 @@ namespace SPHERE
             }
         }
 
+        //Checks to verify a Credential Exists
         public static bool CredentialExists(string target)
         {
             IntPtr credentialPtr = IntPtr.Zero;
@@ -279,6 +290,7 @@ namespace SPHERE
             }
         }
 
+        //Used if a credential is needed to be deleted. 
         public static void DeleteCredential(string target)
         {
             if (!CredDelete(target, CRED_TYPE_GENERIC, 0))
@@ -287,6 +299,29 @@ namespace SPHERE
             }
 
             Console.WriteLine($"Credential for '{target}' deleted successfully.");
+        }
+
+        //Used to verify the current service Account Password (Without revealing it)
+        public static bool VerifyCurrentPassword(string target, string currnetPassword)
+        {
+            if (CredentialManager.CredentialExists(target))
+            {
+                var (Username, Password) = CredentialManager.GetCredential(target);
+                var _currentPassword=Password[0];
+                if (_currentPassword == currnetPassword)
+                {
+                    return true;
+                }
+                else
+                { 
+                    return false; 
+                }
+            }
+            else
+            {
+
+                return false;
+            }
         }
     }
 }
