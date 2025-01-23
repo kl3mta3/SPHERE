@@ -5,8 +5,20 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace SPHERE
+namespace SPHERE.Configure
 {
+    /// <summary>
+    /// The Credential Manager is intended to Store and manage the Service Account Username and Password Dynamically.
+    /// 
+    /// The Password for the Service account is changed and cycled each time it is accessed. This reduces the attack window.
+    /// Changing the password dynamically often has a small change of an out of sync issue where the cred will be updated but the password will not have updated.
+    /// To counter this we store the current password and the last 5 used.  If we encounter a failed password, we check the most resent working backwards till we 
+    /// find the last working password. Becase we used it, it will be reset resolving the out of sync issue.
+    /// 
+    /// Because the Service Account is used to store needed encryption keys in containers locked to the application as long as an attacker can not gain access to 
+    /// the service account password, it will be very dificult to gain access to the private keys stored under the account in CNG Containers.
+    /// 
+    /// </summary>
     public static class CredentialManager
     {
         [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]

@@ -7,9 +7,29 @@ using System.Text;
 using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
 using SPHERE;
+using System.Security.Cryptography;
 
-namespace SPHERE
+namespace SPHERE.Configure
 { 
+
+    /// <summary>
+    /// The Local Service Account(LSA) is used to allow for storing the Encryption keys and important data in CNG Containers that are bound to the specific service account. 
+    /// 
+    /// Traditional CNG containers are bound to the user of the computer. This secures them behind their log in, but the containers would be open to anyother app on the users account. 
+    /// (they coudnt be accessed for copy if export is turned off) however, a malicious app could gain access and sign an malicious block edit or add. By restricting the containers to 
+    /// a service account and then restricting that access to the app alone, we reduce the attack surface drasticlly. 
+    /// 
+    /// The LSA is created using a dynamic username and password.  Passwords are changed every time it is accessed. (which is at log on or creation most likely, or password resets)
+    /// 
+    /// Developers will only need to use ServiceAccountLogon()  it will check if an accout exists and create one if it doesnt. 
+    /// The service account name is created and stored in the registry while the account name and passoword are managed by the Credential Manager to rotate passwords and keep them in sync. 
+    /// 
+    /// The Service Account Provides access to the Keys stored locally in a manner that allows them to never be exposed. 
+    /// Because the Service account is more secure export of containers can be allowed, IN RARE HIGHLY CONTROLED SITUATIONS, FOR BACK UP. (Not Yet Implemented.) It would be best before this to implament Dynamic Container Names.
+    /// 
+    /// If access to this account is lost, the CNG Containers, and thus the keys are locked away inaccessable. Though you would still have the semi private key and BlockId for the contact so you could share and see it,  Editing it, or proving ownership would be impossible. 
+    /// 
+    /// </summary>
     public static class ServiceAccountManager
     {
         internal static string ServiceAccountName = AppIdentifier.GetOrCreateAppIdentifier();
@@ -134,6 +154,69 @@ namespace SPHERE
 
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool CloseHandle(IntPtr hObject);
+
+        // The Encryption Keys are stored in Local CNG Containers.  Those containers are only accessable by the local Service account the App Creates and runs on. 
+        public static void StoreKeyInContainer(string key, string keyName)
+        {
+            string AppId = AppIdentifier.GetOrCreateAppIdentifier();
+
+            // Ensure the service account exists
+            ServiceAccountManager.ServiceAccountLogon();
+
+            try
+            {
+                // Convert the key from Base64
+                byte[] convertedKey = Convert.FromBase64String(key);
+
+                // Define key creation parameters
+                var creationParameters = new CngKeyCreationParameters
+                {
+                    ExportPolicy = CngExportPolicies.None, // Prevents key export
+                    KeyUsage = CngKeyUsages.Signing | CngKeyUsages.Decryption // Restrict to signing and decryption
+                };
+
+                // Create the key
+                using var cngKey = CngKey.Create(CngAlgorithm.ECDsaP256, keyName, creationParameters);
+
+                // Store the application-specific identifier
+                cngKey.SetProperty(new CngProperty("AppId", Encoding.UTF8.GetBytes(AppId), CngPropertyOptions.None));
+
+                // Optional: Store additional data securely within the container
+                cngKey.SetProperty(new CngProperty("KeyData", convertedKey, CngPropertyOptions.None));
+
+                Console.WriteLine("Private key stored securely with app-specific restrictions.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error storing private key: {ex.Message}");
+                throw;
+            }
+        }
+        public static string RetrieveKeyFromContainer(string keyName)
+        {
+            try
+            {
+                // Open the key from the container
+                using var cngKey = CngKey.Open(keyName);
+
+                // Retrieve the application-specific identifier (optional)
+                var appIdProperty = cngKey.GetProperty("AppId", CngPropertyOptions.None);
+                string appId = Encoding.UTF8.GetString(appIdProperty.GetValue());
+                Console.WriteLine($"Retrieved AppId: {appId}");
+
+                // Retrieve the stored key data
+                var keyDataProperty = cngKey.GetProperty("KeyData", CngPropertyOptions.None);
+                string keyData = Convert.ToBase64String(keyDataProperty.GetValue());
+
+                return keyData;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error retrieving key from container: {ex.Message}");
+                throw;
+            }
+        }
+
     }
 
     public static class AccountRestrictionManager

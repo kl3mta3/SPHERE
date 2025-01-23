@@ -11,6 +11,7 @@ using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using System.Web;
 using SPHERE;
+using SPHERE.Configure;
 
 namespace SPHERE.Blockchain
 {
@@ -20,6 +21,18 @@ namespace SPHERE.Blockchain
         RSA2048,
         ECDsa
     }
+
+    /// <summary>
+    /// The Block exists to store the encrypted contact in a decenterilized manner. 
+    /// 
+    /// Block editing. 
+    /// Blocks are signed with the Private Signature Key. This key is attached to the user that created the block.  Block edits that are recievd by a node, can have attached signatures. 
+    /// if the signature is valid the node will accept the edit and update the node or pass on the request, updating it to be verified by the node. 
+    /// (Request could not be addded to verified by so much of the network and keep bouncing till that point and then updates will happen)
+    /// The block edit request would be just the signature for approval and the already encryptedcontact, to which the old contact block is replaced as a while.  
+    /// 
+    ///
+    /// </summary>
     public class Block
     {
         public BlockHeader Header { get; set; }                         // Header containing block metadata
@@ -30,7 +43,8 @@ namespace SPHERE.Blockchain
         public class BlockHeader
         {
             public string BlockId { get; set; }                             // Unique identifier for the block
-            public string PreviousHash { get; set; }                        // Hash of the previous block
+            public string BlockVersion {  get; set; }                       // Block Versions allow for deserialvation of different blocks as the platform evolves.
+            public string ContactVersion { get; set; }                      // Contact versions would allow for deserialation of different contact styles as the platform evolves must be on the contact and the block.
             public DateTime BlockCreationTime { get; set; }                 // Creation timestamp
             public DateTime LastUpdateTime { get; set; }                    // Timestap of last Update to the block by validated user.
             public EncryptionAlgorithm EncryptionAlgorithm { get; set; }    // Algorithm used for encryption (e.g. AES256, RSA2048, ECDsa)
@@ -38,7 +52,7 @@ namespace SPHERE.Blockchain
             public string BlockHash { get; set; }                           // Hash of the block for integrity
             public string PublicSignatureKey { get; set; }                  // This is the public key for verifying the signature of commits and the user.
             public string GNCCertificate { get; set; }                      // GNC Container Certificate for the Private Key, Used to validate application used correct security when storing privatekey. 
-
+            public string PreviousHash { get; set; }                        // Hash of the previous block
 
             // Calculates the hash for the block
             public string CalculateBlockHash()
@@ -63,8 +77,8 @@ namespace SPHERE.Blockchain
                     LastUpdateTime = creationTime,
                     EncryptionAlgorithm = encryptionAlgorithm,
                     KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
-                    PublicSignatureKey = Encryption.RetrieveKeyFromContainer("PUBSIGK"),
-                    GNCCertificate = Encryption.RetrieveKeyFromContainer("GNCC")
+                    PublicSignatureKey = ServiceAccountManager.RetrieveKeyFromContainer("PUBSIGK"),
+                    GNCCertificate = ServiceAccountManager.RetrieveKeyFromContainer("GNCC")
                 };
 
                 // Encrypt and store contact data
@@ -77,7 +91,7 @@ namespace SPHERE.Blockchain
                 {
                     Header = header,
                     EncryptedContact = encryptedContactData,
-                    EncryptedLocalSymmetricKey = Encryption.RetrieveKeyFromContainer("ELSK"),
+                    EncryptedLocalSymmetricKey = ServiceAccountManager.RetrieveKeyFromContainer("ELSK"),
                 };
             }
 

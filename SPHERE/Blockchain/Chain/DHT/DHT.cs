@@ -1,5 +1,6 @@
 ﻿
 using SPHERE;
+using SPHERE.Configure;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,6 +9,17 @@ using System.Threading.Tasks;
 
 namespace SPHERE.Blockchain
 {
+    /// <summary>
+    /// The Distributed Hash Table.
+    /// 
+    /// The DHT is the Blockchain it is the nodes record of the chain, either all or its shard(Piece).
+    /// 
+    /// it is a Dictonary of Blocks with a key of their ID.
+    /// 
+    /// Blocks can be added to the DHT and edited, That is all. 
+    /// 
+    /// It exists exactly the same in all forms across all devices whether they have a shard or the whole Chain.
+    /// </summary>
     public class DHT
     {
 
@@ -21,12 +33,6 @@ namespace SPHERE.Blockchain
         public Block GetBlock(string blockID)
         {
             return _blocks.ContainsKey(blockID) ? _blocks[blockID] : null;
-        }
-
-        public void RemoveBlock(string blockID)
-        {
-            _blocks.Remove(blockID);
-
         }
 
         public void ReplaceBlock(string blockID, string encryptedContact, string signature)

@@ -13,8 +13,24 @@ using System.IO;
 using SPHERE.Blockchain;
 using System.Security.AccessControl;
 
-namespace SPHERE
+namespace SPHERE.Configure
 {
+    /// <summary>
+    /// Encryption is vital for the success of the system.  
+    /// We use need to encrypt the contact with the Local Symmetric Key(LSK).
+    /// We then need to encrypt the LSK with the Semi Public Key(SPK). This is added to the block. 
+    /// 
+    /// Only if provided with the SPK can a node or user decrypt the LSK and then the contact in the block.
+    /// 
+    /// We also encrpyt message to other nodes with thier public Node Signature key 
+    /// We Decrypt message sent to the node that was encrypted with its public Node Signature Key. 
+    /// 
+    /// Contacts can also be used to encrypt a message with the Personal Key (PublicCommunicationKey) that allows only the contact to read it. 
+    /// 
+    /// The application used by a user can access messages sent them and decrypt it with their Private Communication key.
+    /// 
+    ///
+    /// </summary>
     // Encryption/Decryption helper classes
     public static class Encryption
     {
@@ -114,67 +130,7 @@ namespace SPHERE
 
         }
 
-        // The Encryption Keys are stored in Local CNG Containers.  Those containers are only accessable by the local Service account the App Creates and runs on. 
-        public static void StoreKeyInContainer(string key, string keyName)
-        {
-            string AppId = AppIdentifier.GetOrCreateAppIdentifier();
 
-            // Ensure the service account exists
-            ServiceAccountManager.ServiceAccountLogon();
-
-            try
-            {
-                // Convert the key from Base64
-                byte[] convertedKey = Convert.FromBase64String(key);
-
-                // Define key creation parameters
-                var creationParameters = new CngKeyCreationParameters
-                {
-                    ExportPolicy = CngExportPolicies.None, // Prevents key export
-                    KeyUsage = CngKeyUsages.Signing | CngKeyUsages.Decryption // Restrict to signing and decryption
-                };
-
-                // Create the key
-                using var cngKey = CngKey.Create(CngAlgorithm.ECDsaP256, keyName, creationParameters);
-
-                // Store the application-specific identifier
-                cngKey.SetProperty(new CngProperty("AppId", Encoding.UTF8.GetBytes(AppId), CngPropertyOptions.None));
-
-                // Optional: Store additional data securely within the container
-                cngKey.SetProperty(new CngProperty("KeyData", convertedKey, CngPropertyOptions.None));
-
-                Console.WriteLine("Private key stored securely with app-specific restrictions.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error storing private key: {ex.Message}");
-                throw;
-            }
-        }
-        public static string RetrieveKeyFromContainer(string keyName)
-        {
-            try
-            {
-                // Open the key from the container
-                using var cngKey = CngKey.Open(keyName);
-
-                // Retrieve the application-specific identifier (optional)
-                var appIdProperty = cngKey.GetProperty("AppId", CngPropertyOptions.None);
-                string appId = Encoding.UTF8.GetString(appIdProperty.GetValue());
-                Console.WriteLine($"Retrieved AppId: {appId}");
-
-                // Retrieve the stored key data
-                var keyDataProperty = cngKey.GetProperty("KeyData", CngPropertyOptions.None);
-                string keyData = Convert.ToBase64String(keyDataProperty.GetValue());
-
-                return keyData;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error retrieving key from container: {ex.Message}");
-                throw;
-            }
-        }
 
         // Local Symmetric Keys(LSA) are used to Encrypt a contact. They are encrypted with a Semi Pulic Key(SPK) so only someone with the SBK can decrypt the LSK and in turn the contact. 
         public static string EncryptLocalSymmetricKey(string localSymmetricKey, string semiPublicKey)
