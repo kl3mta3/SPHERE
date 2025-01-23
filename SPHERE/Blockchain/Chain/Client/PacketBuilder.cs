@@ -10,6 +10,13 @@ using static SPHERE.Blockchain.Client.Packet;
 
 namespace SPHERE.Client
 {
+
+    /// <summary>
+    /// Used to build a packet by the node to send to the client for sending.  
+    /// 
+    /// There are a few typs of packets and they are converted into an opcode for the TCP transport. 
+    /// 
+    /// </summary>
     public class PacketBuilder
     {
         public enum PacketType

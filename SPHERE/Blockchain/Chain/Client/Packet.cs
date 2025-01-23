@@ -7,7 +7,12 @@ using System.Threading.Tasks;
 namespace SPHERE.Blockchain.Client
 {
 
-
+    /// <summary>
+    /// A packet is just what it says it is created by a node to be sent by the client to another node. 
+    /// The signature is made with the nodes private signature. 
+    /// the reciever can use this and the included node ID and public key to verify the signature. 
+    /// 
+    /// </summary>
     public class Packet
     {
 

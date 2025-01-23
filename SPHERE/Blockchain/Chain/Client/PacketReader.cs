@@ -7,6 +7,14 @@ using System.Threading.Tasks;
 
 namespace SPHERE.Client
 {
+    /// <summary>
+    /// The PacketReader is used to read incoming Packets. 
+    /// 
+    /// At the moment it is jsut reading a message this is missing its fucntionality as it is next to finish. 
+    /// 
+    /// The packet reader will convert the steam back into a serilized pack once that happens it can use the packet type to process the packet accourdingly.
+    /// 
+    /// </summary>
     public  class PacketReader: BinaryReader
     {
             private NetworkStream _stream;

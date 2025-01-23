@@ -8,6 +8,18 @@ using System.Threading.Tasks;
 
 namespace SPHERE.Client
 {
+
+    /// <summary>
+    /// The client is a standard TCP/IP listener. 
+    /// We use STUN (Session Traversal Utilities for NAT) to get a port and Ip for the listener to allow the client to connect and listen to the outside world without portfowarding.
+    /// 
+    /// Sent Packets are sent dynamically so no other work is needed,
+    /// 
+    /// The client will get packets from the Node and send them to the requested address
+    /// Or the client listener will get Packets from other Nodes and send them to the Packet reader to be processed. 
+    /// 
+    /// 
+    /// </summary>
     public class Client
     {
         private const int StartPort = 5000;                     // Start of the port range
