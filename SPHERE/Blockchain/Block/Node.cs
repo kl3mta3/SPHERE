@@ -58,6 +58,7 @@ namespace SPHERE.Blockchain
         public Peer Peer;
         private Client Client;
         private DHT DHT;
+        private readonly int MaxPeers = 25;
 
         public static Node CreateNode(Client client, NodeType nodeType)
         {
@@ -201,25 +202,23 @@ namespace SPHERE.Blockchain
 
         public async Task BroadcastEndpointToPeers(Node node)
         {
-            // Validate input
             if (node == null)
             {
                 throw new ArgumentNullException(nameof(node), "Node cannot be null.");
             }
+
             var tasks = new List<Task>();
 
-            // Build and serialize the packet
-            Packet packet = PacketBuilder.BuildPacket(node, "Update My EndPoint Info", PacketBuilder.PacketType.PeerUpdate);
+            // Build and serialize the packet with a TTL of 1000
+            Packet packet = PacketBuilder.BuildPacket(node, "Update My EndPoint Info", PacketBuilder.PacketType.PeerUpdate, 1000);
             byte[] data = PacketBuilder.SerializePacket(packet);
 
-            // Lock the Peers collection if it can be modified elsewhere
             lock (Peers)
             {
                 foreach (var peer in Peers.Values)
                 {
                     string key = peer.PublicSignatureKey;
 
-                    // Validate the public signature key
                     if (string.IsNullOrEmpty(key))
                     {
                         Console.WriteLine($"Skipping peer with missing or invalid PublicSignatureKey.");
@@ -230,18 +229,25 @@ namespace SPHERE.Blockchain
                     byte[] secureData = Encryption.EncryptWithPersonalKey(data, key);
                     string signature = SignatureGenerator.SignByteArray(secureData);
 
-                    // Add the task for broadcasting to this peer
-                    tasks.Add(SafeTask(() =>
-                            RetryAsync(() => SendPacketToPeerAsync(
+                    // Add a task to send the packet and update the trust score on success
+                    tasks.Add(SafeTask(async () =>
+                    {
+                        bool success = await RetryAsync(() => SendPacketToPeerAsync(
                             node.Client.clientIP.ToString(),
                             node.Client.clientListenerPort,
                             secureData,
-                            signature 
-                    ))));
+                            signature
+                        ));
 
-                    // Reward the recipient with trust score for a valid update to peers
-                    peer.UpdateTrustScore(peer, +2); // Reward 2 points
- 
+                        if (success)
+                        {
+                            // Only update trust score if the packet was successfully delivered
+                            lock (stateLock)
+                            {
+                                peer.UpdateTrustScore(peer, +2);
+                            }
+                        }
+                    }));
                 }
             }
 
@@ -249,7 +255,6 @@ namespace SPHERE.Blockchain
             try
             {
                 await Task.WhenAll(tasks);
-
             }
             catch (Exception ex)
             {
@@ -258,6 +263,33 @@ namespace SPHERE.Blockchain
             }
         }
 
+        public void EvaluateAndReplacePeer(Peer newPeer)
+        {
+            lock (Peers)
+            {
+                if (Peers.Values.Count < MaxPeers)
+                {
+                    Peers[newPeer.NodeId] = newPeer;
+                    Console.WriteLine($"Added new peer: {newPeer.NodeId}");
+                    return;
+                }
+
+                // Find the weakest peer
+                Peer weakestPeer = Peers.Values
+                    .OrderBy(peer => peer.CalculateProximity(peer))
+                    .ThenBy(peer => peer.TrustScore)
+                    .FirstOrDefault();
+
+                if (weakestPeer != null &&
+                    (newPeer.CalculateProximity(newPeer) > weakestPeer.CalculateProximity(weakestPeer) ||
+                    newPeer.TrustScore > weakestPeer.TrustScore))
+                {
+                    Peers.Remove(weakestPeer.NodeId);
+                    Peers[newPeer.NodeId] = newPeer;
+                    Console.WriteLine($"Replaced peer {weakestPeer.NodeId} with {newPeer.NodeId}");
+                }
+            }
+        }
         public async Task ProcessBootstrapResponse(Node node, byte[] encryptedData,string signature,string senderPublicKey)
         {
             try

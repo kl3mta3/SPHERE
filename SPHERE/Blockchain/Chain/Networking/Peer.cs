@@ -54,16 +54,26 @@ namespace SPHERE.Networking
             public string PublicSignatureKey { get; set; }
             public string PublicEncryptKey { get; set; }
         }
-        public void UpdateTrustScore(Peer peer, int change)
+        public void UpdateTrustScore( Peer targetPeer, int change)
         {
             lock (stateLock)
             {
-                int newScore = Math.Clamp((int)peer.TrustScore + change, 0, 100);
-                peer.TrustScore = newScore;
+                if (this.NodeId == targetPeer.NodeId)
+                {
+                    Console.WriteLine("Error: A node cannot update its own trust score.");
+                    return;
+                }
 
-                Console.WriteLine($"Updated trust score for {peer.NodeId}: {peer.TrustScore}");
+                int newScore = Math.Clamp(targetPeer.TrustScore + change, 0, 100);
+                targetPeer.TrustScore = newScore;
+
+                Console.WriteLine($"Updated trust score for {targetPeer.NodeId} by {this.NodeId}: {targetPeer.TrustScore}");
             }
         }
+
+       
+
+
         public double CalculateProximity(Peer peer)
         {
             // Example weights

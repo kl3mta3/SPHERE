@@ -71,6 +71,12 @@ namespace SPHERE.Networking
                     Console.WriteLine($"Error: {ex.Message}");
                 }
             }
+
+
+
+
+
+
         
         private static byte[] CombineEncryptedDataAndSignature(byte[] encryptedData, byte[] signature)
         {
@@ -250,7 +256,6 @@ namespace SPHERE.Networking
             }
         }
 
-        
 
     }
 

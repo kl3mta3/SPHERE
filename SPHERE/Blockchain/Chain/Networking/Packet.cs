@@ -30,6 +30,7 @@ namespace SPHERE.Networking
             public string Port { get; set; }
             public string PublicKey { get; set; }
             public string Packet_Type { get; set; }
+            public string TTL {  get; set; }
         }
 
 

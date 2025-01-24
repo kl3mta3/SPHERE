@@ -41,7 +41,7 @@ namespace SPHERE.Networking
             { PacketType.Sync,6},
         };
 
-        public static Packet BuildPacket(Node sendingNode, string message, PacketType packetType)
+        public static Packet BuildPacket(Node sendingNode, string message, PacketType packetType, int timeToLive)
         {
             PacketHeader header = new PacketHeader
             {
@@ -51,6 +51,7 @@ namespace SPHERE.Networking
                 Port = sendingNode.Peer.NodePort.ToString(),
                 PublicKey = sendingNode.Peer.PublicSignatureKey,
                 Packet_Type = packetType.ToString(),
+                TTL=timeToLive.ToString(),
             };
 
             Packet packet = new Packet
