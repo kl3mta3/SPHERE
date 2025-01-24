@@ -209,8 +209,8 @@ namespace SPHERE.Blockchain
 
             var tasks = new List<Task>();
 
-            // Build and serialize the packet with a TTL of 1000
-            Packet packet = PacketBuilder.BuildPacket(node, "Update My EndPoint Info", PacketBuilder.PacketType.PeerUpdate, 1000);
+            // Build and serialize the packet with a TTL of 75
+            Packet packet = PacketBuilder.BuildPacket(node, "Update My EndPoint Info", PacketBuilder.PacketType.PeerUpdate, 75);
             byte[] data = PacketBuilder.SerializePacket(packet);
 
             lock (Peers)
@@ -232,7 +232,7 @@ namespace SPHERE.Blockchain
                     // Add a task to send the packet and update the trust score on success
                     tasks.Add(SafeTask(async () =>
                     {
-                        bool success = await RetryAsync(() => SendPacketToPeerAsync(
+                        bool success = await RetryAsync(() => Client.SendPacketToPeerAsync(
                             node.Client.clientIP.ToString(),
                             node.Client.clientListenerPort,
                             secureData,
@@ -404,58 +404,56 @@ namespace SPHERE.Blockchain
             }
 
             // Use RetryAsync to ensure the response is sent
-            await RetryAsync(async () =>
+            await RetryAsync<bool>(async () =>
             {
-                try
+                // Step 1: Build the bootstrap response packet
+                var peerList = Peers.Values.Select(peer => new
                 {
-                    // Step 1: Build the bootstrap response packet
-                    var peerList = Peers.Values.Select(peer => new
-                    {
-                        peer.NodeId,
-                        peer.NodeIP,
-                        peer.NodePort,
-                        peer.PublicSignatureKey,
-                        peer.PublicEncryptKey
-                    }).ToList();
+                    peer.NodeId,
+                    peer.NodeIP,
+                    peer.NodePort,
+                    peer.PublicSignatureKey,
+                    peer.PublicEncryptKey
+                }).ToList();
 
-                    // Optionally include DHT state
-                    var dhtState = includeDHT ? node.DHT.GetCurrentState() : null;
+                // Optionally include DHT state
+                var dhtState = includeDHT ? node.DHT.GetCurrentState() : null;
 
-                    var responsePayload = new
-                    {
-                        MessageType = "BootstrapResponse",
-                        Peers = peerList,
-                        DHT = dhtState
-                    };
-
-                    //  Serialize the response payload into a byte array
-                    byte[] responseData = JsonSerializer.SerializeToUtf8Bytes(responsePayload);
-
-                    //  Encrypt the response data using the recipient's public communication key
-                    byte[] encryptedResponseData = Encryption.EncryptWithPersonalKey(responseData, recipientPublicComKey);
-
-                    //  Generate a signature for the encrypted data using the node's private key
-                    string responseSignature = SignatureGenerator.SignByteArray(encryptedResponseData);
-
-                    // Send the encrypted response data and signature to the recipient
-                    await SendPacketToPeerAsync(recipientIPAddress,recipientPort,encryptedResponseData,responseSignature);
-
-                    // Reward the recipient with trust score for a valid request
-                    var peer = GetPeerByIPAddress(recipientIPAddress);
-                    if (peer != null)
-                    {
-                        peer.UpdateTrustScore(peer, +5); // Reward 5 points
-                    }
-
-                    // Log successful bootstrap response
-                    Console.WriteLine($"Bootstrap response successfully sent to {recipientIPAddress}:{recipientPort}.");
-                }
-                catch (Exception ex)
+                var responsePayload = new
                 {
-                    // Log the error and rethrow it to trigger retries
-                    Console.WriteLine($"Error sending bootstrap response to {recipientIPAddress}:{recipientPort}: {ex.Message}");
-                    throw;
+                    MessageType = "BootstrapResponse",
+                    Peers = peerList,
+                    DHT = dhtState
+                };
+
+                // Serialize the response payload into a byte array
+                byte[] responseData = JsonSerializer.SerializeToUtf8Bytes(responsePayload);
+
+                // Encrypt the response data using the recipient's public communication key
+                byte[] encryptedResponseData = Encryption.EncryptWithPersonalKey(responseData, recipientPublicComKey);
+
+                // Generate a signature for the encrypted data using the node's private key
+                string responseSignature = SignatureGenerator.SignByteArray(encryptedResponseData);
+
+                // Send the encrypted response data and signature to the recipient
+                bool success = await Client.SendPacketToPeerAsync(recipientIPAddress, recipientPort, encryptedResponseData, responseSignature);
+
+                // If the send operation fails, throw an exception to trigger a retry
+                if (!success)
+                {
+                    throw new Exception($"Failed to send bootstrap response to {recipientIPAddress}:{recipientPort}.");
                 }
+
+                // Reward the recipient with trust score for a valid request
+                var peer = GetPeerByIPAddress(recipientIPAddress);
+                if (peer != null)
+                {
+                    peer.UpdateTrustScore(peer, +5); // Reward 5 points
+                }
+
+                // Log successful bootstrap response
+                Console.WriteLine($"Bootstrap response successfully sent to {recipientIPAddress}:{recipientPort}.");
+                return success; // Explicitly return success
             });
         }
 
@@ -482,35 +480,34 @@ namespace SPHERE.Blockchain
                 throw new ArgumentException("Recipient's public communication key cannot be null or empty.", nameof(recipientsPublicComKey));
             }
 
-            // Use RetryAsync to ensure the request is retried on failure
-            await RetryAsync(async () =>
+            // Use RetryAsync to retry the operation on failure
+            await RetryAsync<bool>(async () =>
             {
-                try
+                // Build the bootstrap request packet
+                Packet packet = PacketBuilder.BuildPacket(node, "BootstrapRequest", PacketBuilder.PacketType.BootstrapRequest, 75);
+
+                // Serialize the packet into a byte array
+                byte[] data = PacketBuilder.SerializePacket(packet);
+
+                // Encrypt the packet using the recipient's public communication key
+                byte[] encryptedData = Encryption.EncryptWithPersonalKey(data, recipientsPublicComKey);
+
+                // Generate a signature for the encrypted data using the node's private key
+                string signature = SignatureGenerator.SignByteArray(encryptedData);
+
+                // Send the encrypted data and signature to the recipient
+                bool success = await Client.SendPacketToPeerAsync(iPAddress, port, encryptedData, signature);
+
+                // If the send operation fails, throw an exception to trigger a retry
+                if (!success)
                 {
-                    // Build the bootstrap request packet
-                    Packet packet = PacketBuilder.BuildPacket(node, "BootstrapRequest", PacketBuilder.PacketType.BootstrapRequest);
-
-                    // Serialize the packet into a byte array
-                    byte[] data = PacketBuilder.SerializePacket(packet);
-
-                    // Encrypt the packet using the recipient's public communication key
-                    byte[] encryptedData = Encryption.EncryptWithPersonalKey(data, recipientsPublicComKey);
-
-                    // Generate a signature for the encrypted data using the node's private key
-                    string signature = SignatureGenerator.SignByteArray(encryptedData);
-
-                    // Send the encrypted data and signature to the recipient
-                    await SendPacketToPeerAsync(iPAddress, port, encryptedData, signature);
-
-                    // Log successful bootstrap request
-                    Console.WriteLine($"Bootstrap request successfully sent to {iPAddress}:{port}.");
+                    throw new Exception($"Failed to send bootstrap request to {iPAddress}:{port}.");
                 }
-                catch (Exception ex)
-                {
-                    // Log specific errors at this level
-                    Console.WriteLine($"Error in sending bootstrap request to {iPAddress}:{port}: {ex.Message}");
-                    throw; // Rethrow to trigger RetryAsync retries
-                }
+
+                // Log successful bootstrap request
+                Console.WriteLine($"Bootstrap request successfully sent to {iPAddress}:{port}.");
+
+                return success; // Explicitly return the success status
             });
         }
 
@@ -519,21 +516,25 @@ namespace SPHERE.Blockchain
             node.isBootstrapped = false;
         }
 
-        private async Task RetryAsync(Func<Task> action, int retries = 3, int delayMilliseconds = 1000)
+        private async Task<T> RetryAsync<T>(Func<Task<T>> action, int maxRetries = 3, int delayMilliseconds = 1000)
         {
-            for (int i = 0; i < retries; i++)
+            for (int i = 0; i < maxRetries; i++)
             {
                 try
                 {
-                    await action();
-                    return; // Exit on success
+                    return await action(); // Attempt the action
                 }
-                catch
+                catch (Exception ex)
                 {
-                    if (i == retries - 1) throw; // Re-throw on final attempt
-                    await Task.Delay(delayMilliseconds);
+                    Console.WriteLine($"Attempt {i + 1} failed: {ex.Message}");
+                    if (i == maxRetries - 1)
+                        throw; // Re-throw on final attempt
+
+                    await Task.Delay(delayMilliseconds * (int)Math.Pow(2, i)); // Exponential backoff
                 }
             }
+
+            throw new Exception("RetryAsync failed after all attempts."); // Should never reach here
         }
 
         private async Task SafeTask(Func<Task> action)
@@ -556,35 +557,35 @@ namespace SPHERE.Blockchain
             }
         }
 
-        public async Task SendPacketToPeerAsync(string ip, int port, byte[] encryptedData, string signature)
-        {
-            await RetryAsync(async () =>
-            {
-                try
-                {
-                    await Client.SendPacketToPeerAsync(ip, port, encryptedData, signature);
-                    Console.WriteLine($"Packet successfully sent to {ip}:{port}.");
+        //public async Task SendPacketToPeerAsync(string ip, int port, byte[] encryptedData, string signature)
+        //{
+        //    await RetryAsync(async () =>
+        //    {
+        //        try
+        //        {
+        //            await Client.SendPacketToPeerAsync(ip, port, encryptedData, signature);
+        //            Console.WriteLine($"Packet successfully sent to {ip}:{port}.");
 
-                    // Reward the recipient
-                    var peer = GetPeerByIPAddress(ip);
-                    if (peer != null)
-                    {
-                        peer.UpdateTrustScore(peer, +3); // Reward 3 points for successful communication
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Failed to send packet to {ip}:{port}: {ex.Message}");
+        //            // Reward the recipient
+        //            var peer = GetPeerByIPAddress(ip);
+        //            if (peer != null)
+        //            {
+        //                peer.UpdateTrustScore(peer, +3); // Reward 3 points for successful communication
+        //            }
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            Console.WriteLine($"Failed to send packet to {ip}:{port}: {ex.Message}");
 
-                    // Penalize the recipient
-                    var peer = GetPeerByIPAddress(ip);
-                    if (peer != null)
-                    {
-                        peer.UpdateTrustScore(peer, -5); // Penalize 5 points for failure
-                    }
-                }
-            });
-        }
+        //            // Penalize the recipient
+        //            var peer = GetPeerByIPAddress(ip);
+        //            if (peer != null)
+        //            {
+        //                peer.UpdateTrustScore(peer, -5); // Penalize 5 points for failure
+        //            }
+        //        }
+        //    });
+        //}
 
 
     }

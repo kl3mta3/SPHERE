@@ -48,36 +48,36 @@ namespace SPHERE.Networking
         public int clientCommunicationPort;
 
 
-       
-        public static async Task SendPacketToPeerAsync(string ip, int port, byte[] encryptedData, string signature)
-         {
-            // Combine the signature and encrypted data
-             byte[] combinedData = CombineEncryptedDataAndSignature(encryptedData, Encoding.UTF8.GetBytes(signature));
 
+        public static async Task<bool> SendPacketToPeerAsync(string ip, int port, byte[] encryptedData, string signature)
+        {
+            // Combine the signature and encrypted data
+            byte[] combinedData = CombineEncryptedDataAndSignature(encryptedData, Encoding.UTF8.GetBytes(signature));
 
             try
-                {
-                    using TcpClient client = new TcpClient();
-                    await client.ConnectAsync(ip, port);
+            {
+                using TcpClient client = new TcpClient();
+                await client.ConnectAsync(ip, port);
 
-                    using NetworkStream stream = client.GetStream();
+                using NetworkStream stream = client.GetStream();
 
-                    // Send the packet
-                    await stream.WriteAsync(combinedData, 0, combinedData.Length);
-
+                // Send the packet
+                await stream.WriteAsync(combinedData, 0, combinedData.Length);
+                return true; // Indicate success
             }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error: {ex.Message}");
-                }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+                return false; // Indicate failure
             }
+        }
 
 
 
 
 
 
-        
+
         private static byte[] CombineEncryptedDataAndSignature(byte[] encryptedData, byte[] signature)
         {
             // Create a byte array to hold the signature length, signature, and encrypted data
