@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 using static SPHERE.Networking.PacketBuilder;
+using SPHERE.Blockchain;
 
 namespace SPHERE.Networking
 {
@@ -38,38 +39,38 @@ namespace SPHERE.Networking
                 return message;
             }
 
-        //public async Task ProcessIncomingPacket(byte[] packetData)
-        //{
-        //    try
-        //    {
-        //        Packet packet = PacketBuilder.DeserializePacket(packetData);
+        public async Task ProcessIncomingPacket(Node node, byte[] packetData)
+        {
+            try
+            {
+                Packet packet = PacketBuilder.DeserializePacket(packetData);
 
-        //        PacketType type = Packet.ParsePacketType(packet.Header.Packet_Type);
+                PacketType type = Packet.ParsePacketType(packet.Header.Packet_Type);
 
-        //        switch (type)
-        //        {
-        //            case PacketType.BootstrapRequest:
-        //                await ProcessBootstrapRequest(packet);
-        //                break;
+                switch (type)
+                {
+                    case PacketType.BootstrapRequest:
+                        await node.SendBootstrapResponse(packet);
+                        break;
 
-        //            case PacketType.BootstrapResponse:
-        //                await ProcessBootstrapResponse(packet);
-        //                break;
+                    case PacketType.BootstrapResponse:
+                        await node.ProcessBootstrapResponse(packet);
+                        break;
 
-        //            case PacketType.PeerUpdate:
-        //                ProcessPeerUpdate(packet);
-        //                break;
+                    case PacketType.PeerUpdate:
+                        //ProcessPeerUpdate(packet);
+                        break;
 
-        //            default:
-        //                Console.WriteLine($"Unknown packet type: {packet.Type}");
-        //                break;
-        //        }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        Console.WriteLine($"Error processing packet: {ex.Message}");
-        //    }
-        //}
+                    default:
+                        Console.WriteLine($"Unknown packet type: {packet.Header.Packet_Type}");
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error processing packet: {ex.Message}");
+            }
+        }
 
 
     }

@@ -290,16 +290,31 @@ namespace SPHERE.Blockchain
                 }
             }
         }
-        public async Task ProcessBootstrapResponse(Node node, byte[] encryptedData,string signature,string senderPublicKey)
+
+        public async Task ProcessBootstrapResponse(Packet packet)
         {
+            Node node = this;
+
             try
             {
-                // Verify Node isnt already Bootstrapped, Prevents reBootstrapping By accident.
-                if(node.isBootstrapped=true)
+                // Verify Node isn't already Bootstrapped, prevents re-bootstrapping by accident
+                if (node.isBootstrapped)
                 {
                     Console.WriteLine("Node is already Bootstrapped. Ignoring the response.");
                     return;
                 }
+
+                // Validate the packet and extract the header details
+                if (packet == null || packet.Header == null)
+                {
+                    Console.WriteLine("Invalid packet or missing header.");
+                    return;
+                }
+
+                // Extract details from the packet header
+                string senderPublicKey = packet.Header.PublicSignatureKey;
+                string signature = packet.Signature;
+                byte[] encryptedData = Convert.FromBase64String(packet.Content);
 
                 // Verify the signature
                 bool isSignatureValid = SignatureGenerator.VerifyByteArray(encryptedData, signature, senderPublicKey);
@@ -380,22 +395,31 @@ namespace SPHERE.Blockchain
             }
         }
 
-        public async Task SendBootstrapResponse(Node node, string recipientIPAddress, int recipientPort, string recipientPublicComKey, bool includeDHT = false)
+        public async Task SendBootstrapResponse( Packet packet)
         {
+            Node node = this;
+            string recipientIPAddress = packet.Header.IPAddress;
+            int recipientPort = int.Parse(packet.Header.Port);
+            string recipientPublicComKey= packet.Header.PublicSignatureKey;
             // Validate inputs
+            if (packet == null)
+            {
+                throw new ArgumentNullException(nameof(packet), "Packet cannot be null.");
+            }
+
             if (node == null)
             {
-                throw new ArgumentNullException(nameof(node), "Node cannot be null.");
+                throw new ArgumentNullException(nameof(node), "The Node cannot be null.");
             }
 
             if (string.IsNullOrWhiteSpace(recipientIPAddress))
             {
-                throw new ArgumentException("Recipient IP address cannot be null or empty.", nameof(recipientIPAddress));
+                throw new ArgumentException("Packet's IP address cannot be null or empty.", nameof(recipientIPAddress));
             }
 
             if (recipientPort <= 0 || recipientPort > 65535)
             {
-                throw new ArgumentOutOfRangeException(nameof(recipientPort), "Port must be a valid number between 1 and 65535.");
+                throw new ArgumentOutOfRangeException(nameof(recipientPort), "Packet port must be a valid number between 1 and 65535.");
             }
 
             if (string.IsNullOrWhiteSpace(recipientPublicComKey))
@@ -406,7 +430,7 @@ namespace SPHERE.Blockchain
             // Use RetryAsync to ensure the response is sent
             await RetryAsync<bool>(async () =>
             {
-                // Step 1: Build the bootstrap response packet
+                // Build the bootstrap response packet
                 var peerList = Peers.Values.Select(peer => new
                 {
                     peer.NodeId,
@@ -416,8 +440,8 @@ namespace SPHERE.Blockchain
                     peer.PublicEncryptKey
                 }).ToList();
 
-                // Optionally include DHT state
-                var dhtState = includeDHT ? node.DHT.GetCurrentState() : null;
+                // Include DHT state
+                var dhtState =  node.DHT.GetCurrentState();
 
                 var responsePayload = new
                 {
@@ -457,8 +481,10 @@ namespace SPHERE.Blockchain
             });
         }
 
-        public async Task SendBootstrapRequest(Node node, string iPAddress, int port, string recipientsPublicComKey)
+        public async Task SendBootstrapRequest(string iPAddress, int port, string recipientsPublicComKey)
         {
+
+            Node node = this;
             // Validate inputs
             if (node == null)
             {
@@ -557,37 +583,7 @@ namespace SPHERE.Blockchain
             }
         }
 
-        //public async Task SendPacketToPeerAsync(string ip, int port, byte[] encryptedData, string signature)
-        //{
-        //    await RetryAsync(async () =>
-        //    {
-        //        try
-        //        {
-        //            await Client.SendPacketToPeerAsync(ip, port, encryptedData, signature);
-        //            Console.WriteLine($"Packet successfully sent to {ip}:{port}.");
-
-        //            // Reward the recipient
-        //            var peer = GetPeerByIPAddress(ip);
-        //            if (peer != null)
-        //            {
-        //                peer.UpdateTrustScore(peer, +3); // Reward 3 points for successful communication
-        //            }
-        //        }
-        //        catch (Exception ex)
-        //        {
-        //            Console.WriteLine($"Failed to send packet to {ip}:{port}: {ex.Message}");
-
-        //            // Penalize the recipient
-        //            var peer = GetPeerByIPAddress(ip);
-        //            if (peer != null)
-        //            {
-        //                peer.UpdateTrustScore(peer, -5); // Penalize 5 points for failure
-        //            }
-        //        }
-        //    });
-        //}
-
-
+        
     }
 
     public class BootstrapResponsePayload

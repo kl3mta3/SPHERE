@@ -49,7 +49,7 @@ namespace SPHERE.Networking
                 NodeId = sendingNode.Peer.NodeId,
                 IPAddress = sendingNode.Peer.NodeIP,
                 Port = sendingNode.Peer.NodePort.ToString(),
-                PublicKey = sendingNode.Peer.PublicSignatureKey,
+                PublicSignatureKey = sendingNode.Peer.PublicSignatureKey,
                 Packet_Type = packetType.ToString(),
                 TTL=timeToLive.ToString(),
             };
@@ -104,7 +104,8 @@ namespace SPHERE.Networking
                 writer.Write(packet.Header.NodeId);
                 writer.Write(packet.Header.IPAddress);
                 writer.Write(packet.Header.Port);
-                writer.Write(packet.Header.PublicKey);
+                writer.Write(packet.Header.PublicSignatureKey);
+                writer.Write(packet.Header.PublicCommKey);
 
                 // Write Content
                 writer.Write(packet.Content);
@@ -147,7 +148,8 @@ namespace SPHERE.Networking
                     packet.Header.NodeId = reader.ReadString();
                     packet.Header.IPAddress = reader.ReadString();
                     packet.Header.Port = reader.ReadInt32().ToString();
-                    packet.Header.PublicKey = reader.ReadString();
+                    packet.Header.PublicSignatureKey = reader.ReadString();
+                    packet.Header.PublicCommKey = reader.ReadString();
 
                     // Read Content
                     packet.Content = reader.ReadString();

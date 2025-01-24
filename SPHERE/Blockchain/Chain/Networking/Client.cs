@@ -72,12 +72,6 @@ namespace SPHERE.Networking
             }
         }
 
-
-
-
-
-
-
         private static byte[] CombineEncryptedDataAndSignature(byte[] encryptedData, byte[] signature)
         {
             // Create a byte array to hold the signature length, signature, and encrypted data
