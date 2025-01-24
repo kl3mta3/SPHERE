@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using static SPHERE.Networking.PacketBuilder;
 
 namespace SPHERE.Networking
 {
@@ -63,7 +64,8 @@ namespace SPHERE.Networking
 
                     // Send the packet
                     await stream.WriteAsync(combinedData, 0, combinedData.Length);
-                }
+
+            }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error: {ex.Message}");
@@ -247,6 +249,9 @@ namespace SPHERE.Networking
                 client.Close();
             }
         }
+
+        
+
     }
 
     /// <summary>

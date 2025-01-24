@@ -53,7 +53,7 @@ namespace SPHERE.Blockchain
     {
         private static readonly object stateLock = new object();
         private const string DefaultPreviousHash = "UNKNOWN";
-        private readonly Dictionary<string, Peer> Peers = new Dictionary<string, Peer>();
+        public readonly Dictionary<string, Peer> Peers = new Dictionary<string, Peer>();
         private bool isBootstrapped = false;
         public Peer Peer;
         private Client Client;
@@ -232,12 +232,16 @@ namespace SPHERE.Blockchain
 
                     // Add the task for broadcasting to this peer
                     tasks.Add(SafeTask(() =>
-                            RetryAsync(() => Client.SendPacketToPeerAsync(
+                            RetryAsync(() => SendPacketToPeerAsync(
                             node.Client.clientIP.ToString(),
                             node.Client.clientListenerPort,
                             secureData,
                             signature 
                     ))));
+
+                    // Reward the recipient with trust score for a valid update to peers
+                    peer.UpdateTrustScore(peer, +2); // Reward 2 points
+ 
                 }
             }
 
@@ -245,6 +249,7 @@ namespace SPHERE.Blockchain
             try
             {
                 await Task.WhenAll(tasks);
+
             }
             catch (Exception ex)
             {
@@ -391,22 +396,24 @@ namespace SPHERE.Blockchain
                         DHT = dhtState
                     };
 
-                    // Step 2: Serialize the response payload into a byte array
+                    //  Serialize the response payload into a byte array
                     byte[] responseData = JsonSerializer.SerializeToUtf8Bytes(responsePayload);
 
-                    // Step 3: Encrypt the response data using the recipient's public communication key
+                    //  Encrypt the response data using the recipient's public communication key
                     byte[] encryptedResponseData = Encryption.EncryptWithPersonalKey(responseData, recipientPublicComKey);
 
-                    // Step 4: Generate a signature for the encrypted data using the node's private key
+                    //  Generate a signature for the encrypted data using the node's private key
                     string responseSignature = SignatureGenerator.SignByteArray(encryptedResponseData);
 
-                    // Step 5: Send the encrypted response data and signature to the recipient
-                    await Client.SendPacketToPeerAsync(
-                        recipientIPAddress,
-                        recipientPort,
-                        encryptedResponseData,
-                        responseSignature
-                    );
+                    // Send the encrypted response data and signature to the recipient
+                    await SendPacketToPeerAsync(recipientIPAddress,recipientPort,encryptedResponseData,responseSignature);
+
+                    // Reward the recipient with trust score for a valid request
+                    var peer = GetPeerByIPAddress(recipientIPAddress);
+                    if (peer != null)
+                    {
+                        peer.UpdateTrustScore(peer, +5); // Reward 5 points
+                    }
 
                     // Log successful bootstrap response
                     Console.WriteLine($"Bootstrap response successfully sent to {recipientIPAddress}:{recipientPort}.");
@@ -461,7 +468,7 @@ namespace SPHERE.Blockchain
                     string signature = SignatureGenerator.SignByteArray(encryptedData);
 
                     // Send the encrypted data and signature to the recipient
-                    await Client.SendPacketToPeerAsync(iPAddress, port, encryptedData, signature);
+                    await SendPacketToPeerAsync(iPAddress, port, encryptedData, signature);
 
                     // Log successful bootstrap request
                     Console.WriteLine($"Bootstrap request successfully sent to {iPAddress}:{port}.");
@@ -508,6 +515,45 @@ namespace SPHERE.Blockchain
                 Console.WriteLine($"Task error: {ex.Message}");
             }
         }
+
+        public  Peer GetPeerByIPAddress(string ipAddress)
+        {
+            lock (stateLock)
+            {
+                return Peers.Values.FirstOrDefault(peer => peer.NodeIP == ipAddress);
+            }
+        }
+
+        public async Task SendPacketToPeerAsync(string ip, int port, byte[] encryptedData, string signature)
+        {
+            await RetryAsync(async () =>
+            {
+                try
+                {
+                    await Client.SendPacketToPeerAsync(ip, port, encryptedData, signature);
+                    Console.WriteLine($"Packet successfully sent to {ip}:{port}.");
+
+                    // Reward the recipient
+                    var peer = GetPeerByIPAddress(ip);
+                    if (peer != null)
+                    {
+                        peer.UpdateTrustScore(peer, +3); // Reward 3 points for successful communication
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to send packet to {ip}:{port}: {ex.Message}");
+
+                    // Penalize the recipient
+                    var peer = GetPeerByIPAddress(ip);
+                    if (peer != null)
+                    {
+                        peer.UpdateTrustScore(peer, -5); // Penalize 5 points for failure
+                    }
+                }
+            });
+        }
+
 
     }
 

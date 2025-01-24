@@ -39,13 +39,14 @@ namespace SPHERE.Networking
             packet.Content = content;
             packet.Header = Header;
             
-
-
-
-
             return new Packet();
         }
 
-       
+        public static PacketType ParsePacketType(string type)
+        {
+            Enum.TryParse(type, out PacketType parsedEnum);
+            return parsedEnum;
+        }
+
     }
 }

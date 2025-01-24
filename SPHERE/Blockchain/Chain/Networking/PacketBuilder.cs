@@ -115,6 +115,55 @@ namespace SPHERE.Networking
             }
         }
 
+        public static Packet DeserializePacket(byte[] data)
+        {
+            if (data == null || data.Length == 0)
+            {
+                throw new ArgumentException("Data cannot be null or empty.", nameof(data));
+            }
+
+            using (MemoryStream ms = new MemoryStream(data))
+            using (BinaryReader reader = new BinaryReader(ms))
+            {
+                try
+                {
+                    // Create a new Packet object
+                    Packet packet = new Packet();
+                    packet.Header = new PacketHeader();
+
+                    // Read Opcode
+                    byte opcode = reader.ReadByte();
+                    if (!PacketTypes.ContainsValue(opcode))
+                    {
+                        throw new ArgumentException($"Invalid opcode: {opcode}");
+                    }
+
+                    // Find the corresponding PacketType enum value
+                    PacketType packetType = PacketTypes.FirstOrDefault(x => x.Value == opcode).Key;
+                    packet.Header.Packet_Type = packetType.ToString();
+
+                    // Read Header
+                    packet.Header.NodeId = reader.ReadString();
+                    packet.Header.IPAddress = reader.ReadString();
+                    packet.Header.Port = reader.ReadInt32().ToString();
+                    packet.Header.PublicKey = reader.ReadString();
+
+                    // Read Content
+                    packet.Content = reader.ReadString();
+
+                    // Read Signature
+                    packet.Signature = reader.ReadString();
+
+                    return packet;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error deserializing packet: {ex.Message}");
+                    throw;
+                }
+            }
+        }
+
     }
 
 }

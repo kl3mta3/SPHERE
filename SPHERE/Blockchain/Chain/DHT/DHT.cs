@@ -1,9 +1,11 @@
 ﻿
 using SPHERE;
 using SPHERE.Configure;
+using SPHERE.Networking;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.NetworkInformation;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -26,6 +28,8 @@ namespace SPHERE.Blockchain
         private static readonly object stateLock = new object(); // For thread safety
 
         private readonly Dictionary<string, Block> _blocks = new();
+
+        private List<Peer> RoutingTable = new List<Peer>();
 
         public void AddBlock(Block block)
         {
@@ -234,6 +238,43 @@ namespace SPHERE.Blockchain
             }
         }
 
+
+        //public void UpdateRoutingTable(IEnumerable<Peer> bootstrapPeers)
+        //{
+        //    lock (stateLock)
+        //    {
+        //        foreach (var peer in bootstrapPeers)
+        //        {
+        //            if (!RoutingTable.Any(p => p.NodeId == peer.NodeId))
+        //            {
+        //                RoutingTable.Add(peer);
+        //                Console.WriteLine($"Added peer {peer.NodeId} to routing table.");
+        //            }
+        //        }
+        //    }
+        //}
+        public List<Peer> SelectPeersForRoutingTable(IEnumerable<Peer> candidatePeers)
+        {
+            return candidatePeers
+                .OrderBy(peer => peer.CalculateProximity(peer)) // Sort by proximity or a custom metric
+                .Take(10) // Limit the number of peers
+                .ToList();
+        }
+
+        public void UpdateRoutingTable(Node node)
+        {
+            lock (stateLock)
+            {
+                RoutingTable = node.Peers.Values
+                    .OrderByDescending(peer => peer.TrustScore) // Higher trust first
+                    .ThenBy(peer => peer.CalculateProximity(peer)) // Then by proximity
+                    .Take(10) // Limit to 10 peers
+                    .ToList();
+            }
+        }
+
+
+       
     }
 
 }
