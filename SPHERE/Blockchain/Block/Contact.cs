@@ -9,13 +9,13 @@ using SPHERE.Configure;
 
 namespace SPHERE.Blockchain
 {
-    public class BlockContact
+    public class Contact
     {
         public ContactMetaData MetaData { get; set; }               // Contacts needed MetaData.
         public ContactKeys Keys { get; set; }                       // Contacts needed Encryption keys. 
 
 
-        public static BlockContact CreateNewContact(string displayName, string name, string blockId, string? avatarURL, string? description)
+        public static Contact CreateNewContact(string displayName, string name, string blockId, string? avatarURL, string? description)
         {
 
             //Generate the set or Key Pairs needed  (Signature and Communication pair)
@@ -56,7 +56,7 @@ namespace SPHERE.Blockchain
 
             };
 
-            BlockContact contact = new BlockContact
+            Contact contact = new Contact
             {
                 MetaData = metaData,
                 Keys = keys,
@@ -66,7 +66,7 @@ namespace SPHERE.Blockchain
         }
 
 
-        public static string BuildEncryptedContact(BlockContact contact)
+        public static string BuildEncryptedContact(Contact contact)
         {
 
             var encryptedContact = Encryption.EncryptWithSymmetric(contact, contact.Keys.LocalSymmetricKey);

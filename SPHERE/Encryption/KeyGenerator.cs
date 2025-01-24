@@ -14,7 +14,7 @@ namespace SPHERE.Configure
     /// --ECC Curve Pair --
     /// A contact(user) has two key pairs. 
     /// 
-    /// *Public Communication Key(Personal Key)/ a Private Communication Key. 
+    /// *Public Communication Key(Personal Key)/ a Private Communication Key (encryptiong KEY). 
     /// This pair is used for communication at the contact level.  
     /// The Personal communication Key is stored in the contact and used to encrypt messages only the contact owner with the Private Communication Key can decrypt.
     /// *
@@ -23,8 +23,9 @@ namespace SPHERE.Configure
     /// The Public Signature Key is attached to the block and used to verify the signature of the Contact creator/owner that has the private associated key.
     /// **
     /// 
-    /// A Node also has a single Pair. 
+    /// A Node also has a Pair of both . 
     /// *The Public Node Signature Key is provided by the node to allow for communication to it to be encrypted so that only it can read the responses with its Private Signature Key. 
+    ///  The Encrypting Key is used to allow others to encrypt messages to the node. 
     /// *
     /// 
     /// --Symmetric Keys--
@@ -39,17 +40,15 @@ namespace SPHERE.Configure
     /// </summary>
     public class KeyGenerator
     {
-
-
         public static void GeneratePersonalKeyPairSets()
         {
             using var signaturePair = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-            using var commPair = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+            using var encryptPair = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
 
             var privateSignatureKey = signaturePair.ExportPkcs8PrivateKey();
             var publicSignatureKey = signaturePair.ExportSubjectPublicKeyInfo();
-            var privateCommunicationKey = commPair.ExportPkcs8PrivateKey();
-            var publicCommunicationKey = commPair.ExportSubjectPublicKeyInfo();
+            var privateCommunicationKey = encryptPair.ExportPkcs8PrivateKey();
+            var publicCommunicationKey = encryptPair.ExportSubjectPublicKeyInfo();
 
             try
             {
@@ -58,10 +57,10 @@ namespace SPHERE.Configure
                 string publicCommunicationKeyBase64 = Convert.ToBase64String(publicCommunicationKey);
                 string privateCommunicationKeyBase64 = Convert.ToBase64String(privateCommunicationKey);
 
-                ServiceAccountManager.StoreKeyInContainer(privateSignatureKeyBase64, "PRISGNK");
-                ServiceAccountManager.StoreKeyInContainer(publicSignatureKeyBase64, "PUBSGNK");
-                ServiceAccountManager.StoreKeyInContainer(privateCommunicationKeyBase64, "PRICOMK");
-                ServiceAccountManager.StoreKeyInContainer(publicCommunicationKeyBase64, "PUBCOMK");
+                ServiceAccountManager.StoreKeyInContainer(privateSignatureKeyBase64, "PRIPERSGNK");
+                ServiceAccountManager.StoreKeyInContainer(publicSignatureKeyBase64, "PUBPERSGNK");
+                ServiceAccountManager.StoreKeyInContainer(privateCommunicationKeyBase64, "PRIPERCOMK");
+                ServiceAccountManager.StoreKeyInContainer(publicCommunicationKeyBase64, "PUBPERCOMK");
 
                 privateSignatureKeyBase64 = null;
                 publicSignatureKeyBase64 = null;
@@ -84,35 +83,50 @@ namespace SPHERE.Configure
 
         }
 
-        public static void GenerateNodeKeyPair()
+        public static void GenerateNodeKeyPairs()
         {
 
-            using var nodeePair = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+            using var nodeSigPair = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+            using var nodeEncPair= ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
 
-            var privateKey = nodeePair.ExportPkcs8PrivateKey();
-            var publicKey = nodeePair.ExportSubjectPublicKeyInfo();
+            var privateSigKey = nodeSigPair.ExportPkcs8PrivateKey();
+            var publicSigKey = nodeSigPair.ExportSubjectPublicKeyInfo();
+            var privateEncKey = nodeEncPair.ExportPkcs8PrivateKey();
+            var publicEncKey = nodeEncPair.ExportSubjectPublicKeyInfo();
+
 
             try
             {
-                string publicKeyBase64 = Convert.ToBase64String(publicKey);
-                string privateeKeyBase64 = Convert.ToBase64String(privateKey);
+                string publicSigKeyBase64 = Convert.ToBase64String(publicSigKey);
+                string privateKeyBase64 = Convert.ToBase64String(privateSigKey);
+                string publicEncKeyBase64 = Convert.ToBase64String(publicEncKey);
+                string privateEncKeyBase64 = Convert.ToBase64String(privateEncKey);
 
-                ServiceAccountManager.StoreKeyInContainer(privateeKeyBase64, "PRINODK");
-                ServiceAccountManager.StoreKeyInContainer(publicKeyBase64, "PUBNODK");
+                ServiceAccountManager.StoreKeyInContainer(privateKeyBase64, "PRINODSIGK");
+                ServiceAccountManager.StoreKeyInContainer(publicSigKeyBase64, "PUBNODSIGK");
 
-                privateeKeyBase64 = null;
-                publicKeyBase64 = null;
+                ServiceAccountManager.StoreKeyInContainer(privateKeyBase64, "PRINODENCK");
+                ServiceAccountManager.StoreKeyInContainer(privateEncKeyBase64, "PUBNODENCK");
+
+                privateKeyBase64 = null;
+                publicSigKeyBase64 = null;
+                privateEncKeyBase64 = null;
+                publicEncKeyBase64 = null;
             }
             finally
             {
 
-                ClearSensitiveData(privateKey);
-                ClearSensitiveData(publicKey);
-                privateKey = null;
-                publicKey = null;
+                ClearSensitiveData(privateEncKey);
+                ClearSensitiveData(publicEncKey);
+                ClearSensitiveData(privateSigKey);
+                ClearSensitiveData(publicSigKey);
+
+                privateEncKey = null;
+                publicEncKey = null;
+                privateSigKey = null;
+                publicSigKey = null;
             }
         }
-
 
         public static string CreateVerificationKey(string privateKey, string salt)
         {

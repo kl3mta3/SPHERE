@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SPHERE.Blockchain;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
@@ -43,6 +44,7 @@ namespace SPHERE.Configure
                 return Convert.ToBase64String(signature);
             }
         }
+
         public static string CreateNodeSignature(string nodeId)
         {
             // Convert the block ID to bytes
@@ -51,7 +53,7 @@ namespace SPHERE.Configure
             // Create the signature using the private key
             using (var ecdsa = ECDsa.Create())
             {
-                ecdsa.ImportPkcs8PrivateKey(Convert.FromBase64String(ServiceAccountManager.RetrieveKeyFromContainer("PRINODK")), out _);
+                ecdsa.ImportPkcs8PrivateKey(Convert.FromBase64String(ServiceAccountManager.RetrieveKeyFromContainer("PRINODSIGK")), out _);
                 byte[] signature = ecdsa.SignData(blockBytes, HashAlgorithmName.SHA256);
 
                 // Return the signature as a Base64-encoded string
@@ -59,7 +61,53 @@ namespace SPHERE.Configure
             }
         }
 
-        public static bool VerifyBlockSignature(string blockId, string base64Signature, string publicSignatureKey)
+        public static string SignByteArray(byte[] data)
+
+        {
+            
+
+            // Create the signature using the private key
+            using (var ecdsa = ECDsa.Create())
+            {
+                ecdsa.ImportPkcs8PrivateKey(Convert.FromBase64String(ServiceAccountManager.RetrieveKeyFromContainer("PRINODSIGK")), out _);
+                byte[] signature = ecdsa.SignData(data, HashAlgorithmName.SHA256);
+
+                // Return the signature as a Base64-encoded string
+                return Convert.ToBase64String(signature);
+
+            }
+        }
+
+
+        public static bool VerifyByteArray(byte[] data, string signature, string publicKey)
+        {
+            try
+            {
+                // Convert the Base64 public key back to a byte array
+                byte[] publicKeyBytes = Convert.FromBase64String(publicKey);
+
+                // Import the public key
+                using (ECDsa ecdsa = ECDsa.Create())
+                {
+                    ecdsa.ImportSubjectPublicKeyInfo(publicKeyBytes, out _);
+
+                    // Convert the signature back to a byte array
+                    byte[] signatureBytes = Convert.FromBase64String(signature);
+
+                    // Verify the signature
+                    return ecdsa.VerifyData(data, signatureBytes, HashAlgorithmName.SHA256);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log or handle exceptions (optional)
+                Console.WriteLine($"Error verifying signature: {ex.Message}");
+                return false;
+            }
+        }
+    
+
+    public static bool VerifyBlockSignature(string blockId, string base64Signature, string publicSignatureKey)
         {
             // Convert the block ID to bytes
             byte[] blockBytes = Encoding.UTF8.GetBytes(blockId);

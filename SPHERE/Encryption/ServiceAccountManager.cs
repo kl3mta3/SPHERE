@@ -10,7 +10,7 @@ using SPHERE;
 using System.Security.Cryptography;
 
 namespace SPHERE.Configure
-{ 
+{
 
     /// <summary>
     /// The Local Service Account(LSA) is used to allow for storing the Encryption keys and important data in CNG Containers that are bound to the specific service account. 
@@ -32,7 +32,7 @@ namespace SPHERE.Configure
     /// </summary>
     public static class ServiceAccountManager
     {
-        internal static string ServiceAccountName = AppIdentifier.GetOrCreateAppIdentifier();
+        internal static string ServiceAccountName = AppIdentifier.GetOrCreateServiceName();
 
         public static void ServiceAccountLogon()   // Starts or creats the Service Account
         {
@@ -47,10 +47,10 @@ namespace SPHERE.Configure
                     {
                         // Create the service account
                         Console.WriteLine("Service account does not exist. Creating...");
-                        var newPass= Guid.NewGuid().ToString();
+                        var newPass = Guid.NewGuid().ToString();
                         using (var newUser = new UserPrincipal(context))
                         {
-                            newUser.SamAccountName = AppIdentifier.GetOrCreateAppIdentifier();
+                            newUser.SamAccountName = AppIdentifier.GetOrCreateServiceName();
                             newUser.SetPassword(newPass);
                             newUser.PasswordNeverExpires = true;
                             newUser.UserCannotChangePassword = false;
@@ -63,7 +63,7 @@ namespace SPHERE.Configure
                     else
                     {
                         //Get username and password as account exists
-                        var (username, password) = CredentialManager.GetOrCreateCredentials(AppIdentifier.GetOrCreateAppIdentifier());
+                        var (username, password) = CredentialManager.GetOrCreateCredentials(AppIdentifier.GetOrCreateAppId());
                         // Log into the service account
                         AuthenticateServiceAccount(username, password);
                     }
@@ -116,37 +116,37 @@ namespace SPHERE.Configure
         }
 
         public static void ChangeServiceAccountPassword(string accountName, string newPassword, string currentPassword) //used to change the service account password.
+        {
+            try
             {
-                try
+                if (!CredentialManager.VerifyCurrentPassword(AppIdentifier.GetOrCreateAppId(), currentPassword))
                 {
-                    if (!CredentialManager.VerifyCurrentPassword(AppIdentifier.GetOrCreateAppIdentifier(), currentPassword))
-                    {
-                        throw new InvalidOperationException($"Failed to verify current credential.");
-                    
-                    }
-                    using (var context = new PrincipalContext(ContextType.Machine))
-                    {
-                        // Find the service account
-                        UserPrincipal user = UserPrincipal.FindByIdentity(context, accountName);
+                    throw new InvalidOperationException($"Failed to verify current credential.");
 
-                        if (user == null)
-                        {
-                            throw new InvalidOperationException($"Service account '{accountName}' does not exist.");
-                        }
-
-                        // Change the password
-                        user.SetPassword(newPassword);
-                        user.Save();
-
-                        Console.WriteLine($"Password for service account '{accountName}' successfully updated.");
-                    }
                 }
-                catch (Exception ex)
+                using (var context = new PrincipalContext(ContextType.Machine))
                 {
-                    Console.WriteLine($"Error updating password for service account '{accountName}': {ex.Message}");
-                    throw;
+                    // Find the service account
+                    UserPrincipal user = UserPrincipal.FindByIdentity(context, accountName);
+
+                    if (user == null)
+                    {
+                        throw new InvalidOperationException($"Service account '{accountName}' does not exist.");
+                    }
+
+                    // Change the password
+                    user.SetPassword(newPassword);
+                    user.Save();
+
+                    Console.WriteLine($"Password for service account '{accountName}' successfully updated.");
                 }
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating password for service account '{accountName}': {ex.Message}");
+                throw;
+            }
+        }
 
         [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         private static extern bool LogonUser(string lpszUsername, string lpszDomain, string lpszPassword,
@@ -158,10 +158,19 @@ namespace SPHERE.Configure
         // The Encryption Keys are stored in Local CNG Containers.  Those containers are only accessable by the local Service account the App Creates and runs on. 
         public static void StoreKeyInContainer(string key, string keyName)
         {
-            string AppId = AppIdentifier.GetOrCreateAppIdentifier();
+            string AppId = AppIdentifier.GetOrCreateAppId();
 
             // Ensure the service account exists
-            ServiceAccountManager.ServiceAccountLogon();
+            using (var context = new PrincipalContext(ContextType.Machine))
+            {
+                // Check if the service account exists
+                UserPrincipal user = UserPrincipal.FindByIdentity(context, ServiceAccountName);
+
+                if (user == null)
+                {
+                    ServiceAccountManager.ServiceAccountLogon();
+                }
+            }
 
             try
             {
@@ -192,7 +201,27 @@ namespace SPHERE.Configure
                 throw;
             }
         }
-        public static string RetrieveKeyFromContainer(string keyName)
+
+        public static bool KeyContainerExists(string containerName)
+        {
+            try
+            {
+                // Try to open the CNG key with the specified name
+                using (CngKey.Open(containerName))
+                {
+                    // If successful, the container exists
+                    return true;
+                }
+            }
+            catch (CryptographicException)
+            {
+                // If an exception occurs, the container likely doesn't exist
+                return false;
+            }
+        }
+    
+
+    public static string RetrieveKeyFromContainer(string keyName)
         {
             try
             {
@@ -220,119 +249,202 @@ namespace SPHERE.Configure
     }
 
     public static class AccountRestrictionManager
+    {
+        private const string DenyLogonLocallyRight = "SeDenyInteractiveLogonRight";
+        private const string DenyLogonThroughRemoteDesktopRight = "SeDenyRemoteInteractiveLogonRight";
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        private static extern int LsaAddAccountRights(IntPtr policyHandle, IntPtr accountSid, string[] userRights, int countOfRights);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        private static extern int LsaOpenPolicy(ref LsaObjectAttributes objectAttributes, IntPtr objectName, int desiredAccess, out IntPtr policyHandle);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        private static extern int LsaClose(IntPtr policyHandle);
+
+        public static void RestrictLogonRights(string accountName)
         {
-            private const string DenyLogonLocallyRight = "SeDenyInteractiveLogonRight";
-            private const string DenyLogonThroughRemoteDesktopRight = "SeDenyRemoteInteractiveLogonRight";
+            IntPtr policyHandle = IntPtr.Zero;
+            IntPtr sidPointer = IntPtr.Zero;
 
-            [DllImport("advapi32.dll", SetLastError = true)]
-            private static extern int LsaAddAccountRights(IntPtr policyHandle, IntPtr accountSid, string[] userRights, int countOfRights);
-
-            [DllImport("advapi32.dll", SetLastError = true)]
-            private static extern int LsaOpenPolicy(ref LsaObjectAttributes objectAttributes, IntPtr objectName, int desiredAccess, out IntPtr policyHandle);
-
-            [DllImport("advapi32.dll", SetLastError = true)]
-            private static extern int LsaClose(IntPtr policyHandle);
-
-            public static void RestrictLogonRights(string accountName)
+            try
             {
-                IntPtr policyHandle = IntPtr.Zero;
-                IntPtr sidPointer = IntPtr.Zero;
+                // Get the account SID
+                var account = new NTAccount(accountName);
+                var sid = (SecurityIdentifier)account.Translate(typeof(SecurityIdentifier));
 
-                try
+                // Allocate memory for the SID as a byte array
+                byte[] sidBinaryForm = new byte[sid.BinaryLength];
+                sid.GetBinaryForm(sidBinaryForm, 0); // Retrieve the binary form of the SID
+
+                // Allocate unmanaged memory and copy the SID binary form into it
+                sidPointer = Marshal.AllocHGlobal(sidBinaryForm.Length);
+                Marshal.Copy(sidBinaryForm, 0, sidPointer, sidBinaryForm.Length);
+
+                // Open the policy
+                var objectAttributes = new LsaObjectAttributes
                 {
-                    // Get the account SID
-                    var account = new NTAccount(accountName);
-                    var sid = (SecurityIdentifier)account.Translate(typeof(SecurityIdentifier));
+                    Length = Marshal.SizeOf(typeof(LsaObjectAttributes)),
+                    RootDirectory = IntPtr.Zero,
+                    ObjectName = IntPtr.Zero,
+                    Attributes = 0,
+                    SecurityDescriptor = IntPtr.Zero,
+                    SecurityQualityOfService = IntPtr.Zero
+                };
+                int access = 0x00000800; // POLICY_WRITE
 
-                    // Allocate memory for the SID as a byte array
-                    byte[] sidBinaryForm = new byte[sid.BinaryLength];
-                    sid.GetBinaryForm(sidBinaryForm, 0); // Retrieve the binary form of the SID
-
-                    // Allocate unmanaged memory and copy the SID binary form into it
-                    sidPointer = Marshal.AllocHGlobal(sidBinaryForm.Length);
-                    Marshal.Copy(sidBinaryForm, 0, sidPointer, sidBinaryForm.Length);
-
-                    // Open the policy
-                    var objectAttributes = new LsaObjectAttributes
-                    {
-                        Length = Marshal.SizeOf(typeof(LsaObjectAttributes)),
-                        RootDirectory = IntPtr.Zero,
-                        ObjectName = IntPtr.Zero,
-                        Attributes = 0,
-                        SecurityDescriptor = IntPtr.Zero,
-                        SecurityQualityOfService = IntPtr.Zero
-                    };
-                    int access = 0x00000800; // POLICY_WRITE
-
-                    var result = LsaOpenPolicy(ref objectAttributes, IntPtr.Zero, access, out policyHandle);
-                    if (result != 0)
-                    {
-                        throw new InvalidOperationException($"Failed to open LSA Policy. Error code: {result}");
-                    }
-
-                    // Assign deny logon rights
-                    string[] rights = { DenyLogonLocallyRight, DenyLogonThroughRemoteDesktopRight };
-                    var status = LsaAddAccountRights(policyHandle, sidPointer, rights, rights.Length);
-
-                    if (status != 0) // LsaAddAccountRights returns NTSTATUS (0 is success)
-                    {
-                        throw new InvalidOperationException($"Failed to assign logon rights to account: {accountName}. NTSTATUS: {status}");
-                    }
-
-                    Console.WriteLine($"Restricted logon rights for account: {accountName}");
+                var result = LsaOpenPolicy(ref objectAttributes, IntPtr.Zero, access, out policyHandle);
+                if (result != 0)
+                {
+                    throw new InvalidOperationException($"Failed to open LSA Policy. Error code: {result}");
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error restricting logon rights: {ex.Message}");
-                }
-                finally
-                {
-                    // Free the allocated memory
-                    if (sidPointer != IntPtr.Zero)
-                    {
-                        Marshal.FreeHGlobal(sidPointer);
-                    }
 
-                    // Close the policy handle
-                    if (policyHandle != IntPtr.Zero)
-                    {
-                        LsaClose(policyHandle);
-                    }
+                // Assign deny logon rights
+                string[] rights = { DenyLogonLocallyRight, DenyLogonThroughRemoteDesktopRight };
+                var status = LsaAddAccountRights(policyHandle, sidPointer, rights, rights.Length);
+
+                if (status != 0) // LsaAddAccountRights returns NTSTATUS (0 is success)
+                {
+                    throw new InvalidOperationException($"Failed to assign logon rights to account: {accountName}. NTSTATUS: {status}");
+                }
+
+                Console.WriteLine($"Restricted logon rights for account: {accountName}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error restricting logon rights: {ex.Message}");
+            }
+            finally
+            {
+                // Free the allocated memory
+                if (sidPointer != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(sidPointer);
+                }
+
+                // Close the policy handle
+                if (policyHandle != IntPtr.Zero)
+                {
+                    LsaClose(policyHandle);
                 }
             }
-
-            [StructLayout(LayoutKind.Sequential)]
-            private struct LsaObjectAttributes
-            {
-                public int Length;
-                public IntPtr RootDirectory;
-                public IntPtr ObjectName;
-                public int Attributes;
-                public IntPtr SecurityDescriptor;
-                public IntPtr SecurityQualityOfService;
-            }
-
         }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct LsaObjectAttributes
+        {
+            public int Length;
+            public IntPtr RootDirectory;
+            public IntPtr ObjectName;
+            public int Attributes;
+            public IntPtr SecurityDescriptor;
+            public IntPtr SecurityQualityOfService;
+        }
+
+    }
 
     public class AppIdentifier
+    {
+        private const string RegistryKeyPath = @"HKEY_CURRENT_USER\Software\SPHERE";
+        private const string RegistryValueID = "Appid";
+        private const string RegistryValueServiceName = "ServiceName";
+        private const string RegistryValueNodeID = "NodeID";
+
+
+        // Returns the unique application identifier.
+        public static string GetOrCreateAppId()
         {
-            private const string RegistryKeyPath = @"HKEY_CURRENT_USER\Software\SPHERE";
-            private const string RegistryValueName = "SPHERE";
+            // Try to get the existing identifier from the registry
+            string appIdentifier = (string)Registry.GetValue(RegistryKeyPath, RegistryValueID, null);
 
-            // Returns the unique application identifier.
-            public static string GetOrCreateAppIdentifier()
+            // If it doesn't exist, create and store a new one
+            if (string.IsNullOrEmpty(appIdentifier))
             {
-                // Try to get the existing identifier from the registry
-                string appIdentifier = (string)Registry.GetValue(RegistryKeyPath, RegistryValueName, null);
+                appIdentifier = Guid.NewGuid().ToString(); // Generate a new unique identifier
+                Registry.SetValue(RegistryKeyPath, RegistryValueID, appIdentifier);
+            }
 
-                // If it doesn't exist, create and store a new one
-                if (string.IsNullOrEmpty(appIdentifier))
-                {
-                    appIdentifier = Guid.NewGuid().ToString(); // Generate a new unique identifier
-                    Registry.SetValue(RegistryKeyPath, RegistryValueName, appIdentifier);
-                }
+            return appIdentifier;
+        }
 
-                return appIdentifier;
+        // Returns the unique ServiceName.
+        public static string GetOrCreateServiceName()
+        {
+            // Try to get the existing service account name from the registry
+            string serviceAccountName = (string)Registry.GetValue(RegistryKeyPath, RegistryValueServiceName, null);
+
+            // If it doesn't exist, create and store a new one
+            if (string.IsNullOrEmpty(serviceAccountName))
+            {
+                serviceAccountName = GenerateRandomServiceName(15); // Generate a 15-character name
+                Registry.SetValue(RegistryKeyPath, RegistryValueServiceName, serviceAccountName);
+            }
+
+            return serviceAccountName;
+        }
+
+        //Generates a unique Service Name.
+        private static string GenerateRandomServiceName(int length)
+        {
+            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+            var random = new Random();
+            char[] result = new char[length];
+
+            for (int i = 0; i < length; i++)
+            {
+                result[i] = chars[random.Next(chars.Length)];
+            }
+
+            return new string(result);
+        }
+
+        // Returns the unique 256-bit DHT node ID.
+        public static string GetOrCreateDHTNodeID()
+        {
+            // Try to get the existing DHT node ID from the registry
+            string dhtNodeID = (string)Registry.GetValue(RegistryKeyPath, RegistryValueNodeID, null);
+
+            // If it doesn't exist, create and store a new one
+            if (string.IsNullOrEmpty(dhtNodeID))
+            {
+                dhtNodeID = Generate256BitID(); // Generate a new 256-bit ID
+                Registry.SetValue(RegistryKeyPath, RegistryValueNodeID, dhtNodeID);
+            }
+
+            return dhtNodeID;
+        }
+
+        // Generates a 256-bit (64-character hex) unique ID
+        private static string Generate256BitID()
+        {
+            using (var sha256 = SHA256.Create())
+            {
+                // Use a GUID as the seed for hashing
+                string guid = Guid.NewGuid().ToString();
+                byte[] hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(guid));
+
+                // Convert the hash to a 64-character hexadecimal string
+                return BitConverter.ToString(hashBytes).Replace("-", "").ToLower();
             }
         }
+    }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

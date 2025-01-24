@@ -82,7 +82,7 @@ namespace SPHERE.Configure
                     password[i] = _password.ToString();
 
                 }
-                SaveCredential(AppIdentifier.GetOrCreateAppIdentifier(), username, password);
+                SaveCredential(AppIdentifier.GetOrCreateAppId(), username, password);
 
                 return (username, password);
             }

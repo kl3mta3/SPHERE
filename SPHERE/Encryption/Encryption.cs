@@ -35,7 +35,7 @@ namespace SPHERE.Configure
     public static class Encryption
     {
         // The Local Symmetric Key is used to Eccrypt the blockContact.
-        public static string EncryptWithSymmetric(BlockContact contactData, string key)
+        public static string EncryptWithSymmetric(Contact contactData, string key)
         {
             byte[] convertedKey = Convert.FromBase64String(key);
 
@@ -56,7 +56,7 @@ namespace SPHERE.Configure
 
             return Convert.ToBase64String(ms.ToArray()); // Return Base64-encoded encrypted data
         }
-        public static BlockContact DecryptWithSymmetricKey(string encryptedData, string key)
+        public static Contact DecryptWithSymmetricKey(string encryptedData, string key)
         {
             byte[] convertedKey = Convert.FromBase64String(key);
             byte[] convertedEncryptedData = Convert.FromBase64String(encryptedData);
@@ -76,60 +76,78 @@ namespace SPHERE.Configure
             string decryptedData = reader.ReadToEnd();
 
             // Deserialize the contact from the data.
-            return System.Text.Json.JsonSerializer.Deserialize<BlockContact>(decryptedData);
+            return System.Text.Json.JsonSerializer.Deserialize<Contact>(decryptedData);
         }
 
         //Encrypt with a personal(public) Key Provides a secretKey to Validate its use. 
-        private static (byte[] encryptedData, byte[] sharedSecret) EncryptWithPersonalKey(string data, string personalKey)
+        public static byte[] EncryptWithPersonalKey(byte[] data, string personalKey)
         {
-            using var ecdh = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
-            ecdh.ImportSubjectPublicKeyInfo(Convert.FromBase64String(personalKey), out _);
+            byte[] recipientPublicKey = Convert.FromBase64String(personalKey);
 
-            // Generate a shared secret using the recipient's public key
-            byte[] sharedSecret = ecdh.DeriveKeyMaterial(ecdh.PublicKey);
+            using var senderKeyPair = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+            byte[] senderPublicKey = senderKeyPair.ExportSubjectPublicKeyInfo();
 
-            // Use the shared secret to encrypt data (e.g., AES)
+            // Import the recipient's public key
+            using var recipientKey = ECDiffieHellman.Create();
+            recipientKey.ImportSubjectPublicKeyInfo(recipientPublicKey, out _);
+
+            // Derive the shared secret using the recipient's public key
+            byte[] sharedSecret = senderKeyPair.DeriveKeyMaterial(recipientKey.PublicKey);
+
+            // Encrypt the data with the shared secret using AES
             using var aes = Aes.Create();
             aes.Key = sharedSecret;
             aes.GenerateIV();
-            using var encryptor = aes.CreateEncryptor(aes.Key, aes.IV);
+            byte[] iv = aes.IV;
 
-            using var ms = new MemoryStream();
-            using (var cs = new CryptoStream(ms, encryptor, CryptoStreamMode.Write))
-            using (var writer = new StreamWriter(cs))
-            {
-                writer.Write(data);
-            }
+            using var encryptor = aes.CreateEncryptor();
+            byte[] encryptedData = encryptor.TransformFinalBlock(data, 0, data.Length);
 
-            return (ms.ToArray(), aes.IV);
+            // Combine IV + sender's ephemeral public key + encrypted data
+            byte[] result = new byte[iv.Length + senderPublicKey.Length + encryptedData.Length];
+            Buffer.BlockCopy(iv, 0, result, 0, iv.Length);
+            Buffer.BlockCopy(senderPublicKey, 0, result, iv.Length, senderPublicKey.Length);
+            Buffer.BlockCopy(encryptedData, 0, result, iv.Length + senderPublicKey.Length, encryptedData.Length);
+
+            return result;
 
         }
 
         //Decrypt with the Private Key Stored in the CNG Container and the shared secret
-        private static string DecryptWithPrivateKey(string privateKey, string encryptedData, byte[] sharedSecret)
+        public static byte[] DecryptWithPrivateKey(byte[] encryptedData, string  privateKey)
         {
-            byte[] encryptedDataByteArray = Convert.FromBase64String(encryptedData);
+            // Decode the Base64 private key string into a byte array
+            byte[] recipientPrivateKey = Convert.FromBase64String(privateKey);
 
+            // Import the private key into ECDiffieHellman
+            using var recipientKeyPair = ECDiffieHellman.Create();
+            recipientKeyPair.ImportPkcs8PrivateKey(recipientPrivateKey, out _);
 
-            using var ecdh = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
-            ecdh.ImportPkcs8PrivateKey(Convert.FromBase64String(privateKey), out _);
+            // Extract IV, sender's ephemeral public key, and ciphertext
+            byte[] iv = new byte[16]; // AES block size (16 bytes)
+            byte[] senderPublicKey = new byte[91]; // Size of nistP256 public key
+            byte[] ciphertext = new byte[encryptedData.Length - iv.Length - senderPublicKey.Length];
 
-            // Derive the shared secret
-            byte[] derivedKey = ecdh.DeriveKeyMaterial(ecdh.PublicKey);
+            Buffer.BlockCopy(encryptedData, 0, iv, 0, iv.Length);
+            Buffer.BlockCopy(encryptedData, iv.Length, senderPublicKey, 0, senderPublicKey.Length);
+            Buffer.BlockCopy(encryptedData, iv.Length + senderPublicKey.Length, ciphertext, 0, ciphertext.Length);
 
-            // Decrypt the data (e.g., AES)
+            // Import the sender's ephemeral public key
+            using var senderKeyPair = ECDiffieHellman.Create();
+            senderKeyPair.ImportSubjectPublicKeyInfo(senderPublicKey, out _);
+
+            // Derive the shared secret using the sender's public key and recipient's private key
+            byte[] sharedSecret = recipientKeyPair.DeriveKeyMaterial(senderKeyPair.PublicKey);
+
+            // Decrypt the data with AES
             using var aes = Aes.Create();
-            aes.Key = derivedKey;
-            aes.IV = sharedSecret;
-            using var decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
+            aes.Key = sharedSecret;
+            aes.IV = iv;
 
-            using var ms = new MemoryStream(encryptedDataByteArray);
-            using var cs = new CryptoStream(ms, decryptor, CryptoStreamMode.Read);
-            using var reader = new StreamReader(cs);
-            return reader.ReadToEnd();
+            using var decryptor = aes.CreateDecryptor();
+            return decryptor.TransformFinalBlock(ciphertext, 0, ciphertext.Length);
 
         }
-
 
 
         // Local Symmetric Keys(LSA) are used to Encrypt a contact. They are encrypted with a Semi Pulic Key(SPK) so only someone with the SBK can decrypt the LSK and in turn the contact. 

@@ -5,7 +5,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace SPHERE.Client
+namespace SPHERE.Networking
 {
     /// <summary>
     /// The PacketReader is used to read incoming Packets. 

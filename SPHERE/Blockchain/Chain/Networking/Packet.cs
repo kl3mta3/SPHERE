@@ -1,11 +1,13 @@
-﻿using System;
+﻿using SPHERE.Blockchain;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using static SPHERE.Networking.PacketBuilder;
 
-namespace SPHERE.Blockchain.Client
-{
+namespace SPHERE.Networking
+{ 
 
     /// <summary>
     /// A packet is just what it says it is created by a node to be sent by the client to another node. 
@@ -31,7 +33,19 @@ namespace SPHERE.Blockchain.Client
         }
 
 
-        
+        public Packet BuildPacketContent(string content)
+        {
+            Packet packet = new Packet();
+            packet.Content = content;
+            packet.Header = Header;
+            
 
+
+
+
+            return new Packet();
+        }
+
+       
     }
 }

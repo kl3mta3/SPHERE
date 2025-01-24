@@ -8,6 +8,7 @@ using System.Security.Cryptography.Xml;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Web;
 using SPHERE;
@@ -35,23 +36,49 @@ namespace SPHERE.Blockchain
     /// </summary>
     public class Block
     {
+        [JsonPropertyName("header")]
         public BlockHeader Header { get; set; }                         // Header containing block metadata
+
+        [JsonPropertyName("encryptedContact")]
         public string EncryptedContact { get; set; }                    // Encrypted contact data object
+
+        [JsonPropertyName("encryptedLocalSymmetricKey")]
         public string EncryptedLocalSymmetricKey { get; set; }          // The encrypted key used to encrypt the contact.  can only be decrypted by semi Public Key
 
 
         public class BlockHeader
         {
+            [JsonPropertyName("BlockId")]
             public string BlockId { get; set; }                             // Unique identifier for the block
+
+            [JsonPropertyName("BlockVersion")]
             public string BlockVersion {  get; set; }                       // Block Versions allow for deserialvation of different blocks as the platform evolves.
+
+            [JsonPropertyName("ContactVersion")]
             public string ContactVersion { get; set; }                      // Contact versions would allow for deserialation of different contact styles as the platform evolves must be on the contact and the block.
+
+            [JsonPropertyName("BlockCreationTime")]
             public DateTime BlockCreationTime { get; set; }                 // Creation timestamp
+
+            [JsonPropertyName("LastUpdateTime")]
             public DateTime LastUpdateTime { get; set; }                    // Timestap of last Update to the block by validated user.
-            public EncryptionAlgorithm EncryptionAlgorithm { get; set; }    // Algorithm used for encryption (e.g. AES256, RSA2048, ECDsa)
+
+            [JsonPropertyName("EncryptionAlgorithm")]
+            public string EncryptionAlgorithm { get; set; }    // Algorithm used for encryption (e.g. AES256, RSA2048, ECDsa)
+
+            [JsonPropertyName("KeyUsagePolicies")]
             public string? KeyUsagePolicies { get; set; }                   // Policies for key usage
+
+            [JsonPropertyName("BlockHash")]
             public string BlockHash { get; set; }                           // Hash of the block for integrity
+
+            [JsonPropertyName("PublicSignatureKey")]
             public string PublicSignatureKey { get; set; }                  // This is the public key for verifying the signature of commits and the user.
+
+            [JsonPropertyName("GNCCertificate")]
             public string GNCCertificate { get; set; }                      // GNC Container Certificate for the Private Key, Used to validate application used correct security when storing privatekey. 
+
+            [JsonPropertyName("PreviousHash")]
             public string PreviousHash { get; set; }                        // Hash of the previous block
 
             // Calculates the hash for the block
@@ -75,7 +102,7 @@ namespace SPHERE.Blockchain
                     PreviousHash = previousHash,
                     BlockCreationTime = creationTime,
                     LastUpdateTime = creationTime,
-                    EncryptionAlgorithm = encryptionAlgorithm,
+                    EncryptionAlgorithm = encryptionAlgorithm.ToString(),
                     KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
                     PublicSignatureKey = ServiceAccountManager.RetrieveKeyFromContainer("PUBSIGK"),
                     GNCCertificate = ServiceAccountManager.RetrieveKeyFromContainer("GNCC")
