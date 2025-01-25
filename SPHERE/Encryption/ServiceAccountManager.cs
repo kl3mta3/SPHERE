@@ -155,8 +155,8 @@ namespace SPHERE.Configure
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool CloseHandle(IntPtr hObject);
 
-        // The Encryption Keys are stored in Local CNG Containers.  Those containers are only accessable by the local Service account the App Creates and runs on. 
-        public static void StoreKeyInContainer(string key, string keyName)
+        // The Encryption Keys are stored in Local CNG Containers.  Those containers are only accessable by the local Service account the App Creates and runs on. NO EXPORT Safest option for private keys.
+        public static void StoreKeyInContainerWithoutExport(string key, string keyName)
         {
             string AppId = AppIdentifier.GetOrCreateAppId();
 
@@ -202,26 +202,102 @@ namespace SPHERE.Configure
             }
         }
 
-        public static bool KeyContainerExists(string containerName)
+        // The Encryption Keys are stored in Local CNG Containers.  Those containers are only accessable by the local Service account the App Creates and runs on. EXPORT AS PLAIN TEXT !!!! DANGEROUS BUT NECESSARY SOMETIMES.  SHOLD INCLUDE TIMED KEY WITH PASSWORD ENCRYPTION
+        public static void StoreKeyInContainerWithExportPlainText(string key, string keyName)
         {
-            try
+            string AppId = AppIdentifier.GetOrCreateAppId();
+
+            // Ensure the service account exists
+            using (var context = new PrincipalContext(ContextType.Machine))
             {
-                // Try to open the CNG key with the specified name
-                using (CngKey.Open(containerName))
+                // Check if the service account exists
+                UserPrincipal user = UserPrincipal.FindByIdentity(context, ServiceAccountName);
+
+                if (user == null)
                 {
-                    // If successful, the container exists
-                    return true;
+                    ServiceAccountManager.ServiceAccountLogon();
                 }
             }
-            catch (CryptographicException)
+
+            try
             {
-                // If an exception occurs, the container likely doesn't exist
-                return false;
+                // Convert the key from Base64
+                byte[] convertedKey = Convert.FromBase64String(key);
+
+                // Define key creation parameters
+                var creationParameters = new CngKeyCreationParameters
+                {
+                    ExportPolicy = CngExportPolicies.AllowPlaintextExport, // Allows for the plain Text of the containter key.
+                    KeyUsage = CngKeyUsages.Signing | CngKeyUsages.Decryption // Restrict to signing and decryption
+                };
+
+                // Create the key
+                using var cngKey = CngKey.Create(CngAlgorithm.ECDsaP256, keyName, creationParameters);
+
+                // Store the application-specific identifier
+                cngKey.SetProperty(new CngProperty("AppId", Encoding.UTF8.GetBytes(AppId), CngPropertyOptions.None));
+
+                // Optional: Store additional data securely within the container
+                cngKey.SetProperty(new CngProperty("KeyData", convertedKey, CngPropertyOptions.None));
+
+                Console.WriteLine("Private key stored securely with app-specific restrictions.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error storing private key: {ex.Message}");
+                throw;
             }
         }
-    
 
-    public static string RetrieveKeyFromContainer(string keyName)
+        // The Encryption Keys are stored in Local CNG Containers.  Those containers are only accessable by the local Service account the App Creates and runs on. EXPORT AS CNGContainer.  MUCH SAFER OPTION BUT ONLY VIABLE TO OTHER WINDOWS DEVICES.
+        public static void StoreKeyInContainerWithExport(string key, string keyName)
+        {
+            string AppId = AppIdentifier.GetOrCreateAppId();
+
+            // Ensure the service account exists
+            using (var context = new PrincipalContext(ContextType.Machine))
+            {
+                // Check if the service account exists
+                UserPrincipal user = UserPrincipal.FindByIdentity(context, ServiceAccountName);
+
+                if (user == null)
+                {
+                    ServiceAccountManager.ServiceAccountLogon();
+                }
+            }
+
+            try
+            {
+                // Convert the key from Base64
+                byte[] convertedKey = Convert.FromBase64String(key);
+
+                // Define key creation parameters
+                var creationParameters = new CngKeyCreationParameters
+                {
+                    ExportPolicy = CngExportPolicies.AllowExport, // key export as Containers only
+                    KeyUsage = CngKeyUsages.Signing | CngKeyUsages.Decryption // Restrict to signing and decryption
+                };
+
+                // Create the key
+                using var cngKey = CngKey.Create(CngAlgorithm.ECDsaP256, keyName, creationParameters);
+
+                // Store the application-specific identifier
+                cngKey.SetProperty(new CngProperty("AppId", Encoding.UTF8.GetBytes(AppId), CngPropertyOptions.None));
+
+                // Optional: Store additional data securely within the container
+                cngKey.SetProperty(new CngProperty("KeyData", convertedKey, CngPropertyOptions.None));
+
+                Console.WriteLine("Private key stored securely with app-specific restrictions.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error storing private key: {ex.Message}");
+                throw;
+            }
+        }
+
+    
+        public static string RetrieveKeyFromContainer(string keyName)
         {
             try
             {
@@ -246,6 +322,42 @@ namespace SPHERE.Configure
             }
         }
 
+        public static bool KeyContainerExists(string containerName)
+        {
+            try
+            {
+                // Try to open the CNG key with the specified name
+                using (CngKey.Open(containerName))
+                {
+                    // If successful, the container exists
+                    return true;
+                }
+            }
+            catch (CryptographicException)
+            {
+                // If an exception occurs, the container likely doesn't exist
+                return false;
+            }
+        }
+
+        public static RSAParameters RetrievePrivateKeySecurely(string keyName)
+        {
+            using (var rsa = new RSACryptoServiceProvider(new CspParameters
+            {
+                KeyContainerName = keyName,
+                Flags = CspProviderFlags.UseMachineKeyStore
+            }))
+            {
+                return rsa.ExportParameters(true); // Includes private key
+            }
+        }
+        public static bool AuthenticateUser()
+        {
+            // Example: Simple PIN authentication
+            Console.WriteLine("Enter PIN to access private key:");
+            string enteredPin = Console.ReadLine();
+            return enteredPin == "1234"; // Replace with actual secure validation
+        }
     }
 
     public static class AccountRestrictionManager

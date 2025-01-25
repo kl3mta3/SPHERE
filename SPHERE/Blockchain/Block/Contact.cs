@@ -21,22 +21,22 @@ namespace SPHERE.Blockchain
             //Generate the set or Key Pairs needed  (Signature and Communication pair)
             KeyGenerator.GeneratePersonalKeyPairSets();
             var semiPublicKey = KeyGenerator.GenerateSymmetricKey();
-            ServiceAccountManager.StoreKeyInContainer(semiPublicKey, "SPUBK");
+            ServiceAccountManager.StoreKeyInContainerWithoutExport(semiPublicKey, "SPUBK");
             semiPublicKey = null;
 
             //used to encrypt the contact
             var localSymmetricKey = KeyGenerator.GenerateSymmetricKey();
-            ServiceAccountManager.StoreKeyInContainer(localSymmetricKey, "RLSK");
+            ServiceAccountManager.StoreKeyInContainerWithoutExport(localSymmetricKey, "RLSK");
             localSymmetricKey = null;
 
             //the LocalSymmetricKey is Encrypted with the SemiPublicKey and attached to the block so only approved people with the semiPublicKey can decrypt the EncryptedLocalSymetricKey and then decrypt the contact. 
             var encryptedLocalSymmetricKey = Encryption.EncryptLocalSymmetricKey(localSymmetricKey, semiPublicKey);
-            ServiceAccountManager.StoreKeyInContainer(encryptedLocalSymmetricKey, "ELSK");
+            ServiceAccountManager.StoreKeyInContainerWithoutExport(encryptedLocalSymmetricKey, "ELSK");
             encryptedLocalSymmetricKey = null;
 
             //Create a GNC Certificate for the PrivateCommunicationKey to verify correct standards are used. For Node application quality checks. (May remove later) 
             var GNCCert = SignatureGenerator.CreateSphereGNCCertificate("PRISIGK");
-            ServiceAccountManager.StoreKeyInContainer(GNCCert, "GNCC");
+            ServiceAccountManager.StoreKeyInContainerWithoutExport(GNCCert, "GNCC");
             GNCCert = null;
 
             ContactKeys keys = new ContactKeys

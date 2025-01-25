@@ -24,21 +24,33 @@ namespace SPHERE.Networking
         {
             BootstrapRequest,
             BootstrapResponse,
-            Get,
-            Put,
-            Ping,
-            PeerUpdate,
-            Sync,
+            GetRequest,
+            GetResponse,
+            PutRequest,
+            PutResponse,
+            PingRequest,
+            PingResponse,
+            PeerUpdateRequest,
+            PeerUpdateResponse,
+            SyncDHTRequest,
+            SyncDHTResponse,
         }
 
         private static readonly Dictionary<PacketType, int> PacketTypes = new Dictionary<PacketType, int>
         {
             { PacketType.BootstrapRequest,1},
             { PacketType.BootstrapResponse,2},
-            { PacketType.Get,3 },
-            { PacketType.Ping,4 },
-            { PacketType.PeerUpdate,5},
-            { PacketType.Sync,6},
+            { PacketType.GetRequest,3 },
+            { PacketType.GetResponse,4},
+            { PacketType.PutRequest,5},
+            { PacketType.PutResponse,6},
+            { PacketType.PingRequest,7 },
+            { PacketType.PingResponse,8},
+            { PacketType.SyncDHTRequest,9},
+            { PacketType.SyncDHTResponse,10},
+            { PacketType.PeerUpdateRequest,11},
+            { PacketType.PeerUpdateResponse,12},
+
         };
 
         public static Packet BuildPacket(Node sendingNode, string message, PacketType packetType, int timeToLive)
@@ -105,7 +117,7 @@ namespace SPHERE.Networking
                 writer.Write(packet.Header.IPAddress);
                 writer.Write(packet.Header.Port);
                 writer.Write(packet.Header.PublicSignatureKey);
-                writer.Write(packet.Header.PublicCommKey);
+                writer.Write(packet.Header.PublicEncryptKey);
 
                 // Write Content
                 writer.Write(packet.Content);
@@ -149,7 +161,7 @@ namespace SPHERE.Networking
                     packet.Header.IPAddress = reader.ReadString();
                     packet.Header.Port = reader.ReadInt32().ToString();
                     packet.Header.PublicSignatureKey = reader.ReadString();
-                    packet.Header.PublicCommKey = reader.ReadString();
+                    packet.Header.PublicEncryptKey = reader.ReadString();
 
                     // Read Content
                     packet.Content = reader.ReadString();

@@ -60,6 +60,8 @@ namespace SPHERE.Blockchain
         private DHT DHT;
         private readonly int MaxPeers = 25;
 
+
+        //This is used to Create the Node or Load one if it exists. 
         public static Node CreateNode(Client client, NodeType nodeType)
         {
             Node node = new Node();
@@ -123,174 +125,64 @@ namespace SPHERE.Blockchain
             return node;
         }
 
-        public void AddPeerToPeers(Peer peer)
+        //Sends a Bootstrap Request You will need to be provided the IP, Port and public communication Key of the Host. (It can be provided by any othter node on request. But is only good till they go off and back online and thier ip and port reset.
+        public async Task SendBootstrapRequest(string iPAddress, int port, string recipientsPublicComKey)
         {
-            if (peer == null)
-            {
-                throw new ArgumentNullException(nameof(peer), "Peer cannot be null.");
-            }
 
-            lock (stateLock) // Ensures thread safety
-            {
-                if (!Peers.ContainsKey(peer.NodeId)) // Optional: Prevent duplicate keys
-                {
-                    Peers.Add(peer.NodeId, peer);
-                    Console.WriteLine($"Peer {peer.NodeId} added successfully.");
-                }
-                else
-                {
-                    Console.WriteLine($"Peer {peer.NodeId} already exists.");
-                }
-            }
-        }
-        
-        public void RemovePeerFromPeers(Node node)
-        {
-            Peers.Remove(node.Peer.NodeId);
-        }
-
-        public Peer GetPeer(string nodeId)
-        {
-            if (string.IsNullOrEmpty(nodeId))
-            {
-                throw new ArgumentException("Node ID cannot be null or empty.", nameof(nodeId));
-            }
-
-            lock (stateLock) // Ensures thread-safe access to the Peers dictionary
-            {
-                return Peers.ContainsKey(nodeId) ? Peers[nodeId] : null;
-            }
-        }
-
-        public void UpdateNodePerviousHash(Node node, string previousHash)
-        {
-            node.Peer.PreviousNodesHash = previousHash;
-        }
-
-        public void UpdatePeerEndpoint(string peerID, string newIP, int newPort)
-        {
-            if (string.IsNullOrEmpty(peerID))
-            {
-                throw new ArgumentException("Peer ID cannot be null or empty.", nameof(peerID));
-            }
-
-            if (string.IsNullOrEmpty(newIP))
-            {
-                throw new ArgumentException("New IP cannot be null or empty.", nameof(newIP));
-            }
-
-            if (newPort <= 0 || newPort > 65535)
-            {
-                throw new ArgumentOutOfRangeException(nameof(newPort), "Port must be a valid number between 1 and 65535.");
-            }
-
-            lock (stateLock) // Ensure thread safety when accessing and modifying the Peers dictionary
-            {
-                Peer peer = GetPeer(peerID);
-                if (peer == null)
-                {
-                    throw new KeyNotFoundException($"Peer with ID {peerID} not found.");
-                }
-
-                // Update the peer's endpoint
-                peer.NodeIP = newIP;
-                peer.NodePort = newPort;
-
-                Console.WriteLine($"Updated endpoint for peer {peerID}: {newIP}:{newPort}");
-            }
-        }
-
-        public async Task BroadcastEndpointToPeers(Node node)
-        {
+            Node node = this;
+            // Validate inputs
             if (node == null)
             {
                 throw new ArgumentNullException(nameof(node), "Node cannot be null.");
             }
 
-            var tasks = new List<Task>();
-
-            // Build and serialize the packet with a TTL of 75
-            Packet packet = PacketBuilder.BuildPacket(node, "Update My EndPoint Info", PacketBuilder.PacketType.PeerUpdate, 75);
-            byte[] data = PacketBuilder.SerializePacket(packet);
-
-            lock (Peers)
+            if (string.IsNullOrWhiteSpace(iPAddress))
             {
-                foreach (var peer in Peers.Values)
+                throw new ArgumentException("IP address cannot be null or empty.", nameof(iPAddress));
+            }
+
+            if (port <= 0 || port > 65535)
+            {
+                throw new ArgumentOutOfRangeException(nameof(port), "Port must be a valid number between 1 and 65535.");
+            }
+
+            if (string.IsNullOrWhiteSpace(recipientsPublicComKey))
+            {
+                throw new ArgumentException("Recipient's public communication key cannot be null or empty.", nameof(recipientsPublicComKey));
+            }
+
+            // Use RetryAsync to retry the operation on failure
+            await RetryAsync<bool>(async () =>
+            {
+                // Build the bootstrap request packet
+                Packet packet = PacketBuilder.BuildPacket(node, "BootstrapRequest", PacketBuilder.PacketType.BootstrapRequest, 75);
+
+                // Serialize the packet into a byte array
+                byte[] data = PacketBuilder.SerializePacket(packet);
+
+                // Encrypt the packet using the recipient's public communication key
+                byte[] encryptedData = Encryption.EncryptWithPersonalKey(data, recipientsPublicComKey);
+
+                // Generate a signature for the encrypted data using the node's private key
+                string signature = SignatureGenerator.SignByteArray(encryptedData);
+
+                // Send the encrypted data and signature to the recipient
+                bool success = await Client.SendPacketToPeerAsync(iPAddress, port, encryptedData, signature);
+
+                // If the send operation fails, throw an exception to trigger a retry
+                if (!success)
                 {
-                    string key = peer.PublicSignatureKey;
-
-                    if (string.IsNullOrEmpty(key))
-                    {
-                        Console.WriteLine($"Skipping peer with missing or invalid PublicSignatureKey.");
-                        continue;
-                    }
-
-                    // Encrypt and sign the packet
-                    byte[] secureData = Encryption.EncryptWithPersonalKey(data, key);
-                    string signature = SignatureGenerator.SignByteArray(secureData);
-
-                    // Add a task to send the packet and update the trust score on success
-                    tasks.Add(SafeTask(async () =>
-                    {
-                        bool success = await RetryAsync(() => Client.SendPacketToPeerAsync(
-                            node.Client.clientIP.ToString(),
-                            node.Client.clientListenerPort,
-                            secureData,
-                            signature
-                        ));
-
-                        if (success)
-                        {
-                            // Only update trust score if the packet was successfully delivered
-                            lock (stateLock)
-                            {
-                                peer.UpdateTrustScore(peer, +2);
-                            }
-                        }
-                    }));
+                    throw new Exception($"Failed to send bootstrap request to {iPAddress}:{port}.");
                 }
-            }
 
-            // Wait for all tasks to complete
-            try
-            {
-                await Task.WhenAll(tasks);
-            }
-            catch (Exception ex)
-            {
-                // Handle any exceptions that were thrown
-                Console.WriteLine($"Error during broadcast: {ex.Message}");
-            }
+                // Log successful bootstrap request
+                Console.WriteLine($"Bootstrap request successfully sent to {iPAddress}:{port}.");
+
+                return success; // Explicitly return the success status
+            });
         }
 
-        public void EvaluateAndReplacePeer(Peer newPeer)
-        {
-            lock (Peers)
-            {
-                if (Peers.Values.Count < MaxPeers)
-                {
-                    Peers[newPeer.NodeId] = newPeer;
-                    Console.WriteLine($"Added new peer: {newPeer.NodeId}");
-                    return;
-                }
-
-                // Find the weakest peer
-                Peer weakestPeer = Peers.Values
-                    .OrderBy(peer => peer.CalculateProximity(peer))
-                    .ThenBy(peer => peer.TrustScore)
-                    .FirstOrDefault();
-
-                if (weakestPeer != null &&
-                    (newPeer.CalculateProximity(newPeer) > weakestPeer.CalculateProximity(weakestPeer) ||
-                    newPeer.TrustScore > weakestPeer.TrustScore))
-                {
-                    Peers.Remove(weakestPeer.NodeId);
-                    Peers[newPeer.NodeId] = newPeer;
-                    Console.WriteLine($"Replaced peer {weakestPeer.NodeId} with {newPeer.NodeId}");
-                }
-            }
-        }
-
+        //Process a BootStrap Response to set up a Node.   Gets peers and DHT from Bootstrap Host.
         public async Task ProcessBootstrapResponse(Packet packet)
         {
             Node node = this;
@@ -395,6 +287,7 @@ namespace SPHERE.Blockchain
             }
         }
 
+        // Sends a response to a request to Bootstrap.  Sends a peer list and copy of DHT (Or shards at some point)
         public async Task SendBootstrapResponse( Packet packet)
         {
             Node node = this;
@@ -481,67 +374,346 @@ namespace SPHERE.Blockchain
             });
         }
 
-        public async Task SendBootstrapRequest(string iPAddress, int port, string recipientsPublicComKey)
-        {
-
-            Node node = this;
-            // Validate inputs
-            if (node == null)
-            {
-                throw new ArgumentNullException(nameof(node), "Node cannot be null.");
-            }
-
-            if (string.IsNullOrWhiteSpace(iPAddress))
-            {
-                throw new ArgumentException("IP address cannot be null or empty.", nameof(iPAddress));
-            }
-
-            if (port <= 0 || port > 65535)
-            {
-                throw new ArgumentOutOfRangeException(nameof(port), "Port must be a valid number between 1 and 65535.");
-            }
-
-            if (string.IsNullOrWhiteSpace(recipientsPublicComKey))
-            {
-                throw new ArgumentException("Recipient's public communication key cannot be null or empty.", nameof(recipientsPublicComKey));
-            }
-
-            // Use RetryAsync to retry the operation on failure
-            await RetryAsync<bool>(async () =>
-            {
-                // Build the bootstrap request packet
-                Packet packet = PacketBuilder.BuildPacket(node, "BootstrapRequest", PacketBuilder.PacketType.BootstrapRequest, 75);
-
-                // Serialize the packet into a byte array
-                byte[] data = PacketBuilder.SerializePacket(packet);
-
-                // Encrypt the packet using the recipient's public communication key
-                byte[] encryptedData = Encryption.EncryptWithPersonalKey(data, recipientsPublicComKey);
-
-                // Generate a signature for the encrypted data using the node's private key
-                string signature = SignatureGenerator.SignByteArray(encryptedData);
-
-                // Send the encrypted data and signature to the recipient
-                bool success = await Client.SendPacketToPeerAsync(iPAddress, port, encryptedData, signature);
-
-                // If the send operation fails, throw an exception to trigger a retry
-                if (!success)
-                {
-                    throw new Exception($"Failed to send bootstrap request to {iPAddress}:{port}.");
-                }
-
-                // Log successful bootstrap request
-                Console.WriteLine($"Bootstrap request successfully sent to {iPAddress}:{port}.");
-
-                return success; // Explicitly return the success status
-            });
-        }
-
+        //Resets the Bootstrap Status to allow a corupted node to "Reset" it's peers and DHT.
         public static void ResetBootstrapStatus(Node node)
         {
             node.isBootstrapped = false;
         }
 
+        //Build Routing Table from DHT. (Not yet made.)
+
+        //Once the Node has a Routing Table it can get the Previous Hash and update the Previous Hash
+        public void UpdateNodePerviousHash(Node node, string previousHash)
+        {
+            node.Peer.PreviousNodesHash = previousHash;
+        }
+
+        // Sends peer info to all peers. waits for a response and applys trustScore accordingly.
+        public async Task BroadcastEndpointToPeers(Node node)
+        {
+            if (node == null)
+            {
+                throw new ArgumentNullException(nameof(node), "Node cannot be null.");
+            }
+
+            var tasks = new List<Task>();
+
+            // Build and serialize the packet with a TTL of 75
+            Packet packet = PacketBuilder.BuildPacket(node, "Update My EndPoint Info", PacketBuilder.PacketType.PeerUpdateRequest, 75);
+            byte[] data = PacketBuilder.SerializePacket(packet);
+
+            lock (Peers)
+            {
+                foreach (var peer in Peers.Values)
+                {
+                    string key = peer.PublicSignatureKey;
+
+                    if (string.IsNullOrEmpty(key))
+                    {
+                        Console.WriteLine($"Skipping peer with missing or invalid PublicSignatureKey.");
+                        continue;
+                    }
+
+                    // Encrypt and sign the packet
+                    byte[] secureData = Encryption.EncryptWithPersonalKey(data, key);
+                    string signature = SignatureGenerator.SignByteArray(secureData);
+
+                    // Add a task to send the packet and update the trust score on success
+                    tasks.Add(SafeTask(async () =>
+                    {
+                        bool success = await RetryAsync(() => Client.SendPacketToPeerAsync(
+                            node.Client.clientIP.ToString(),
+                            node.Client.clientListenerPort,
+                            secureData,
+                            signature
+                        ));
+
+                        if (success)
+                        {
+                            // Only update trust score if the packet was successfully delivered
+                            lock (stateLock)
+                            {
+                                peer.UpdateTrustScore(peer, +2);
+                            }
+                        }
+                    }));
+                }
+            }
+
+            // Wait for all tasks to complete
+            try
+            {
+                await Task.WhenAll(tasks);
+            }
+            catch (Exception ex)
+            {
+                // Handle any exceptions that were thrown
+                Console.WriteLine($"Error during broadcast: {ex.Message}");
+            }
+        }
+
+        // Updates the Endpoint info of a Peer.
+        public void UpdatePeerEndpoint(string peerID, string newIP, int newPort)
+        {
+            if (string.IsNullOrEmpty(peerID))
+            {
+                throw new ArgumentException("Peer ID cannot be null or empty.", nameof(peerID));
+            }
+
+            if (string.IsNullOrEmpty(newIP))
+            {
+                throw new ArgumentException("New IP cannot be null or empty.", nameof(newIP));
+            }
+
+            if (newPort <= 0 || newPort > 65535)
+            {
+                throw new ArgumentOutOfRangeException(nameof(newPort), "Port must be a valid number between 1 and 65535.");
+            }
+
+            lock (stateLock) // Ensure thread safety when accessing and modifying the Peers dictionary
+            {
+                Peer peer = GetPeerByID(peerID);
+                if (peer == null)
+                {
+                    throw new KeyNotFoundException($"Peer with ID {peerID} not found.");
+                }
+
+                // Update the peer's endpoint
+                peer.NodeIP = newIP;
+                peer.NodePort = newPort;
+
+                Console.WriteLine($"Updated endpoint for peer {peerID}: {newIP}:{newPort}");
+            }
+        }
+
+        // Evlauates a peer based on TrustScore and location to decide to keep a new Peer.
+        public void EvaluateAndReplacePeer(Peer newPeer)
+        {
+            lock (Peers)
+            {
+                if (Peers.Values.Count < MaxPeers)
+                {
+                    Peers[newPeer.NodeId] = newPeer;
+                    Console.WriteLine($"Added new peer: {newPeer.NodeId}");
+                    return;
+                }
+
+                // Find the weakest peer
+                Peer weakestPeer = Peers.Values
+                    .OrderBy(peer => peer.CalculateProximity(peer))
+                    .ThenBy(peer => peer.TrustScore)
+                    .FirstOrDefault();
+
+                if (weakestPeer != null &&
+                    (newPeer.CalculateProximity(newPeer) > weakestPeer.CalculateProximity(weakestPeer) ||
+                    newPeer.TrustScore > weakestPeer.TrustScore))
+                {
+                    Peers.Remove(weakestPeer.NodeId);
+                    Peers[newPeer.NodeId] = newPeer;
+                    Console.WriteLine($"Replaced peer {weakestPeer.NodeId} with {newPeer.NodeId}");
+                }
+            }
+        }
+
+        // Adds a Peer to the PeerList.
+        public void AddPeerToPeers(Peer peer)
+        {
+            if (peer == null)
+            {
+                throw new ArgumentNullException(nameof(peer), "Peer cannot be null.");
+            }
+
+            lock (stateLock) // Ensures thread safety
+            {
+                if (!Peers.ContainsKey(peer.NodeId)) // Optional: Prevent duplicate keys
+                {
+                    Peers.Add(peer.NodeId, peer);
+                    Console.WriteLine($"Peer {peer.NodeId} added successfully.");
+                }
+                else
+                {
+                    Console.WriteLine($"Peer {peer.NodeId} already exists.");
+                }
+            }
+        }
+        
+        //Removes a Peer from the PeerList
+        public void RemovePeerFromPeers(Node node)
+        {
+            Peers.Remove(node.Peer.NodeId);
+        }
+
+        // Returns a peer from the Peerlist based on their IP
+        public  Peer GetPeerByIPAddress(string ipAddress)
+        {
+            lock (stateLock)
+            {
+                return Peers.Values.FirstOrDefault(peer => peer.NodeIP == ipAddress);
+            }
+        }
+
+        //Returns a Peer from the Peer List By ID.
+        public Peer GetPeerByID(string peerID)
+        {
+            if (string.IsNullOrEmpty(peerID))
+            {
+                throw new ArgumentException("Node ID cannot be null or empty.", nameof(peerID));
+            }
+
+            lock (stateLock) // Ensures thread-safe access to the Peers dictionary
+            {
+                return Peers.ContainsKey(peerID) ? Peers[peerID] : null;
+            }
+        }
+
+        public async Task RespondToPingAsync(Packet packet)
+        {
+           
+            try
+            {
+                // Validate the incoming packet
+                if (packet == null || packet.Header == null)
+                {
+                    Console.WriteLine("Invalid ping request packet.");
+                    return;
+                }
+
+                string senderIPAddress = packet.Header.IPAddress;
+                int senderPort = int.Parse(packet.Header.Port);
+                string senderPublicSignatureKey = packet.Header.PublicSignatureKey;
+                string sendersPublicEncryptKey = packet.Header.PublicEncryptKey;
+
+                if (string.IsNullOrWhiteSpace(senderIPAddress) || string.IsNullOrWhiteSpace(senderPublicSignatureKey))
+                {
+                    Console.WriteLine("Invalid ping request header details.");
+                    return;
+                }
+
+                // Build the ping response packet
+                Packet responsePacket = new Packet
+                {
+                    Header = new Packet.PacketHeader
+                    {
+                        NodeId = "PingResponse",
+                        IPAddress = Client.clientIP.ToString(),
+                        Port = Client.clientListenerPort.ToString(),
+                        PublicSignatureKey = ServiceAccountManager.RetrieveKeyFromContainer("PUBNODSIGK"), 
+                        PublicEncryptKey = ServiceAccountManager.RetrieveKeyFromContainer("PUBNODENCK"), 
+                        Packet_Type = "PingResponse",
+                        TTL = "1"
+                    },
+                    Content = Convert.ToBase64String(Encoding.UTF8.GetBytes("PingResponse")),
+                    Signature = SignatureGenerator.SignByteArray(Encoding.UTF8.GetBytes("PingResponse"))
+                };
+
+                // Serialize and send the response packet
+                byte[] encryptedResponseData = Encryption.EncryptWithPersonalKey(
+                    Encoding.UTF8.GetBytes(responsePacket.Content),
+                    sendersPublicEncryptKey
+                );
+
+                bool success = await Client.SendPacketToPeerAsync(senderIPAddress, senderPort, encryptedResponseData, responsePacket.Signature);
+
+                if (success)
+                {
+                    Console.WriteLine($"Successfully sent PingResponse to {senderIPAddress}:{senderPort}");
+                }
+                else
+                {
+                    Console.WriteLine($"Failed to send PingResponse to {senderIPAddress}:{senderPort}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error responding to ping: {ex.Message}");
+            }
+        }
+
+        // Pings the Peerlist Staggard.
+        public async Task StartStaggeredPingAsync()
+        {
+            if (Peers == null || Peers.Count == 0)
+            {
+                Console.WriteLine("No peers available to ping.");
+                return;
+            }
+
+            Console.WriteLine("Starting staggered hourly pings to peers...");
+
+            // Calculate the staggered interval in milliseconds
+            int staggeredInterval = (int)(TimeSpan.FromHours(1).TotalMilliseconds / Peers.Count);
+
+            while (true) // Keep the pinging process running
+            {
+                foreach (var peer in Peers.Values)
+                {
+                    // Ping each peer asynchronously with a delay
+                    _ = SafeTask(async () =>
+                    {
+                        bool isAlive = await PingPeerAsync(peer);
+                        if (isAlive)
+                        {
+                            Console.WriteLine($"Peer {peer.NodeId} responded successfully.");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Peer {peer.NodeId} did not respond. Marking as inactive.");
+                            lock (stateLock)
+                            {
+                                Peers.Remove(peer.NodeId); // Remove the peer if unreachable
+                            }
+                        }
+                    });
+
+                    // Wait for the staggered interval before pinging the next peer
+                    await Task.Delay(staggeredInterval);
+                }
+
+                // Wait for the next hour before starting the next round of pings
+                await Task.Delay(TimeSpan.FromHours(1));
+            }
+        }
+
+        //Ping a single peer. Returns True or false based on successful ping. 
+        private async Task<bool> PingPeerAsync(Peer peer)
+        {
+            try
+            {
+                // Send a small ping packet to the peer
+                Packet pingPacket = new Packet
+                {
+                    Header = new Packet.PacketHeader
+                    {
+                        NodeId = "Ping",
+                        IPAddress = peer.NodeIP,
+                        Port = peer.NodePort.ToString(),
+                        PublicSignatureKey = peer.PublicSignatureKey,
+                        PublicEncryptKey=peer.PublicEncryptKey,
+                        Packet_Type = "Ping",
+                        TTL = "1"
+                    },
+                    Content = Convert.ToBase64String(Encoding.UTF8.GetBytes("PingRequest")),
+                    Signature = SignatureGenerator.SignByteArray(Encoding.UTF8.GetBytes("PingRequest"))
+                };
+
+                // Send the ping and wait for a response
+                bool success = await Client.SendPacketToPeerAsync(
+                    peer.NodeIP,
+                    peer.NodePort,
+                    Encoding.UTF8.GetBytes(pingPacket.Content),
+                    pingPacket.Signature
+                );
+
+                return success; // Return true if the ping was successful
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error pinging peer {peer.NodeId}: {ex.Message}");
+                return false; // Return false if there was an error
+            }
+        }
+
+        // This is used to allow for retries on sending out messages to other nodes.
         private async Task<T> RetryAsync<T>(Func<Task<T>> action, int maxRetries = 3, int delayMilliseconds = 1000)
         {
             for (int i = 0; i < maxRetries; i++)
@@ -563,6 +735,7 @@ namespace SPHERE.Blockchain
             throw new Exception("RetryAsync failed after all attempts."); // Should never reach here
         }
 
+        //same thing here, This is used to assist in retyoing and queueing the tasks.. 
         private async Task SafeTask(Func<Task> action)
         {
             try
@@ -575,17 +748,9 @@ namespace SPHERE.Blockchain
             }
         }
 
-        public  Peer GetPeerByIPAddress(string ipAddress)
-        {
-            lock (stateLock)
-            {
-                return Peers.Values.FirstOrDefault(peer => peer.NodeIP == ipAddress);
-            }
-        }
-
-        
     }
 
+    // This is used to manage the BootStrap Payloads.
     public class BootstrapResponsePayload
     {
         public List<Peer.PeerInfo> Peers { get; set; }

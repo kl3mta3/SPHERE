@@ -57,8 +57,8 @@ namespace SPHERE.Networking
                         await node.ProcessBootstrapResponse(packet);
                         break;
 
-                    case PacketType.PeerUpdate:
-                        //ProcessPeerUpdate(packet);
+                    case PacketType.PeerUpdateRequest:
+                        await node.RespondToPingAsync(packet);
                         break;
 
                     default:

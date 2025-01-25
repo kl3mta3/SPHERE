@@ -57,10 +57,10 @@ namespace SPHERE.Configure
                 string publicCommunicationKeyBase64 = Convert.ToBase64String(publicCommunicationKey);
                 string privateCommunicationKeyBase64 = Convert.ToBase64String(privateCommunicationKey);
 
-                ServiceAccountManager.StoreKeyInContainer(privateSignatureKeyBase64, "PRIPERSGNK");
-                ServiceAccountManager.StoreKeyInContainer(publicSignatureKeyBase64, "PUBPERSGNK");
-                ServiceAccountManager.StoreKeyInContainer(privateCommunicationKeyBase64, "PRIPERCOMK");
-                ServiceAccountManager.StoreKeyInContainer(publicCommunicationKeyBase64, "PUBPERCOMK");
+                ServiceAccountManager.StoreKeyInContainerWithExport(privateSignatureKeyBase64, "PRIPERSGNK");
+                ServiceAccountManager.StoreKeyInContainerWithExport(publicSignatureKeyBase64, "PUBPERSGNK");
+                ServiceAccountManager.StoreKeyInContainerWithExport(privateCommunicationKeyBase64, "PRIPERCOMK");
+                ServiceAccountManager.StoreKeyInContainerWithExport(publicCommunicationKeyBase64, "PUBPERCOMK");
 
                 privateSignatureKeyBase64 = null;
                 publicSignatureKeyBase64 = null;
@@ -102,11 +102,11 @@ namespace SPHERE.Configure
                 string publicEncKeyBase64 = Convert.ToBase64String(publicEncKey);
                 string privateEncKeyBase64 = Convert.ToBase64String(privateEncKey);
 
-                ServiceAccountManager.StoreKeyInContainer(privateKeyBase64, "PRINODSIGK");
-                ServiceAccountManager.StoreKeyInContainer(publicSigKeyBase64, "PUBNODSIGK");
+                ServiceAccountManager.StoreKeyInContainerWithoutExport(privateKeyBase64, "PRINODSIGK");
+                ServiceAccountManager.StoreKeyInContainerWithExport(publicSigKeyBase64, "PUBNODSIGK");
 
-                ServiceAccountManager.StoreKeyInContainer(privateKeyBase64, "PRINODENCK");
-                ServiceAccountManager.StoreKeyInContainer(privateEncKeyBase64, "PUBNODENCK");
+                ServiceAccountManager.StoreKeyInContainerWithoutExport(privateKeyBase64, "PRINODENCK");
+                ServiceAccountManager.StoreKeyInContainerWithExport(privateEncKeyBase64, "PUBNODENCK");
 
                 privateKeyBase64 = null;
                 publicSigKeyBase64 = null;
