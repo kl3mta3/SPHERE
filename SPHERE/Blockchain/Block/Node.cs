@@ -753,7 +753,7 @@ namespace SPHERE.Blockchain
 
             private static Assembly LoadEmbeddedAssembly(object sender, ResolveEventArgs args)
             {
-                // Adjust the resource name to match your embedded DLL path
+                // Update the resource name to match your namespace and structure
                 var resourceName = "YourNamespace.Libs.Packet.dll";
 
                 var assembly = Assembly.GetExecutingAssembly();
