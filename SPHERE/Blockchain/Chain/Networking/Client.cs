@@ -36,8 +36,8 @@ namespace SPHERE.Networking
         private const int EndPort = 6000;                       // End of the port range
         public TcpClient client;
         public TcpListener Listener;
-        public PacketBuilder packetBuilder;
-        public PacketReader packetReader;
+        public Packet.PacketBuilder packetBuilder;
+        public Packet.PacketReader packetReader;
 
         public IPAddress clientIP ;
         public int clientListenerPort=0;                             //Port for listening to incoming messages Should be static and provided to other clinets 
@@ -222,7 +222,7 @@ namespace SPHERE.Networking
             try
             {
                 using NetworkStream stream = client.GetStream();
-                using PacketReader reader = new PacketReader(stream);
+                using Packet.PacketReader reader = new Packet.PacketReader(stream);
 
                 while (client.Connected)
                 {

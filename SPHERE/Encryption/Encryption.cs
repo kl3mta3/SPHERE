@@ -23,7 +23,7 @@ namespace SPHERE.Configure
     // Encryption/Decryption helper classes
     public static class Encryption
     {
-        // The Local Symmetric Key is used to Eccrypt the blockContact.
+        // The Local Symmetric Key is used to Encrypt the blockContact.
         public static string EncryptWithSymmetric(Contact contactData, string key)
         {
             byte[] convertedKey = Convert.FromBase64String(key);
