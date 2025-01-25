@@ -45,6 +45,7 @@ namespace SPHERE.Configure
 
             return Convert.ToBase64String(ms.ToArray()); // Return Base64-encoded encrypted data
         }
+
         public static Contact DecryptWithSymmetricKey(string encryptedData, string key)
         {
             byte[] convertedKey = Convert.FromBase64String(key);
@@ -137,7 +138,6 @@ namespace SPHERE.Configure
             return decryptor.TransformFinalBlock(ciphertext, 0, ciphertext.Length);
 
         }
-
 
         // Local Symmetric Keys(LSA) are used to Encrypt a contact. They are encrypted with a Semi Pulic Key(SPK) so only someone with the SBK can decrypt the LSK and in turn the contact. 
         public static string EncryptLocalSymmetricKey(string localSymmetricKey, string semiPublicKey)
