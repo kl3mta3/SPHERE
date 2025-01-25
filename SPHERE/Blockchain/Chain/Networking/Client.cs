@@ -3,6 +3,8 @@ using System.Net.Sockets;
 using System.Text;
 using static SPHERE.Blockchain.Node;
 using SPHERE.PacketLib;
+using SPHERE.Blockchain;
+using static SPHERE.PacketLib.Packet;
 
 
 namespace SPHERE.Networking
@@ -250,6 +252,38 @@ namespace SPHERE.Networking
             }
         }
 
+        public async Task ProcessIncomingPacket(Node node, byte[] packetData)
+        {
+            try
+            {
+                Packet packet = PacketBuilder.DeserializePacket(packetData);
+
+                PacketBuilder.PacketType type = ParsePacketType(packet.Header.Packet_Type);
+
+                switch (type)
+                {
+                    case PacketBuilder.PacketType.BootstrapRequest:
+                        await node.SendBootstrapResponse(packet);
+                        break;
+
+                    case PacketBuilder.PacketType.BootstrapResponse:
+                        await node.ProcessBootstrapResponse(packet);
+                        break;
+
+                    case PacketBuilder.PacketType.PeerUpdateRequest:
+                        await node.RespondToPingAsync(packet);
+                        break;
+
+                    default:
+                        Console.WriteLine($"Unknown packet type: {packet.Header.Packet_Type}");
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error processing packet: {ex.Message}");
+            }
+        }
 
     }
 

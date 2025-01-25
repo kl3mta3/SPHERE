@@ -150,7 +150,8 @@ namespace SPHERE.Blockchain
             await RetryAsync<bool>(async () =>
             {
                 // Build the bootstrap request packet
-                Packet packet = Packet.PacketBuilder.BuildPacket(node, "BootstrapRequest", Packet.PacketBuilder.PacketType.BootstrapRequest, 75);
+                Packet.PacketHeader header = Packet.PacketBuilder.BuildPacketHeader(Packet.PacketBuilder.PacketType.BootstrapRequest,node.Peer.NodeId, node.Peer.PublicSignatureKey,node.Client.clientListenerPort, node.Client.clientIP.ToString(), 75);
+                Packet packet = Packet.PacketBuilder.BuildPacket(header, "BootstrapRequest");
 
                 // Serialize the packet into a byte array
                 byte[] data = Packet.PacketBuilder.SerializePacket(packet);
@@ -394,7 +395,8 @@ namespace SPHERE.Blockchain
             var tasks = new List<Task>();
 
             // Build and serialize the packet with a TTL of 75
-            Packet packet = Packet.PacketBuilder.BuildPacket(node, "Update My EndPoint Info", Packet.PacketBuilder.PacketType.PeerUpdateRequest, 75);
+            Packet.PacketHeader header = Packet.PacketBuilder.BuildPacketHeader(Packet.PacketBuilder.PacketType.PeerUpdateRequest, node.Peer.NodeId, node.Peer.PublicSignatureKey, node.Client.clientListenerPort, node.Client.clientIP.ToString(), 75);
+            Packet packet = Packet.PacketBuilder.BuildPacket(header, "Update My EndPoint Info");
             byte[] data = Packet.PacketBuilder.SerializePacket(packet);
 
             lock (Peers)
