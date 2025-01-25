@@ -400,5 +400,5 @@ FodyWeavers.xsd
 *.sln.iml
 
 # Packet project and DLL
-/libs/Packet.dll
+/SPHERE/Libs/Packet.dll
 /Packet/
