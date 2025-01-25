@@ -1,10 +1,4 @@
-﻿using SPHERE.Blockchain;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using static SPHERE.Networking.PacketBuilder;
+﻿using static SPHERE.Networking.PacketBuilder;
 
 namespace SPHERE.Networking
 { 
