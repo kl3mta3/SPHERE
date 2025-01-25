@@ -14,37 +14,50 @@ namespace SPHERE.Blockchain
         public ContactMetaData MetaData { get; set; }               // Contacts needed MetaData.
         public ContactKeys Keys { get; set; }                       // Contacts needed Encryption keys. 
 
-
-        public static Contact CreateNewContact(string displayName, string name, string blockId, string? avatarURL, string? description)
+        /// <summary>
+        /// !!!
+        /// To Create a contact and Generate Pairs of needed Private Keys, A password is needed to be passed in.  This is a string meeting Requirements.  (Needs Upper, Lower, Number, Symbol, and to be between 8-64 characters.)
+        /// User Password.CreatePasswordFromString(string password) to generate a password from a string or Password.GenerateRandomPassword(int length) defaults to 16char.
+        /// <param name="displayName"></param>
+        /// <param name="name"></param>
+        /// <param name="blockId"></param>
+        /// <param name="avatarURL"></param>
+        /// <param name="description"></param>
+        /// <param name="privateKeyPassword"></param>
+        /// !!!
+        /// <returns></returns>
+        /// </summary>
+        public static Contact CreateNewContact(string displayName, string name, string blockId, string? avatarURL, string? description, Password privateKeyPassword)
         {
+            
 
             //Generate the set or Key Pairs needed  (Signature and Communication pair)
-            KeyGenerator.GeneratePersonalKeyPairSets();
+            KeyGenerator.GeneratePersonalKeyPairSets(privateKeyPassword);
             var semiPublicKey = KeyGenerator.GenerateSymmetricKey();
-            ServiceAccountManager.StoreKeyInContainerWithoutExport(semiPublicKey, "SPUBK");
+            ServiceAccountManager.StorePublicKeyInContainerWithExportPlainText(semiPublicKey, KeyGenerator.KeyType.SemiPublicKey);
             semiPublicKey = null;
 
             //used to encrypt the contact
             var localSymmetricKey = KeyGenerator.GenerateSymmetricKey();
-            ServiceAccountManager.StoreKeyInContainerWithoutExport(localSymmetricKey, "RLSK");
+            ServiceAccountManager.StorePrivateKeyInContainerWithExportPlainText(localSymmetricKey, KeyGenerator.KeyType.LocalSymmetricKey, privateKeyPassword);
             localSymmetricKey = null;
 
             //the LocalSymmetricKey is Encrypted with the SemiPublicKey and attached to the block so only approved people with the semiPublicKey can decrypt the EncryptedLocalSymetricKey and then decrypt the contact. 
             var encryptedLocalSymmetricKey = Encryption.EncryptLocalSymmetricKey(localSymmetricKey, semiPublicKey);
-            ServiceAccountManager.StoreKeyInContainerWithoutExport(encryptedLocalSymmetricKey, "ELSK");
+            ServiceAccountManager.StorePublicKeyInContainerWithExportPlainText(encryptedLocalSymmetricKey, KeyGenerator.KeyType.EncryptedLocalSymmetricKey);
             encryptedLocalSymmetricKey = null;
 
-            //Create a GNC Certificate for the PrivateCommunicationKey to verify correct standards are used. For Node application quality checks. (May remove later) 
-            var GNCCert = SignatureGenerator.CreateSphereGNCCertificate("PRISIGK");
-            ServiceAccountManager.StoreKeyInContainerWithoutExport(GNCCert, "GNCC");
+            //Create a GNC Certificate for the PrivatePersonalEncryptionKey to verify correct standards are used. For Node application quality checks. (May remove later) 
+            var GNCCert = SignatureGenerator.CreateSphereCNGCertificate(KeyGenerator.KeyType.PrivatePersonalEncryptionKey);
+            ServiceAccountManager.StoreKeyInContainerWithoutExport(GNCCert, KeyGenerator.KeyType.CNGCert);
             GNCCert = null;
 
             ContactKeys keys = new ContactKeys
             {
-                PersonalCommKey = ServiceAccountManager.RetrieveKeyFromContainer("PUBCOMK"),
-                PublicSignatureKey = ServiceAccountManager.RetrieveKeyFromContainer("PUBSIGK"),
-                SemiPublicKey = ServiceAccountManager.RetrieveKeyFromContainer("SPUBK"),
-                LocalSymmetricKey = ServiceAccountManager.RetrieveKeyFromContainer("RLSK")
+                PublicPersonalEncryptionKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalEncryptionKey),
+                PublicPersonalSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalSignatureKey),
+                SemiPublicKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.SemiPublicKey),
+                LocalSymmetricKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.LocalSymmetricKey)
             };
 
             ContactMetaData metaData = new ContactMetaData
@@ -113,8 +126,8 @@ namespace SPHERE.Blockchain
         {
             public string SemiPublicKey { get; set; }                   // Semi-public key
             public string LocalSymmetricKey { get; set; }               // Unencrypted Local Symetric code used to encrypt the Contact. 
-            public string PersonalCommKey { get; set; }                 // Personal Communication key for encrypting messages only the user can decrypt
-            public string PublicSignatureKey { get; set; }              // Used to verify signatures created with the PrivateSignatureKey
+            public string PublicPersonalEncryptionKey { get; set; }                 // Personal Communication key for encrypting messages only the user can decrypt
+            public string PublicPersonalSignatureKey { get; set; }              // Used to verify signatures created with the PrivateSignatureKey
         }
 
     }

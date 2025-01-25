@@ -32,6 +32,8 @@ namespace SPHERE.Blockchain
     /// (Request could not be addded to verified by so much of the network and keep bouncing till that point and then updates will happen)
     /// The block edit request would be just the signature for approval and the already encryptedcontact, to which the old contact block is replaced as a while.  
     /// 
+    /// To create a block Contact the first time Private Keys are needed to be generated so a Password is needed to be made with either Password.CreatePasswordWithString(string password) or Password.GenerateRandomPassword(int length) defaults to 16 characters.
+    ///
     ///
     /// </summary>
     public class Block
@@ -95,7 +97,15 @@ namespace SPHERE.Blockchain
             // Creating a Block
             public static Block CreateBlock(string previousHash, string encryptedContactData, EncryptionAlgorithm encryptionAlgorithm)
             {
+
+                //Check to see if Keys exist.
+                if (!ServiceAccountManager.KeyContainerExists(KeyGenerator.KeyType.PublicPersonalSignatureKey) || !ServiceAccountManager.KeyContainerExists(KeyGenerator.KeyType.PrivatePersonalSignatureKey) || !ServiceAccountManager.KeyContainerExists(KeyGenerator.KeyType.PublicPersonalEncryptionKey) || !ServiceAccountManager.KeyContainerExists(KeyGenerator.KeyType.PrivatePersonalEncryptionKey))
+                {
+                  throw new ArgumentException(nameof(ServiceAccountManager), "One or more Key was Missing You should run KeyGenerator.GeneratePersonalKeyPairSets(string exportPassword). A password will be needed to be included for exporting private keys later.");
+                }
+
                 DateTime creationTime = DateTime.Now;
+
                 var header = new BlockHeader
                 {
                     BlockId = GenerateBlockID(),
@@ -104,8 +114,8 @@ namespace SPHERE.Blockchain
                     LastUpdateTime = creationTime,
                     EncryptionAlgorithm = encryptionAlgorithm.ToString(),
                     KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
-                    PublicSignatureKey = ServiceAccountManager.RetrieveKeyFromContainer("PUBSIGK"),
-                    GNCCertificate = ServiceAccountManager.RetrieveKeyFromContainer("GNCC")
+                    PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalSignatureKey),
+                    GNCCertificate = SignatureGenerator.CreateSphereCNGCertificate(KeyGenerator.KeyType.PrivatePersonalEncryptionKey),
                 };
 
                 // Encrypt and store contact data
@@ -118,7 +128,7 @@ namespace SPHERE.Blockchain
                 {
                     Header = header,
                     EncryptedContact = encryptedContactData,
-                    EncryptedLocalSymmetricKey = ServiceAccountManager.RetrieveKeyFromContainer("ELSK"),
+                    EncryptedLocalSymmetricKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.EncryptedLocalSymmetricKey),
                 };
             }
 

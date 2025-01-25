@@ -37,7 +37,7 @@ namespace SPHERE.Configure
             // Create the signature using the private key
             using (var ecdsa = ECDsa.Create())
             {
-                ecdsa.ImportPkcs8PrivateKey(Convert.FromBase64String(ServiceAccountManager.RetrieveKeyFromContainer("PRISIGK")), out _);
+                ecdsa.ImportPkcs8PrivateKey(Convert.FromBase64String(ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivatePersonalSignatureKey)), out _);
                 byte[] signature = ecdsa.SignData(blockBytes, HashAlgorithmName.SHA256);
 
                 // Return the signature as a Base64-encoded string
@@ -53,7 +53,7 @@ namespace SPHERE.Configure
             // Create the signature using the private key
             using (var ecdsa = ECDsa.Create())
             {
-                ecdsa.ImportPkcs8PrivateKey(Convert.FromBase64String(ServiceAccountManager.RetrieveKeyFromContainer("PRINODSIGK")), out _);
+                ecdsa.ImportPkcs8PrivateKey(Convert.FromBase64String(ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeSignatureKey)), out _);
                 byte[] signature = ecdsa.SignData(blockBytes, HashAlgorithmName.SHA256);
 
                 // Return the signature as a Base64-encoded string
@@ -69,7 +69,7 @@ namespace SPHERE.Configure
             // Create the signature using the private key
             using (var ecdsa = ECDsa.Create())
             {
-                ecdsa.ImportPkcs8PrivateKey(Convert.FromBase64String(ServiceAccountManager.RetrieveKeyFromContainer("PRINODSIGK")), out _);
+                ecdsa.ImportPkcs8PrivateKey(Convert.FromBase64String(ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeSignatureKey)), out _);
                 byte[] signature = ecdsa.SignData(data, HashAlgorithmName.SHA256);
 
                 // Return the signature as a Base64-encoded string
@@ -123,26 +123,34 @@ namespace SPHERE.Configure
             }
         }
 
-        public static string CreateSphereGNCCertificate(string containerName)
+        public static string CreateSphereCNGCertificate(KeyGenerator.KeyType keyType)
         {
-            // Open the existing key container
-            using var key = CngKey.Open(containerName);
+            string containerName=keyType.ToString();
+            try
+            {
+                // Open the existing key container
+                using var key = CngKey.Open(containerName);
 
-            // Wrap the CngKey as an ECDsa object
-            using var ecdsa = new ECDsaCng(key);
+                // Wrap the CngKey as an ECDsa object
+                using var ecdsa = new ECDsaCng(key);
 
-            // Use S.P.H.E.R.E as the subject name
-            var request = new CertificateRequest(
-                new X500DistinguishedName("CN=S.P.H.E.R.E"),
-                ecdsa,
-                HashAlgorithmName.SHA256
-            );
+                // Use S.P.H.E.R.E as the subject name
+                var request = new CertificateRequest(
+                    new X500DistinguishedName("CN=S.P.H.E.R.E"),
+                    ecdsa,
+                    HashAlgorithmName.SHA256
+                );
 
 
-            // Generate a self-signed certificate
-            var certificate = request.CreateSelfSigned(DateTimeOffset.Now, DateTimeOffset.Now.AddYears(5));
-            byte[] certBytes = certificate.Export(X509ContentType.Cert);
-            return Convert.ToBase64String(certBytes);
+                // Generate a self-signed certificate
+                var certificate = request.CreateSelfSigned(DateTimeOffset.Now, DateTimeOffset.Now.AddYears(5));
+                byte[] certBytes = certificate.Export(X509ContentType.Cert);
+                return Convert.ToBase64String(certBytes);
+            }
+            catch (Exception ex)
+            {
+            }
+            throw new Exception("Failed to Generate CNG Certificate.");
         }
 
         public static X509Certificate2 DeserializeCertificateFromString(string base64Cert)

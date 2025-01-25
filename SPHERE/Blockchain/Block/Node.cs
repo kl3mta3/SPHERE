@@ -70,7 +70,7 @@ namespace SPHERE.Blockchain
             lock (stateLock)
             {
                 //Check to see if Keys exist.
-                if (!ServiceAccountManager.KeyContainerExists("PUBNODSIGK") || !ServiceAccountManager.KeyContainerExists("PUBNODENCK"))
+                if (!ServiceAccountManager.KeyContainerExists(KeyGenerator.KeyType.PublicNodeSignatureKey) || !ServiceAccountManager.KeyContainerExists(KeyGenerator.KeyType.PublicNodeEncryptionKey))
                 {
                     KeyGenerator.GenerateNodeKeyPairs();
                 }
@@ -86,8 +86,8 @@ namespace SPHERE.Blockchain
                     NodeIP = client.clientIP.ToString(),
                     NodePort = client.clientListenerPort,
                     PreviousNodesHash = DefaultPreviousHash, // Placeholder value
-                    PublicSignatureKey = ServiceAccountManager.RetrieveKeyFromContainer("PUBNODSIGK"),
-                    PublicEncryptKey = ServiceAccountManager.RetrieveKeyFromContainer("PUBNODENCK"),
+                    PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
+                    PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
                 };
 
                 // Assign header to node
@@ -217,7 +217,7 @@ namespace SPHERE.Blockchain
                 }
 
                 // Decrypt the data
-                byte[] decryptedData = Encryption.DecryptWithPrivateKey(encryptedData, ServiceAccountManager.RetrieveKeyFromContainer("PRINODENCK"));
+                byte[] decryptedData = Encryption.DecryptWithPrivateKey(encryptedData, ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeEncryptionKey));
 
                 // Deserialize the response payload
                 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
@@ -597,8 +597,8 @@ namespace SPHERE.Blockchain
                         NodeId = "PingResponse",
                         IPAddress = Client.clientIP.ToString(),
                         Port = Client.clientListenerPort.ToString(),
-                        PublicSignatureKey = ServiceAccountManager.RetrieveKeyFromContainer("PUBNODSIGK"), 
-                        PublicEncryptKey = ServiceAccountManager.RetrieveKeyFromContainer("PUBNODENCK"), 
+                        PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey), 
+                        PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey), 
                         Packet_Type = "PingResponse",
                         TTL = "1"
                     },

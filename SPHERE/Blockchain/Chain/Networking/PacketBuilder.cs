@@ -20,7 +20,7 @@ namespace SPHERE.Networking
     /// </summary>
     public class PacketBuilder
     {
-        public  enum PacketType
+        public enum PacketType
         {
             BootstrapRequest,
             BootstrapResponse,

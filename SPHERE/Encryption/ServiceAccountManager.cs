@@ -8,6 +8,8 @@ using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
 using SPHERE;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using static SPHERE.Configure.KeyGenerator;
 
 namespace SPHERE.Configure
 {
@@ -32,9 +34,11 @@ namespace SPHERE.Configure
     /// </summary>
     public static class ServiceAccountManager
     {
+
         internal static string ServiceAccountName = AppIdentifier.GetOrCreateServiceName();
 
-        public static void ServiceAccountLogon()   // Starts or creats the Service Account
+        // Starts or creats the Service Account
+        public static void ServiceAccountLogon()
         {
             try
             {
@@ -148,16 +152,10 @@ namespace SPHERE.Configure
             }
         }
 
-        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Auto)]
-        private static extern bool LogonUser(string lpszUsername, string lpszDomain, string lpszPassword,
-            int dwLogonType, int dwLogonProvider, out IntPtr phToken);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool CloseHandle(IntPtr hObject);
-
         // The Encryption Keys are stored in Local CNG Containers.  Those containers are only accessable by the local Service account the App Creates and runs on. NO EXPORT Safest option for private keys.
-        public static void StoreKeyInContainerWithoutExport(string key, string keyName)
+        public static void StoreKeyInContainerWithoutExport(string key, KeyType keyType)
         {
+            string keyName= keyType.ToString();
             string AppId = AppIdentifier.GetOrCreateAppId();
 
             // Ensure the service account exists
@@ -202,22 +200,30 @@ namespace SPHERE.Configure
             }
         }
 
-        // The Encryption Keys are stored in Local CNG Containers.  Those containers are only accessable by the local Service account the App Creates and runs on. EXPORT AS PLAIN TEXT !!!! DANGEROUS BUT NECESSARY SOMETIMES.  SHOLD INCLUDE TIMED KEY WITH PASSWORD ENCRYPTION
-        public static void StoreKeyInContainerWithExportPlainText(string key, string keyName)
+        /// <summary>
+        /// The Encryption PrivateKeys are stored in Local CNG Containers.  Those containers are only accessable by the local Service account the App Creates and runs on. EXPORT AS PLAIN TEXT !!!! DANGEROUS BUT NECESSARY SOMETIMES.  Only Viewable as EXPORTABLE TO A DIALOG BOX NO DEV ACCESS OTHERWISE!
+        /// This is necessary for export as for users to migrate from one "Node" or app to another these keys would be needed as they are the users identity in the chain. If fully lost or locked away so is access to edit or share the block. the user will need to start over. 
+        /// <param name="key"></param>
+        /// <param name="keyName"></param>
+        /// <param name="password"></param>
+        /// <exception cref="ArgumentException"></exception>
+        /// </summary>
+        public static void StorePrivateKeyInContainerWithExportPlainText(string key, KeyType keyType, Password password)
         {
-            string AppId = AppIdentifier.GetOrCreateAppId();
-
-            // Ensure the service account exists
-            using (var context = new PrincipalContext(ContextType.Machine))
+            if (keyType == null || keyType == KeyType.PublicNodeEncryptionKey || keyType == KeyType.PublicNodeSignatureKey || keyType == KeyType.PublicPersonalEncryptionKey || keyType == KeyType.PublicPersonalSignatureKey)
             {
-                // Check if the service account exists
-                UserPrincipal user = UserPrincipal.FindByIdentity(context, ServiceAccountName);
-
-                if (user == null)
-                {
-                    ServiceAccountManager.ServiceAccountLogon();
-                }
+                throw new ArgumentNullException("A Private KeyType is needed.", nameof(keyType));
             }
+            
+
+
+            if (string.IsNullOrWhiteSpace(password.Value))
+            {
+                throw new ArgumentException("Password is required for storing private keys.", nameof(password));
+            }
+
+            string AppId = AppIdentifier.GetOrCreateAppId();
+            string keyName = keyType.ToString();
 
             try
             {
@@ -227,8 +233,8 @@ namespace SPHERE.Configure
                 // Define key creation parameters
                 var creationParameters = new CngKeyCreationParameters
                 {
-                    ExportPolicy = CngExportPolicies.AllowPlaintextExport, // Allows for the plain Text of the containter key.
-                    KeyUsage = CngKeyUsages.Signing | CngKeyUsages.Decryption // Restrict to signing and decryption
+                    ExportPolicy = CngExportPolicies.None, // Private keys are not exportable by default
+                    KeyUsage = CngKeyUsages.Signing | CngKeyUsages.Decryption
                 };
 
                 // Create the key
@@ -237,35 +243,79 @@ namespace SPHERE.Configure
                 // Store the application-specific identifier
                 cngKey.SetProperty(new CngProperty("AppId", Encoding.UTF8.GetBytes(AppId), CngPropertyOptions.None));
 
-                // Optional: Store additional data securely within the container
+                // Store the key data securely
                 cngKey.SetProperty(new CngProperty("KeyData", convertedKey, CngPropertyOptions.None));
 
-                Console.WriteLine("Private key stored securely with app-specific restrictions.");
+                // Generate the password hash
+                byte[] salt = new byte[16];
+                using (var rng = RandomNumberGenerator.Create())
+                {
+                    rng.GetBytes(salt);
+                }
+
+                using (var deriveBytes = new Rfc2898DeriveBytes(password.Value, salt, 10000, HashAlgorithmName.SHA256))
+                {
+                    byte[] hash = deriveBytes.GetBytes(32);
+
+                    // Combine the salt and hash for storage
+                    byte[] hashWithSalt = new byte[salt.Length + hash.Length];
+                    Array.Copy(salt, 0, hashWithSalt, 0, salt.Length);
+                    Array.Copy(hash, 0, hashWithSalt, salt.Length, hash.Length);
+
+                    // Store the password hash in the container
+                    cngKey.SetProperty(new CngProperty("PasswordHash", hashWithSalt, CngPropertyOptions.None));
+                }
+
+                Console.WriteLine("Private key stored securely with password protection.");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error storing private key: {ex.Message}");
+                throw;
+            }
+        }
+
+        // The Encryption PublicKeys are stored in Local CNG Containers.  Those containers are only accessable by the local Service account the App Creates and runs on. EXPORT AS PLAIN TEXT FOR PUBLIC KEYS HAS LITTLE RISK AND IS NEEDED OFTEN. 
+        public static void StorePublicKeyInContainerWithExportPlainText(string key, KeyType keyType)
+        {
+            string AppId = AppIdentifier.GetOrCreateAppId();
+            string keyName= keyType.ToString();
+
+            try
+            {
+                // Convert the key from Base64
+                byte[] convertedKey = Convert.FromBase64String(key);
+
+                // Define key creation parameters
+                var creationParameters = new CngKeyCreationParameters
+                {
+                    ExportPolicy = CngExportPolicies.AllowPlaintextExport, // Public keys are exportable
+                    KeyUsage = CngKeyUsages.KeyAgreement
+                };
+
+                // Create the key
+                using var cngKey = CngKey.Create(CngAlgorithm.ECDsaP256, keyName, creationParameters);
+
+                // Store the application-specific identifier
+                cngKey.SetProperty(new CngProperty("AppId", Encoding.UTF8.GetBytes(AppId), CngPropertyOptions.None));
+
+                // Store the key data securely
+                cngKey.SetProperty(new CngProperty("KeyData", convertedKey, CngPropertyOptions.None));
+
+                Console.WriteLine("Public key stored securely and is exportable.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error storing public key: {ex.Message}");
                 throw;
             }
         }
 
         // The Encryption Keys are stored in Local CNG Containers.  Those containers are only accessable by the local Service account the App Creates and runs on. EXPORT AS CNGContainer.  MUCH SAFER OPTION BUT ONLY VIABLE TO OTHER WINDOWS DEVICES.
-        public static void StoreKeyInContainerWithExport(string key, string keyName)
+        public static void StoreKeyInContainerWithExport(string key, KeyType keyType, string password = null, bool isPublicKey = false)
         {
             string AppId = AppIdentifier.GetOrCreateAppId();
-
-            // Ensure the service account exists
-            using (var context = new PrincipalContext(ContextType.Machine))
-            {
-                // Check if the service account exists
-                UserPrincipal user = UserPrincipal.FindByIdentity(context, ServiceAccountName);
-
-                if (user == null)
-                {
-                    ServiceAccountManager.ServiceAccountLogon();
-                }
-            }
-
+            string keyName= keyType.ToString();
             try
             {
                 // Convert the key from Base64
@@ -274,8 +324,8 @@ namespace SPHERE.Configure
                 // Define key creation parameters
                 var creationParameters = new CngKeyCreationParameters
                 {
-                    ExportPolicy = CngExportPolicies.AllowExport, // key export as Containers only
-                    KeyUsage = CngKeyUsages.Signing | CngKeyUsages.Decryption // Restrict to signing and decryption
+                    ExportPolicy = isPublicKey ? CngExportPolicies.AllowExport : CngExportPolicies.None,
+                    KeyUsage = isPublicKey ? CngKeyUsages.KeyAgreement : CngKeyUsages.Signing | CngKeyUsages.Decryption
                 };
 
                 // Create the key
@@ -284,46 +334,135 @@ namespace SPHERE.Configure
                 // Store the application-specific identifier
                 cngKey.SetProperty(new CngProperty("AppId", Encoding.UTF8.GetBytes(AppId), CngPropertyOptions.None));
 
-                // Optional: Store additional data securely within the container
+                // Store the key data securely
                 cngKey.SetProperty(new CngProperty("KeyData", convertedKey, CngPropertyOptions.None));
 
-                Console.WriteLine("Private key stored securely with app-specific restrictions.");
+                if (!isPublicKey && password != null)
+                {
+                    // Generate the password hash
+                    byte[] salt = new byte[16];
+                    using (var rng = RandomNumberGenerator.Create())
+                    {
+                        rng.GetBytes(salt);
+                    }
+
+                    using (var deriveBytes = new Rfc2898DeriveBytes(password, salt, 10000, HashAlgorithmName.SHA256))
+                    {
+                        byte[] hash = deriveBytes.GetBytes(32);
+
+                        // Combine the salt and hash for storage
+                        byte[] hashWithSalt = new byte[salt.Length + hash.Length];
+                        Array.Copy(salt, 0, hashWithSalt, 0, salt.Length);
+                        Array.Copy(hash, 0, hashWithSalt, salt.Length, hash.Length);
+
+                        // Store the password hash in the container
+                        cngKey.SetProperty(new CngProperty("PasswordHash", hashWithSalt, CngPropertyOptions.None));
+                    }
+                }
+
+                Console.WriteLine(isPublicKey
+                    ? "Public key stored securely and is exportable."
+                    : "Private key stored securely with password protection.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error storing private key: {ex.Message}");
+                Console.WriteLine($"Error storing key: {ex.Message}");
                 throw;
             }
         }
 
-    
-        public static string RetrieveKeyFromContainer(string keyName)
+        public static string UseKeyInStorageContainer(KeyType keyType)
         {
+            string keyName=keyType.ToString();
             try
             {
                 // Open the key from the container
                 using var cngKey = CngKey.Open(keyName);
 
-                // Retrieve the application-specific identifier (optional)
-                var appIdProperty = cngKey.GetProperty("AppId", CngPropertyOptions.None);
-                string appId = Encoding.UTF8.GetString(appIdProperty.GetValue());
-                Console.WriteLine($"Retrieved AppId: {appId}");
-
                 // Retrieve the stored key data
                 var keyDataProperty = cngKey.GetProperty("KeyData", CngPropertyOptions.None);
                 string keyData = Convert.ToBase64String(keyDataProperty.GetValue());
 
+                Console.WriteLine("Key retrieved successfully for cryptographic use.");
                 return keyData;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error retrieving key from container: {ex.Message}");
+                Console.WriteLine($"Error retrieving key: {ex.Message}");
                 throw;
             }
         }
 
-        public static bool KeyContainerExists(string containerName)
+        public static string ExportPrivateKeyFromContainer(KeyType keyType, string password = null)
         {
+
+            string keyName = keyType.ToString();
+            try
+            {
+                // Open the key from the container
+                using var cngKey = CngKey.Open(keyName);
+
+                    if (string.IsNullOrWhiteSpace(password))
+                    {
+                        throw new UnauthorizedAccessException("Password is required to export the private key.");
+                    }
+
+                    // Retrieve and validate the password hash
+                    var passwordHashProperty = cngKey.GetProperty("PasswordHash", CngPropertyOptions.None);
+                    byte[] hashWithSalt = passwordHashProperty.GetValue();
+
+                    byte[] salt = new byte[16];
+                    byte[] storedHash = new byte[32];
+                    Array.Copy(hashWithSalt, 0, salt, 0, salt.Length);
+                    Array.Copy(hashWithSalt, salt.Length, storedHash, 0, storedHash.Length);
+
+                    using (var deriveBytes = new Rfc2898DeriveBytes(password, salt, 10000, HashAlgorithmName.SHA256))
+                    {
+                        byte[] computedHash = deriveBytes.GetBytes(32);
+
+                        if (!computedHash.SequenceEqual(storedHash))
+                        {
+                            throw new UnauthorizedAccessException("Incorrect password.");
+                        }
+                    }
+
+                // Retrieve and validate the private key data
+                var keyDataProperty = cngKey.GetProperty("KeyData", CngPropertyOptions.None);
+                string privateKeyData = Convert.ToBase64String(keyDataProperty.GetValue());
+
+                return privateKeyData;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error exporting key: {ex.Message}");
+                throw;
+            }
+        }
+
+        public static string ExportPublicKeyFromContainer(KeyType keyType)
+        {
+            string keyName=keyType.ToString();
+            try
+            {
+                // Open the key from the container
+                using var cngKey = CngKey.Open(keyName);
+
+                // Retrieve and validate the public key data
+                var keyDataProperty = cngKey.GetProperty("KeyData", CngPropertyOptions.None);
+                string publicKeyData = Convert.ToBase64String(keyDataProperty.GetValue());
+
+                return publicKeyData;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error exporting key: {ex.Message}");
+                throw;
+            }
+        }
+
+        public static bool KeyContainerExists(KeyType keyType)
+        {
+            string containerName=keyType.ToString();
             try
             {
                 // Try to open the CNG key with the specified name
@@ -340,8 +479,9 @@ namespace SPHERE.Configure
             }
         }
 
-        public static RSAParameters RetrievePrivateKeySecurely(string keyName)
+        public static RSAParameters RetrievePrivateKeySecurely(KeyType keyType)
         {
+            string keyName = keyType.ToString();
             using (var rsa = new RSACryptoServiceProvider(new CspParameters
             {
                 KeyContainerName = keyName,
@@ -351,13 +491,13 @@ namespace SPHERE.Configure
                 return rsa.ExportParameters(true); // Includes private key
             }
         }
-        public static bool AuthenticateUser()
-        {
-            // Example: Simple PIN authentication
-            Console.WriteLine("Enter PIN to access private key:");
-            string enteredPin = Console.ReadLine();
-            return enteredPin == "1234"; // Replace with actual secure validation
-        }
+
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        private static extern bool LogonUser(string lpszUsername, string lpszDomain, string lpszPassword,
+            int dwLogonType, int dwLogonProvider, out IntPtr phToken);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool CloseHandle(IntPtr hObject);
     }
 
     public static class AccountRestrictionManager
