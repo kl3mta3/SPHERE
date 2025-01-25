@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using SPHERE.Configure;
 
+
 namespace SPHERE.Blockchain
 {
     public enum EncryptionAlgorithm

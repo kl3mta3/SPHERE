@@ -1,7 +1,9 @@
-﻿using System.Text;
+﻿using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using SPHERE.Configure;
 using SPHERE.Networking;
+using SPHERE.PacketLib;
 
 namespace SPHERE.Blockchain
 {
@@ -56,8 +58,8 @@ namespace SPHERE.Blockchain
         //This is used to Create the Node or Load one if it exists. 
         public static Node CreateNode(Client client, NodeType nodeType)
         {
+            var trigger = typeof(EmbeddedDllLoader);
             Node node = new Node();
-
             // Thread-safe key generation
             lock (stateLock)
             {
@@ -70,6 +72,7 @@ namespace SPHERE.Blockchain
 
             try
             {
+                
                 // Initialize PeerHeader
                 Peer peer = new Peer
                 {
@@ -738,6 +741,33 @@ namespace SPHERE.Blockchain
             catch (Exception ex)
             {
                 Console.WriteLine($"Task error: {ex.Message}");
+            }
+        }
+
+        public static class EmbeddedDllLoader
+        {
+            static EmbeddedDllLoader()
+            {
+                AppDomain.CurrentDomain.AssemblyResolve += LoadEmbeddedAssembly;
+            }
+
+            private static Assembly LoadEmbeddedAssembly(object sender, ResolveEventArgs args)
+            {
+                // Adjust the resource name to match your embedded DLL path
+                var resourceName = "YourNamespace.Libs.Packet.dll";
+
+                var assembly = Assembly.GetExecutingAssembly();
+                using (var stream = assembly.GetManifestResourceStream(resourceName))
+                {
+                    if (stream == null)
+                    {
+                        return null;
+                    }
+
+                    var buffer = new byte[stream.Length];
+                    stream.Read(buffer, 0, buffer.Length);
+                    return Assembly.Load(buffer);
+                }
             }
         }
 

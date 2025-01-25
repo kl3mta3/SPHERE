@@ -1,5 +1,6 @@
 ﻿using SPHERE.Configure;
 
+
 namespace SPHERE.Blockchain
 {
     public class Contact

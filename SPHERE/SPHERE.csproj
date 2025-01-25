@@ -11,4 +11,10 @@
     <PackageReference Include="System.DirectoryServices.AccountManagement" Version="9.0.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Reference Include="Packet">
+      <HintPath>..\Packet\bin\Debug\net8.0\Packet.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
 </Project>

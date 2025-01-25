@@ -6,6 +6,7 @@ using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
 using System.Security.Cryptography;
 using static SPHERE.Configure.KeyGenerator;
+using static SPHERE.Blockchain.Node;
 
 namespace SPHERE.Configure
 {
@@ -38,6 +39,7 @@ namespace SPHERE.Configure
         {
             try
             {
+                var trigger = typeof(EmbeddedDllLoader);
                 using (var context = new PrincipalContext(ContextType.Machine))
                 {
                     // Check if the service account exists
