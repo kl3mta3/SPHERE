@@ -58,7 +58,7 @@ namespace SPHERE.Blockchain
         //This is used to Create the Node or Load one if it exists. 
         public static Node CreateNode(Client client, NodeType nodeType)
         {
-            var trigger = typeof(EmbeddedDllLoader);
+            //var trigger = typeof(EmbeddedDllLoader);
             Node node = new Node();
             // Thread-safe key generation
             lock (stateLock)
@@ -746,32 +746,32 @@ namespace SPHERE.Blockchain
             }
         }
 
-        public static class EmbeddedDllLoader
-        {
-            static EmbeddedDllLoader()
-            {
-                AppDomain.CurrentDomain.AssemblyResolve += LoadEmbeddedAssembly;
-            }
+        //public static class EmbeddedDllLoader
+        //{
+        //    static EmbeddedDllLoader()
+        //    {
+        //        AppDomain.CurrentDomain.AssemblyResolve += LoadEmbeddedAssembly;
+        //    }
 
-            private static Assembly LoadEmbeddedAssembly(object sender, ResolveEventArgs args)
-            {
-                // Update the resource name to match your namespace and structure
-                var resourceName = "SPHERE.Libs.Packet.dll";
+        //    private static Assembly LoadEmbeddedAssembly(object sender, ResolveEventArgs args)
+        //    {
+        //        // Update the resource name to match your namespace and structure
+        //        var resourceName = "SPHERE.Libs.Packet.dll";
 
-                var assembly = Assembly.GetExecutingAssembly();
-                using (var stream = assembly.GetManifestResourceStream(resourceName))
-                {
-                    if (stream == null)
-                    {
-                        return null;
-                    }
+        //        var assembly = Assembly.GetExecutingAssembly();
+        //        using (var stream = assembly.GetManifestResourceStream(resourceName))
+        //        {
+        //            if (stream == null)
+        //            {
+        //                return null;
+        //            }
 
-                    var buffer = new byte[stream.Length];
-                    stream.Read(buffer, 0, buffer.Length);
-                    return Assembly.Load(buffer);
-                }
-            }
-        }
+        //            var buffer = new byte[stream.Length];
+        //            stream.Read(buffer, 0, buffer.Length);
+        //            return Assembly.Load(buffer);
+        //        }
+        //    }
+        //}
 
     }
 

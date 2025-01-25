@@ -145,7 +145,7 @@ namespace SPHERE.Networking
 
         public static async Task StartClientListenerAsync(Client client)
         {
-            var trigger = typeof(EmbeddedDllLoader);
+            //var trigger = typeof(EmbeddedDllLoader);
             if (client.clientListenerPort==0)
             {
                 client.clientListenerPort = FindAvailablePort();
@@ -176,7 +176,7 @@ namespace SPHERE.Networking
         {
             try
             {
-                var trigger = typeof(EmbeddedDllLoader);
+                //var trigger = typeof(EmbeddedDllLoader);
                 var stun = new STUN();
                 var (PublicIP, PublicPort) = stun.GetPublicEndpoint();
 
