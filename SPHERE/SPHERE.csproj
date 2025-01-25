@@ -8,6 +8,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Libs\Packet.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Libs\Packet.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="System.DirectoryServices.AccountManagement" Version="9.0.1" />
   </ItemGroup>
 
