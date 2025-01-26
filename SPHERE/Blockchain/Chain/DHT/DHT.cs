@@ -23,7 +23,7 @@ namespace SPHERE.Blockchain
 
         private readonly Dictionary<string, Block> _blocks = new();
 
-        private List<Peer> RoutingTable = new List<Peer>();
+        public RoutingTable RoutingTable { get; set; }
 
         public void AddBlock(Block block)
         {
@@ -84,11 +84,11 @@ namespace SPHERE.Blockchain
             }
         }
 
-        public static string GetAppDataPath()
+        public static string GetAppDataPath(string fileName)
         {
             string appDataDir;
             appDataDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            return Path.Combine(appDataDir, $"{AppIdentifier.GetOrCreateServiceName()}.state");
+            return Path.Combine(appDataDir, $"{AppIdentifier.GetOrCreateServiceName()}{fileName}.state");
         }
 
         /// <summary>
@@ -138,14 +138,13 @@ namespace SPHERE.Blockchain
             return true;
         }
 
-        // Save DHT state to a file
         public void SaveState()
         {
             lock (stateLock) // Ensure thread safety
             {
                 try
                 {
-                    string filePath = GetAppDataPath();
+                    string filePath = GetAppDataPath("DHT");
 
                     // Ensure the directory exists
                     string directoryPath = Path.GetDirectoryName(filePath);
@@ -185,7 +184,7 @@ namespace SPHERE.Blockchain
             {
                 try
                 {
-                    string filePath = GetAppDataPath();
+                    string filePath = GetAppDataPath("DHT");
 
                     if (!File.Exists(filePath))
                     {
@@ -232,21 +231,17 @@ namespace SPHERE.Blockchain
             }
         }
 
-
-        //public void UpdateRoutingTable(IEnumerable<Peer> bootstrapPeers)
-        //{
-        //    lock (stateLock)
-        //    {
-        //        foreach (var peer in bootstrapPeers)
-        //        {
-        //            if (!RoutingTable.Any(p => p.NodeId == peer.NodeId))
-        //            {
-        //                RoutingTable.Add(peer);
-        //                Console.WriteLine($"Added peer {peer.NodeId} to routing table.");
-        //            }
-        //        }
-        //    }
-        //}
+        //
+        public void UpdateRoutingTable(IEnumerable<Peer> bootstrapPeers)
+        {
+            lock (stateLock)
+            {
+                foreach (var peer in bootstrapPeers)
+                {
+                    RoutingTable.AddPeer(peer); // Use the RoutingTable class to handle this
+                }
+            }
+        }
 
         public List<Peer> SelectPeersForRoutingTable(IEnumerable<Peer> candidatePeers)
         {
@@ -256,20 +251,21 @@ namespace SPHERE.Blockchain
                 .ToList();
         }
 
-        public void UpdateRoutingTable(Node node)
+        public void RebuildRoutingTable(Node node)
         {
             lock (stateLock)
             {
-                RoutingTable = node.Peers.Values
-                    .OrderByDescending(peer => peer.TrustScore) // Higher trust first
-                    .ThenBy(peer => peer.CalculateProximity(peer)) // Then by proximity
-                    .Take(10) // Limit to 10 peers
-                    .ToList();
+                foreach (var peer in node.Peers.Values
+                    .OrderByDescending(peer => peer.TrustScore)
+                    .ThenBy(peer => peer.CalculateProximity(peer)))
+                {
+                    RoutingTable.AddPeer(peer); // Use RoutingTable class for re-adding peers
+                }
             }
         }
 
 
-       
+
     }
 
 }

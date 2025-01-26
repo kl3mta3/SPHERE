@@ -49,6 +49,7 @@ namespace SPHERE.Blockchain
         private static readonly object stateLock = new object();
         private const string DefaultPreviousHash = "UNKNOWN";
         public readonly Dictionary<string, Peer> Peers = new Dictionary<string, Peer>();
+        public RoutingTable RoutingTable { get; set; }
         private bool isBootstrapped = false;
         public Peer Peer;
         private Client Client;
@@ -102,7 +103,7 @@ namespace SPHERE.Blockchain
             try
             {
                 // Load DHT state (internal locking already handled by LoadState)
-                if (File.Exists(DHT.GetAppDataPath()))
+                if (File.Exists(DHT.GetAppDataPath("DHT")))
                 {
                     node.DHT.LoadState();
                 }
@@ -110,12 +111,35 @@ namespace SPHERE.Blockchain
                 {
                     Console.WriteLine("DHT state file not found. Starting with a fresh state.");
                 }
+
+
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error loading DHT state: {ex.Message}");
                 Console.WriteLine("Starting with a fresh state.");
                 node.DHT = new DHT(); // Reinitialize
+            }
+
+            try
+            {
+                // Load RoutingTable state (internal locking already handled by LoadState)
+                if (File.Exists(DHT.GetAppDataPath("RT")))
+                {
+                    node.RoutingTable.LoadRoutingTable();
+                }
+                else
+                {
+                    Console.WriteLine("Routing Table state file not found. Starting with a fresh state.");
+                }
+
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading RoutingTable state: {ex.Message}");
+                Console.WriteLine("Starting with a fresh state.");
+                node.RoutingTable = new RoutingTable(); // Reinitialize
             }
 
             return node;
@@ -179,7 +203,6 @@ namespace SPHERE.Blockchain
             });
         }
 
-        //Process a BootStrap Response to set up a Node.   Gets peers and DHT from Bootstrap Host.
         public async Task ProcessBootstrapResponse(Packet packet)
         {
             Node node = this;
@@ -246,6 +269,13 @@ namespace SPHERE.Blockchain
 
                                 AddPeerToPeers(newPeer);
                                 Console.WriteLine($"Added new peer: {peer.NodeId} ({peer.NodeIP}:{peer.NodePort})");
+
+                                // Add the peer to the RoutingTable
+                                if (RoutingTable != null)
+                                {
+                                    RoutingTable.AddPeer(newPeer);
+                                    Console.WriteLine($"Added peer {peer.NodeId} to the routing table.");
+                                }
                             }
                             else
                             {
@@ -283,7 +313,6 @@ namespace SPHERE.Blockchain
                 Console.WriteLine($"Error processing bootstrap response: {ex.Message}");
             }
         }
-
         // Sends a response to a request to Bootstrap.  Sends a peer list and copy of DHT (Or shards at some point)
         public async Task SendBootstrapResponse( Packet packet)
         {
@@ -746,33 +775,6 @@ namespace SPHERE.Blockchain
                 Console.WriteLine($"Task error: {ex.Message}");
             }
         }
-
-        //public static class EmbeddedDllLoader
-        //{
-        //    static EmbeddedDllLoader()
-        //    {
-        //        AppDomain.CurrentDomain.AssemblyResolve += LoadEmbeddedAssembly;
-        //    }
-
-        //    private static Assembly LoadEmbeddedAssembly(object sender, ResolveEventArgs args)
-        //    {
-        //        // Update the resource name to match your namespace and structure
-        //        var resourceName = "SPHERE.Libs.Packet.dll";
-
-        //        var assembly = Assembly.GetExecutingAssembly();
-        //        using (var stream = assembly.GetManifestResourceStream(resourceName))
-        //        {
-        //            if (stream == null)
-        //            {
-        //                return null;
-        //            }
-
-        //            var buffer = new byte[stream.Length];
-        //            stream.Read(buffer, 0, buffer.Length);
-        //            return Assembly.Load(buffer);
-        //        }
-        //    }
-        //}
 
     }
 
