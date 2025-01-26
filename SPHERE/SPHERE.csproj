@@ -25,6 +25,9 @@
     <Reference Include="Packet">
       <HintPath>..\Packet\bin\Debug\net8.0\Packet.dll</HintPath>
     </Reference>
+    <Reference Include="Security">
+      <HintPath>Libs\Security.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>

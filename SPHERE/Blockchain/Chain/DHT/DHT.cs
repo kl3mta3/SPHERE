@@ -2,6 +2,7 @@
 using SPHERE.Configure;
 using SPHERE.Networking;
 using System.Text.Json;
+using SPHERE.Security;
 
 namespace SPHERE.Blockchain
 {

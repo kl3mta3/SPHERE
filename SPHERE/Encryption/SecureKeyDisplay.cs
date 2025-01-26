@@ -1,5 +1,5 @@
 ﻿using System.Runtime.InteropServices;
-using SPHERE..
+using SPHERE.Security;
 
 namespace SPHERE.Configure
 {

@@ -4,6 +4,7 @@ using System.Text.Json;
 using SPHERE.Configure;
 using SPHERE.Networking;
 using SPHERE.PacketLib;
+using SPHERE.Security;
 
 namespace SPHERE.Blockchain
 {
