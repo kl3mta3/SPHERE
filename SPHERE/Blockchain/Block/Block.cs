@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using SPHERE.Configure;
+using SPHERE.Security;
 
 
 namespace SPHERE.Blockchain
@@ -69,7 +70,7 @@ namespace SPHERE.Blockchain
             public string PublicSignatureKey { get; set; }                  // This is the public key for verifying the signature of commits and the user.
 
             [JsonPropertyName("GNCCertificate")]
-            public string GNCCertificate { get; set; }                      // GNC Container Certificate for the Private Key, Used to validate application used correct security when storing privatekey. 
+            public string CNGCertificate { get; set; }                      // GNC Container Certificate for the Private Key, Used to validate application used correct security when storing privatekey. 
 
             [JsonPropertyName("PreviousHash")]
             public string PreviousHash { get; set; }                        // Hash of the previous block
@@ -106,7 +107,7 @@ namespace SPHERE.Blockchain
                     EncryptionAlgorithm = encryptionAlgorithm.ToString(),
                     KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
                     PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalSignatureKey),
-                    GNCCertificate = SignatureGenerator.CreateSphereCNGCertificate(KeyGenerator.KeyType.PrivatePersonalEncryptionKey),
+                    CNGCertificate = SignatureGenerator.CreateSphereCNGCertificate(KeyGenerator.KeyType.PrivatePersonalEncryptionKey),
                 };
 
                 // Encrypt and store contact data
@@ -123,7 +124,45 @@ namespace SPHERE.Blockchain
                 };
             }
 
-            public static string GenerateBlockID()
+
+        // Creating a Block
+        public static Block CreateTestBlock(string previousHash, string encryptedContactData, EncryptionAlgorithm encryptionAlgorithm)
+        {
+
+            
+
+            DateTime creationTime = DateTime.Now;
+
+            var header = new BlockHeader
+            {
+                BlockId = GenerateBlockID(),
+                PreviousHash = previousHash,
+                BlockCreationTime = creationTime,
+                LastUpdateTime = creationTime,
+                EncryptionAlgorithm = encryptionAlgorithm.ToString(),
+                KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
+                PublicSignatureKey = "TestPublicSignature",
+                CNGCertificate = "TestCNGCertificate",
+            };
+
+            // Encrypt and store contact data
+            string serializedContactData = JsonSerializer.Serialize(encryptedContactData);
+
+            header.BlockHash = header.CalculateBlockHash();
+
+
+            return new Block
+            {
+                Header = header,
+                EncryptedContact = encryptedContactData,
+                EncryptedLocalSymmetricKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.EncryptedLocalSymmetricKey),
+            };
+        }
+
+
+
+
+        public static string GenerateBlockID()
             {
                 byte[] randomBytes = new byte[32]; // 256 bits = 32 bytes
                 using (var rng = RandomNumberGenerator.Create())

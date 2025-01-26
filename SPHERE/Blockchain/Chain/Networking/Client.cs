@@ -223,6 +223,26 @@ namespace SPHERE.Networking
             }
         }
 
+
+        // Synchronous method to start the client listener using STUN
+        public static void StartClientListenerWithSTUNSync(Client client)
+        {
+            var stun = new STUN();
+            var (PublicIP, PublicPort) = stun.GetPublicEndpoint();
+
+            if (PublicIP == null || PublicPort == 0)
+            {
+                Console.WriteLine("Failed to retrieve public endpoint. Exiting.");
+                throw new Exception("STUN failed to retrieve public endpoint.");
+            }
+
+            client.clientListenerPort = PublicPort;
+            client.clientIP = PublicIP;
+            client.Listener = new TcpListener(client.clientIP, client.clientListenerPort);
+            client.Listener.Start();
+            Console.WriteLine($"Server is listening on port {client.clientListenerPort}");
+        }
+
         private static async Task HandleClientAsync(TcpClient client)
         {
             try

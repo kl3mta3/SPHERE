@@ -46,22 +46,29 @@ namespace SPHERE.Blockchain
     }
     public class Node
     {
-        private static readonly object stateLock = new object();
-        private const string DefaultPreviousHash = "UNKNOWN";
-        public readonly Dictionary<string, Peer> Peers = new Dictionary<string, Peer>();
+        public static readonly object stateLock = new object();
+        public const string DefaultPreviousHash = "UNKNOWN";
+        public Dictionary<string, Peer> Peers = new Dictionary<string, Peer>();
         public RoutingTable RoutingTable { get; set; }
-        private bool isBootstrapped = false;
+        public bool isBootstrapped = false;
         public Peer Peer;
-        private Client Client;
-        private DHT DHT;
-        private readonly int MaxPeers = 25;
+        public Client Client;
+        public DHT DHT;
+        public readonly int MaxPeers = 25;
 
 
         //This is used to Create the Node or Load one if it exists. 
+
         public static Node CreateNode(Client client, NodeType nodeType)
         {
+            // If not loaded load needed Libraries
             DllLoader.LoadAllEmbeddedDlls();
+
+            //create a node.
             Node node = new Node();
+
+            //Create a client for the node using STUN. 
+
             // Thread-safe key generation
             lock (stateLock)
             {
@@ -96,8 +103,107 @@ namespace SPHERE.Blockchain
                 throw;
             }
 
-            // Initialize client and DHT
-            node.Client = client;
+
+            // Initialize DHT Peers and Routing Table.
+            node.DHT = new DHT();
+            node.Peers = new Dictionary<string, Peer>();
+            node.RoutingTable = new RoutingTable();
+
+            try
+            {
+                // Load DHT state (internal locking already handled by LoadState)
+                if (File.Exists(DHT.GetAppDataPath("DHT")))
+                {
+                    node.DHT.LoadState();
+                }
+                else
+                {
+                    Console.WriteLine("DHT state file not found. Starting with a fresh state.");
+                }
+
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading DHT state: {ex.Message}");
+                Console.WriteLine("Starting with a fresh state.");
+                node.DHT = new DHT(); // Reinitialize
+            }
+
+            try
+            {
+                // Load RoutingTable state (internal locking already handled by LoadState)
+                if (File.Exists(DHT.GetAppDataPath("RT")))
+                {
+                    node.RoutingTable.LoadRoutingTable();
+                }
+                else
+                {
+                    Console.WriteLine("Routing Table state file not found. Starting with a fresh state.");
+                }
+
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading RoutingTable state: {ex.Message}");
+                Console.WriteLine("Starting with a fresh state.");
+                node.RoutingTable = new RoutingTable(); // Reinitialize
+            }
+
+            return node;
+        }
+
+
+        //This is used to Create the Node or Load one if it exists. 
+        public static Node CreateNodeWithClientListenerUsingSTUN(NodeType nodeType)
+        {
+            // If not loaded load needed Libraries
+            DllLoader.LoadAllEmbeddedDlls();
+
+            //create a node.
+            Node node = new Node();
+
+            //Create a client get listeners using STUN. 
+            Client client = new Client();
+            Client.StartClientListenerWithSTUNSync(client);
+            node.Client= client;
+
+            // Thread-safe key generation
+            lock (stateLock)
+            {
+                //Check to see if Keys exist.
+                if (!ServiceAccountManager.KeyContainerExists(KeyGenerator.KeyType.PublicNodeSignatureKey) || !ServiceAccountManager.KeyContainerExists(KeyGenerator.KeyType.PublicNodeEncryptionKey))
+                {
+                    KeyGenerator.GenerateNodeKeyPairs();
+                }
+            }
+
+            try
+            {
+
+                // Initialize PeerHeader
+                Peer peer = new Peer
+                {
+                    Node_Type = nodeType,
+                    NodeId = AppIdentifier.GetOrCreateDHTNodeID(),
+                    NodeIP = client.clientIP.ToString(),
+                    NodePort = client.clientListenerPort,
+                    PreviousNodesHash = DefaultPreviousHash, // Placeholder value
+                    PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
+                    PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
+                };
+
+                // Assign header to node
+                node.Peer = peer;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error retrieving or creating keys: {ex.Message}");
+                throw;
+            }
+
+            // Initialize DHT
             node.DHT = new DHT();
 
             try
@@ -144,6 +250,7 @@ namespace SPHERE.Blockchain
 
             return node;
         }
+
 
         //Sends a Bootstrap Request You will need to be provided the IP, Port and public communication Key of the Host. (It can be provided by any othter node on request. But is only good till they go off and back online and thier ip and port reset.
         public async Task SendBootstrapRequest(string iPAddress, int port, string recipientsPublicComKey)
