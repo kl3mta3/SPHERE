@@ -5,6 +5,7 @@ using static SPHERE.Blockchain.Node;
 using SPHERE.PacketLib;
 using SPHERE.Blockchain;
 using static SPHERE.PacketLib.Packet;
+using SPHERE.Configure;
 
 
 namespace SPHERE.Networking
@@ -145,7 +146,7 @@ namespace SPHERE.Networking
 
         public static async Task StartClientListenerAsync(Client client)
         {
-            //var trigger = typeof(EmbeddedDllLoader);
+            DllLoader.LoadAllEmbeddedDlls();
             if (client.clientListenerPort==0)
             {
                 client.clientListenerPort = FindAvailablePort();
@@ -176,7 +177,7 @@ namespace SPHERE.Networking
         {
             try
             {
-                //var trigger = typeof(EmbeddedDllLoader);
+                DllLoader.LoadAllEmbeddedDlls();
                 var stun = new STUN();
                 var (PublicIP, PublicPort) = stun.GetPublicEndpoint();
 

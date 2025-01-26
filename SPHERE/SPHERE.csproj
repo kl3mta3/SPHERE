@@ -9,10 +9,12 @@
 
   <ItemGroup>
     <None Remove="Libs\Packet.dll" />
+    <None Remove="Libs\Security.dll" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="Libs\Packet.dll" />
+    <EmbeddedResource Include="Libs\Security.dll" />
   </ItemGroup>
 
   <ItemGroup>

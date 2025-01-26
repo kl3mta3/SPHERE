@@ -246,6 +246,7 @@ namespace SPHERE.Blockchain
         //        }
         //    }
         //}
+
         public List<Peer> SelectPeersForRoutingTable(IEnumerable<Peer> candidatePeers)
         {
             return candidatePeers

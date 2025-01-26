@@ -58,7 +58,7 @@ namespace SPHERE.Blockchain
         //This is used to Create the Node or Load one if it exists. 
         public static Node CreateNode(Client client, NodeType nodeType)
         {
-            //var trigger = typeof(EmbeddedDllLoader);
+            DllLoader.LoadAllEmbeddedDlls();
             Node node = new Node();
             // Thread-safe key generation
             lock (stateLock)

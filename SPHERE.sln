@@ -7,6 +7,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SPHERE", "SPHERE\SPHERE.csp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Packet", "Packet\Packet.csproj", "{2F9A9502-411B-4679-A8B0-3598B9EFD98D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Security", "Security\Security.csproj", "{312E9B69-6497-43ED-8760-F2A690A312FD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{2F9A9502-411B-4679-A8B0-3598B9EFD98D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2F9A9502-411B-4679-A8B0-3598B9EFD98D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2F9A9502-411B-4679-A8B0-3598B9EFD98D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{312E9B69-6497-43ED-8760-F2A690A312FD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{312E9B69-6497-43ED-8760-F2A690A312FD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{312E9B69-6497-43ED-8760-F2A690A312FD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{312E9B69-6497-43ED-8760-F2A690A312FD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

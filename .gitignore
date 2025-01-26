@@ -402,3 +402,7 @@ FodyWeavers.xsd
 # Packet project and DLL
 /SPHERE/Libs/Packet.dll
 /Packet/
+
+# KeyGenerator project and DLL
+/SPHERE/Libs/Security.dll
+/Security/
