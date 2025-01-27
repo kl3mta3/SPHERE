@@ -1,297 +1,279 @@
-﻿using SPHERE.Networking;
+﻿using SPHERE.Blockchain;
+using SPHERE.Networking;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Numerics;
+using System.Text.Json;
 
-namespace SPHERE.Blockchain
+public class RoutingTable
 {
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Net.NetworkInformation;
-    using System.Text.Json;
+    private readonly List<Bucket> _buckets;
+    private readonly int _bucketSize;
+    private readonly object _lock = new();
+    public Node node { get; set; }
 
-    namespace SPHERE.Blockchain
+    public RoutingTable(int bucketSize = 20)
     {
-        /// <summary>
-        /// The RoutingTable class implements a Kademlia-style Distributed Hash Table (DHT) for managing network peers.
-        /// It organizes peers into buckets based on XOR distance from the local node, allowing efficient peer discovery and routing.
-        /// 
-        /// Key Features:
-        /// - Buckets: Groups peers by XOR distance for efficient lookup.
-        /// - Closest Peer Lookup: Finds peers closest to a given node ID.
-        /// - Bucket Maintenance: Enforces a maximum bucket size and ensures active connections.
-        /// - XOR Distance Calculation: Determines the proximity between peers using XOR metrics.
-        /// 
-        /// Usage:
-        /// - Use AddPeer() to add a peer to the appropriate bucket.
-        /// - Use RemovePeer() to remove a peer by its Node ID.
-        /// - Use GetClosestPeers() to find the closest peers to a target Node ID.
-        /// - Call DisplayTable() to log the current state of the routing table.
-        /// 
-        /// Example:
-        /// var routingTable = new RoutingTable();
-        /// var peer = Peer.CreatePeerHeader(...);
-        /// routingTable.AddPeer(peer);
-        /// var closestPeers = routingTable.GetClosestPeers(targetId, count);
-        /// 
-        ///</summary>
-        /// Below is a use case example for the Routing Table
-        /*  public class Program
-            {
-                public static void Main()
-                {
-                    var routingTable = new RoutingTable();
-
-                    // Example peers
-                    var peer1 = Peer.CreatePeerHeader(NodeType.FullNode, "001", "192.168.1.1", 8001, "hash1", "pubSig1", "pubEnc1");
-                    var peer2 = Peer.CreatePeerHeader(NodeType.LightNode, "002", "192.168.1.2", 8002, "hash2", "pubSig2", "pubEnc2");
-                    var peer3 = Peer.CreatePeerHeader(NodeType.FullNode, "003", "192.168.1.3", 8003, "hash3", "pubSig3", "pubEnc3");
-
-                    // Add peers
-                    routingTable.AddPeer(peer1);
-                    routingTable.AddPeer(peer2);
-                    routingTable.AddPeer(peer3);
- 
-                    // Display table
-                    routingTable.DisplayTable();
-
-                    // Get closest peers
-                    var closestPeers = routingTable.GetClosestPeers("002", 2);
-                    Console.WriteLine("Closest peers:");
-                    foreach (var peer in closestPeers)
-                    {
-                        Console.WriteLine($"- {peer.NodeId}: {peer.NodeIP}:{peer.NodePort}");
-                    }
-
-                    // Remove a peer
-                    routingTable.RemovePeer("002");
-
-                    // Display table again
-                    routingTable.DisplayTable();
-
-        */
-
+        _buckets = new List<Bucket>(Enumerable.Range(0, 256).Select(_ => new Bucket { node=node})); // 256 buckets for a 256-bit ID space
+        _bucketSize = bucketSize;
     }
-    public class RoutingTable
+
+    public void AddPeer(Peer peer)
+    {
+        lock (_lock)
         {
-            private readonly List<Bucket> _buckets;
-            private readonly int _bucketSize;
-            private readonly object _lock = new();
+            int bucketIndex = GetBucketIndex(peer.NodeId);
+            var bucket = _buckets[bucketIndex];
+            bucket.AddPeer(peer, _bucketSize);
+        }
+    }
 
-            public RoutingTable(int bucketSize = 20)
-            {
-                _buckets = new List<Bucket>(Enumerable.Range(0, 160).Select(_ => new Bucket()));
-                _bucketSize = bucketSize;
-            }
-
-            public void AddPeer(Peer peer)
-            {
-                lock (_lock)
-                {
-                    int bucketIndex = GetBucketIndex(peer.NodeId);
-                    var bucket = _buckets[bucketIndex];
-                    bucket.AddPeer(peer, _bucketSize);
-                }
-            }
-
-            public void RemovePeer(string nodeId)
-            {
-                lock (_lock)
-                {
-                    int bucketIndex = GetBucketIndex(nodeId);
-                    _buckets[bucketIndex].RemovePeer(nodeId);
-                }
-            }
-
-            public Peer GetPeer(string nodeId)
-            {
-                lock (_lock)
-                {
-                    int bucketIndex = GetBucketIndex(nodeId);
-                    return _buckets[bucketIndex].GetPeer(nodeId);
-                }
-            }
-
-            public List<Peer> GetClosestPeers(string targetId, int count)
-            {
-                lock (_lock)
-                {
-                    return _buckets
-                        .SelectMany(bucket => bucket.Peers)
-                        .OrderBy(peer => CalculateXorDistance(peer.NodeId, targetId))
-                        .Take(count)
-                        .ToList();
-                }
-            }
-
-            private int GetBucketIndex(string nodeId)
-            {
-                // Assuming the local node ID is 160 bits for Kademlia, adjust accordingly
-                string localNodeId = "00000000000000000000000000000000"; // Example local node ID
-                int distance = CalculateXorDistance(localNodeId, nodeId);
-                return 159 - (int)Math.Log2(distance);
-            }
-
-            private static int CalculateXorDistance(string id1, string id2)
-            {
-                byte[] id1Bytes = Convert.FromHexString(id1);
-                byte[] id2Bytes = Convert.FromHexString(id2);
-
-                int distance = 0;
-                for (int i = 0; i < id1Bytes.Length; i++)
-                {
-                    distance = (distance << 8) + (id1Bytes[i] ^ id2Bytes[i]);
-                }
-
-                return distance;
-            }
-
-            public void DisplayTable()
-            {
-                lock (_lock)
-                {
-                    Console.WriteLine("Routing Table:");
-                    for (int i = 0; i < _buckets.Count; i++)
-                    {
-                        Console.WriteLine($"Bucket {i}:");
-                        foreach (var peer in _buckets[i].Peers)
-                        {
-                            Console.WriteLine($"- {peer.NodeId}: {peer.NodeIP}:{peer.NodePort}");
-                        }
-                    }
-                }
-            }
-
-        public void SaveRoutingTable()
+    public List<Peer> GetAllPeers()
+    {
+        lock (_lock)
         {
-            lock (_lock) // Ensure thread-safe access to the RoutingTable
+            return _buckets.SelectMany(bucket => bucket.Peers).ToList();
+        }
+    }
+
+    public Peer GetPeerByIPAddress(string ipAddress)
+    {
+        lock (_lock)
+        {
+            return _buckets.SelectMany(bucket => bucket.Peers)
+                           .FirstOrDefault(peer => peer.NodeIP == ipAddress);
+        }
+    }
+
+    public void RemovePeer(string nodeId)
+    {
+        lock (_lock)
+        {
+            int bucketIndex = GetBucketIndex(nodeId);
+            _buckets[bucketIndex].RemovePeer(nodeId);
+        }
+    }
+
+    public Peer GetPeerByID(string nodeId)
+    {
+        lock (_lock)
+        {
+            int bucketIndex = GetBucketIndex(nodeId);
+            return _buckets[bucketIndex].GetPeer(nodeId);
+        }
+    }
+
+    public List<Peer> GetClosestPeers(string targetId, int count)
+    {
+        lock (_lock)
+        {
+            return _buckets
+                .SelectMany(bucket => bucket.Peers)
+                .OrderBy(peer => CalculateXorDistance(peer.NodeId, targetId))
+                .Take(count)
+                .ToList();
+        }
+    }
+
+    private int GetBucketIndex(string nodeId)
+    {
+        string localNodeId = "0000000000000000000000000000000000000000000000000000000000000000"; // Example local node ID (256 bits in hex)
+        BigInteger distance = CalculateXorDistance(localNodeId, nodeId);
+
+        if (distance.IsZero)
+            throw new InvalidOperationException("Cannot calculate bucket index for the local node ID.");
+
+        return 255 - (int)Math.Log2((double)distance);
+    }
+
+    private static BigInteger CalculateXorDistance(string id1, string id2)
+    {
+        byte[] id1Bytes = Convert.FromHexString(id1);
+        byte[] id2Bytes = Convert.FromHexString(id2);
+
+        byte[] xorResult = new byte[id1Bytes.Length];
+        for (int i = 0; i < id1Bytes.Length; i++)
+        {
+            xorResult[i] = (byte)(id1Bytes[i] ^ id2Bytes[i]);
+        }
+
+        return new BigInteger(xorResult.Reverse().ToArray());
+    }
+
+    public void DisplayTable()
+    {
+        lock (_lock)
+        {
+            Console.WriteLine("Routing Table:");
+            for (int i = 0; i < _buckets.Count; i++)
             {
-                try
+                Console.WriteLine($"Bucket {i}:");
+                foreach (var peer in _buckets[i].Peers)
                 {
-                    string filePath = DHT.GetAppDataPath("RT");
-
-                    // Ensure the directory exists
-                    string directoryPath = Path.GetDirectoryName(filePath);
-                    if (!Directory.Exists(directoryPath))
-                    {
-                        Directory.CreateDirectory(directoryPath);
-                    }
-
-                    // Serialize the routing table to JSON
-                    var options = new JsonSerializerOptions { WriteIndented = true };
-                    string json = JsonSerializer.Serialize(_buckets, options);
-
-                    // Write to the file with exclusive access
-                    using (FileStream fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None))
-                    using (StreamWriter writer = new StreamWriter(fileStream))
-                    {
-                        writer.Write(json);
-                    }
-
-                    Console.WriteLine("RoutingTable state saved successfully.");
-                }
-                catch (IOException ioEx)
-                {
-                    Console.WriteLine($"I/O error while saving RoutingTable state: {ioEx.Message}");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Failed to save RoutingTable state: {ex.Message}");
+                    Console.WriteLine($"- {peer.NodeId}: {peer.NodeIP}:{peer.NodePort}");
                 }
             }
         }
-
-        public void LoadRoutingTable()
-        {
-            lock (_lock) // Ensure thread-safe access to the RoutingTable
-            {
-                try
-                {
-                    string filePath = DHT.GetAppDataPath("RT");
-
-                    if (!File.Exists(filePath))
-                    {
-                        Console.WriteLine("RoutingTable state file not found. Starting with an empty table.");
-                        return;
-                    }
-
-                    // Open the file and deserialize it into the routing table
-                    using (FileStream fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.None))
-                    using (StreamReader reader = new StreamReader(fileStream))
-                    {
-                        string json = reader.ReadToEnd();
-                        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                        var loadedBuckets = JsonSerializer.Deserialize<List<Bucket>>(json, options);
-
-                        if (loadedBuckets != null)
-                        {
-                            _buckets.Clear();
-                            foreach (var bucket in loadedBuckets)
-                            {
-                                _buckets.Add(bucket);
-                            }
-
-                            Console.WriteLine("RoutingTable state loaded successfully.");
-                        }
-                        else
-                        {
-                            Console.WriteLine("No data found in the RoutingTable state file. Starting with an empty table.");
-                        }
-                    }
-                }
-                catch (IOException ioEx)
-                {
-                    Console.WriteLine($"I/O error while loading RoutingTable state: {ioEx.Message}");
-                }
-                catch (JsonException jsonEx)
-                {
-                    Console.WriteLine($"JSON error while loading RoutingTable state: {jsonEx.Message}");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Failed to load RoutingTable state: {ex.Message}");
-                }
-            }
-        }
-
-        private class Bucket
-            {
-                public List<Peer> Peers { get; }
-
-                public Bucket()
-                {
-                    Peers = new List<Peer>();
-                }
-
-                public void AddPeer(Peer peer, int maxSize)
-                {
-                    if (Peers.Count >= maxSize)
-                    {
-                        Console.WriteLine($"Bucket is full. Cannot add peer {peer.NodeId}.");
-                        return;
-                    }
-
-                    if (!Peers.Any(p => p.NodeId == peer.NodeId))
-                    {
-                        Peers.Add(peer);
-                    }
-                }
-
-                public void RemovePeer(string nodeId)
-                {
-                    Peers.RemoveAll(p => p.NodeId == nodeId);
-                }
-
-                public Peer GetPeer(string nodeId)
-                {
-                    return Peers.FirstOrDefault(p => p.NodeId == nodeId);
-                }
-            }
     }
 
+    public void SaveRoutingTable()
+    {
+        lock (_lock)
+        {
+            try
+            {
+                string filePath = DHT.GetAppDataPath("RT");
+
+                string directoryPath = Path.GetDirectoryName(filePath);
+                if (!Directory.Exists(directoryPath))
+                {
+                    Directory.CreateDirectory(directoryPath);
+                }
+
+                var options = new JsonSerializerOptions { WriteIndented = true };
+                string json = JsonSerializer.Serialize(_buckets, options);
+
+                using (FileStream fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None))
+                using (StreamWriter writer = new StreamWriter(fileStream))
+                {
+                    writer.Write(json);
+                }
+
+                Console.WriteLine("RoutingTable state saved successfully.");
+            }
+            catch (IOException ioEx)
+            {
+                Console.WriteLine($"I/O error while saving RoutingTable state: {ioEx.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to save RoutingTable state: {ex.Message}");
+            }
+        }
+    }
+
+    public void ClearRoutingTable()
+    {
+        lock (_lock)
+        {
+            foreach (var bucket in _buckets)
+            {
+                bucket.Peers.Clear();
+            }
+        }
+    }
+
+    public void LoadRoutingTable()
+    {
+        lock (_lock)
+        {
+            try
+            {
+                string filePath = DHT.GetAppDataPath("RT");
+
+                if (!File.Exists(filePath))
+                {
+                    Console.WriteLine("RoutingTable state file not found. Starting with an empty table.");
+                    return;
+                }
+
+                using (FileStream fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.None))
+                using (StreamReader reader = new StreamReader(fileStream))
+                {
+                    string json = reader.ReadToEnd();
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var loadedBuckets = JsonSerializer.Deserialize<List<Bucket>>(json, options);
+
+                    if (loadedBuckets != null)
+                    {
+                        _buckets.Clear();
+                        foreach (var bucket in loadedBuckets)
+                        {
+                            _buckets.Add(bucket);
+                        }
+
+                        Console.WriteLine("RoutingTable state loaded successfully.");
+                    }
+                    else
+                    {
+                        Console.WriteLine("No data found in the RoutingTable state file. Starting with an empty table.");
+                    }
+                }
+            }
+            catch (IOException ioEx)
+            {
+                Console.WriteLine($"I/O error while loading RoutingTable state: {ioEx.Message}");
+            }
+            catch (JsonException jsonEx)
+            {
+                Console.WriteLine($"JSON error while loading RoutingTable state: {jsonEx.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to load RoutingTable state: {ex.Message}");
+            }
+        }
+    }
+
+    private class Bucket
+    {
+        public List<Peer> Peers { get; }
+        public Node node { get; set; }
+        public Bucket()
+        {
+            Peers = new List<Peer>();
+        }
+
+        public async Task AddPeer(Peer peer, int maxSize)
+        {
+            var existingPeer = Peers.FirstOrDefault(p => p.NodeId == peer.NodeId);
+            if (existingPeer != null)
+            {
+                // Move the existing peer to the end of the list (LRU logic)
+                Peers.Remove(existingPeer);
+                Peers.Add(peer);
+                return;
+            }
+
+            if (Peers.Count >= maxSize)
+            {
+                // Identify the peer with the lowest trust score
+                Peer leastTrustedPeer = Peers.OrderBy(p => p.TrustScore).First();
+
+                // Optionally ping the least trusted peer to confirm it's alive
+
+                bool isAlive = await Node.PingPeerAsync(this.node, peer);
+                if (isAlive)
+                {
+              
+                    Peers.Remove(leastTrustedPeer);
+                    Console.WriteLine($"Removed least trusted and unresponsive peer: {leastTrustedPeer.NodeId}");
+                }
+                else if (peer.TrustScore > leastTrustedPeer.TrustScore)
+                {
+                    // Replace the least trusted peer if the new peer has a higher trust score
+                    Peers.Remove(leastTrustedPeer);
+                    Console.WriteLine($"Removed least trusted peer: {leastTrustedPeer.NodeId} to add {peer.NodeId}");
+                }
+                else
+                {
+                    Console.WriteLine($"Peer {peer.NodeId} was not added due to lower trust score.");
+                    return;
+                }
+            }
+
+            Peers.Add(peer);
+        }
+
+        public void RemovePeer(string nodeId)
+        {
+            Peers.RemoveAll(p => p.NodeId == nodeId);
+        }
+
+        public Peer GetPeer(string nodeId)
+        {
+            return Peers.FirstOrDefault(p => p.NodeId == nodeId);
+        }
+    }
 }
-
-

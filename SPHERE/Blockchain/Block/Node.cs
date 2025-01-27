@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using System.Net.Mail;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using SPHERE.Configure;
@@ -48,7 +49,7 @@ namespace SPHERE.Blockchain
     {
         public static readonly object stateLock = new object();
         public const string DefaultPreviousHash = "UNKNOWN";
-        public Dictionary<string, Peer> Peers = new Dictionary<string, Peer>();
+       // public Dictionary<string, Peer> Peers = new Dictionary<string, Peer>();
         public RoutingTable RoutingTable { get; set; }
         public bool isBootstrapped = false;
         public Peer Peer;
@@ -106,8 +107,9 @@ namespace SPHERE.Blockchain
 
             // Initialize DHT Peers and Routing Table.
             node.DHT = new DHT();
-            node.Peers = new Dictionary<string, Peer>();
+            //node.Peers = new Dictionary<string, Peer>();
             node.RoutingTable = new RoutingTable();
+            
 
             try
             {
@@ -139,6 +141,7 @@ namespace SPHERE.Blockchain
                 }
                 else
                 {
+                   
                     Console.WriteLine("Routing Table state file not found. Starting with a fresh state.");
                 }
 
@@ -150,7 +153,7 @@ namespace SPHERE.Blockchain
                 Console.WriteLine("Starting with a fresh state.");
                 node.RoutingTable = new RoutingTable(); // Reinitialize
             }
-
+            node.RoutingTable.node = node;
             return node;
         }
 
@@ -310,6 +313,7 @@ namespace SPHERE.Blockchain
             });
         }
 
+        //Process Bootstrap Response
         public async Task ProcessBootstrapResponse(Packet packet)
         {
             Node node = this;
@@ -344,7 +348,10 @@ namespace SPHERE.Blockchain
                 }
 
                 // Decrypt the data
-                byte[] decryptedData = Encryption.DecryptWithPrivateKey(encryptedData, ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeEncryptionKey));
+                byte[] decryptedData = Encryption.DecryptWithPrivateKey(
+                    encryptedData,
+                    ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeEncryptionKey)
+                );
 
                 // Deserialize the response payload
                 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
@@ -359,35 +366,23 @@ namespace SPHERE.Blockchain
                 // Process the peer list
                 if (responsePayload.Peers != null)
                 {
-                    lock (stateLock) // Ensure thread-safe access to the Peers collection
+                    lock (RoutingTable) // Ensure thread-safe access to the RoutingTable
                     {
                         foreach (var peer in responsePayload.Peers)
                         {
-                            if (!Peers.ContainsKey(peer.NodeId))
+                            // Create a Peer object for each entry
+                            var newPeer = new Peer
                             {
-                                var newPeer = new Peer
-                                {
-                                    NodeId = peer.NodeId,
-                                    NodeIP = peer.NodeIP,
-                                    NodePort = peer.NodePort,
-                                    PublicSignatureKey = peer.PublicSignatureKey,
-                                    PublicEncryptKey = peer.PublicEncryptKey
-                                };
+                                NodeId = peer.NodeId,
+                                NodeIP = peer.NodeIP,
+                                NodePort = peer.NodePort,
+                                PublicSignatureKey = peer.PublicSignatureKey,
+                                PublicEncryptKey = peer.PublicEncryptKey
+                            };
 
-                                AddPeerToPeers(newPeer);
-                                Console.WriteLine($"Added new peer: {peer.NodeId} ({peer.NodeIP}:{peer.NodePort})");
-
-                                // Add the peer to the RoutingTable
-                                if (RoutingTable != null)
-                                {
-                                    RoutingTable.AddPeer(newPeer);
-                                    Console.WriteLine($"Added peer {peer.NodeId} to the routing table.");
-                                }
-                            }
-                            else
-                            {
-                                Console.WriteLine($"Peer {peer.NodeId} already exists. Skipping.");
-                            }
+                            // Add the peer to the RoutingTable (will handle duplicates automatically)
+                            RoutingTable.AddPeer(newPeer);
+                            Console.WriteLine($"Added or updated peer {peer.NodeId} in the routing table.");
                         }
                     }
                 }
@@ -420,10 +415,12 @@ namespace SPHERE.Blockchain
                 Console.WriteLine($"Error processing bootstrap response: {ex.Message}");
             }
         }
+
         // Sends a response to a request to Bootstrap.  Sends a peer list and copy of DHT (Or shards at some point)
         public async Task SendBootstrapResponse( Packet packet)
         {
             Node node = this;
+            string recipientsID = packet.Header.NodeId;
             string recipientIPAddress = packet.Header.IPAddress;
             int recipientPort = int.Parse(packet.Header.Port);
             string recipientPublicComKey= packet.Header.PublicSignatureKey;
@@ -456,8 +453,23 @@ namespace SPHERE.Blockchain
             // Use RetryAsync to ensure the response is sent
             await RetryAsync<bool>(async () =>
             {
-                // Build the bootstrap response packet
-                var peerList = Peers.Values.Select(peer => new
+                // Collect peers from the RoutingTable
+                List<Peer> peerList;
+                lock (node.RoutingTable)
+                {
+                    if (!string.IsNullOrWhiteSpace(recipientsID))
+                    {
+                        peerList = node.RoutingTable.GetClosestPeers(recipientsID, 20); // Adjust '20' as needed
+                    }
+                    else
+                    {
+
+                        peerList= node.RoutingTable.GetAllPeers();
+                    }
+                }
+
+                // Prepare a lightweight peer list for the response payload
+                var responsePeerList = peerList.Select(peer => new
                 {
                     peer.NodeId,
                     peer.NodeIP,
@@ -466,13 +478,14 @@ namespace SPHERE.Blockchain
                     peer.PublicEncryptKey
                 }).ToList();
 
-                // Include DHT state
-                var dhtState =  node.DHT.GetCurrentState();
+                // Include DHT state (if necessary)
+                var dhtState = node.DHT.GetCurrentState();
 
+                // Build the response payload
                 var responsePayload = new
                 {
                     MessageType = "BootstrapResponse",
-                    Peers = peerList,
+                    Peers = responsePeerList,
                     DHT = dhtState
                 };
 
@@ -494,14 +507,17 @@ namespace SPHERE.Blockchain
                     throw new Exception($"Failed to send bootstrap response to {recipientIPAddress}:{recipientPort}.");
                 }
 
-                // Reward the recipient with trust score for a valid request
-                var peer = GetPeerByIPAddress(recipientIPAddress);
-                if (peer != null)
+                //  Reward the recipient with a trust score for a valid request
+                lock (node.RoutingTable)
                 {
-                    peer.UpdateTrustScore(peer, +5); // Reward 5 points
+                    var peer = node.RoutingTable.GetPeerByIPAddress(recipientIPAddress);
+                    if (peer != null)
+                    {
+                        peer.UpdateTrustScore(peer, +5); // Reward 5 points
+                    }
                 }
 
-                // Log successful bootstrap response
+                //  Log successful bootstrap response
                 Console.WriteLine($"Bootstrap response successfully sent to {recipientIPAddress}:{recipientPort}.");
                 return success; // Explicitly return success
             });
@@ -519,71 +535,6 @@ namespace SPHERE.Blockchain
         public void UpdateNodePerviousHash(Node node, string previousHash)
         {
             node.Peer.PreviousNodesHash = previousHash;
-        }
-
-        // Sends peer info to all peers. waits for a response and applys trustScore accordingly.
-        public async Task BroadcastEndpointToPeers(Node node)
-        {
-            if (node == null)
-            {
-                throw new ArgumentNullException(nameof(node), "Node cannot be null.");
-            }
-
-            var tasks = new List<Task>();
-
-            // Build and serialize the packet with a TTL of 75
-            Packet.PacketHeader header = Packet.PacketBuilder.BuildPacketHeader(Packet.PacketBuilder.PacketType.PeerUpdateRequest, node.Peer.NodeId, node.Peer.PublicSignatureKey, node.Client.clientListenerPort, node.Client.clientIP.ToString(), 75);
-            Packet packet = Packet.PacketBuilder.BuildPacket(header, "Update My EndPoint Info");
-            byte[] data = Packet.PacketBuilder.SerializePacket(packet);
-
-            lock (Peers)
-            {
-                foreach (var peer in Peers.Values)
-                {
-                    string key = peer.PublicSignatureKey;
-
-                    if (string.IsNullOrEmpty(key))
-                    {
-                        Console.WriteLine($"Skipping peer with missing or invalid PublicSignatureKey.");
-                        continue;
-                    }
-
-                    // Encrypt and sign the packet
-                    byte[] secureData = Encryption.EncryptWithPersonalKey(data, key);
-                    string signature = SignatureGenerator.SignByteArray(secureData);
-
-                    // Add a task to send the packet and update the trust score on success
-                    tasks.Add(SafeTask(async () =>
-                    {
-                        bool success = await RetryAsync(() => Client.SendPacketToPeerAsync(
-                            node.Client.clientIP.ToString(),
-                            node.Client.clientListenerPort,
-                            secureData,
-                            signature
-                        ));
-
-                        if (success)
-                        {
-                            // Only update trust score if the packet was successfully delivered
-                            lock (stateLock)
-                            {
-                                peer.UpdateTrustScore(peer, +2);
-                            }
-                        }
-                    }));
-                }
-            }
-
-            // Wait for all tasks to complete
-            try
-            {
-                await Task.WhenAll(tasks);
-            }
-            catch (Exception ex)
-            {
-                // Handle any exceptions that were thrown
-                Console.WriteLine($"Error during broadcast: {ex.Message}");
-            }
         }
 
         // Updates the Endpoint info of a Peer.
@@ -606,7 +557,7 @@ namespace SPHERE.Blockchain
 
             lock (stateLock) // Ensure thread safety when accessing and modifying the Peers dictionary
             {
-                Peer peer = GetPeerByID(peerID);
+                Peer peer = RoutingTable.GetPeerByID(peerID);
                 if (peer == null)
                 {
                     throw new KeyNotFoundException($"Peer with ID {peerID} not found.");
@@ -620,90 +571,61 @@ namespace SPHERE.Blockchain
             }
         }
 
-        // Evlauates a peer based on TrustScore and location to decide to keep a new Peer.
-        public void EvaluateAndReplacePeer(Peer newPeer)
-        {
-            lock (Peers)
-            {
-                if (Peers.Values.Count < MaxPeers)
-                {
-                    Peers[newPeer.NodeId] = newPeer;
-                    Console.WriteLine($"Added new peer: {newPeer.NodeId}");
-                    return;
-                }
+        //// Evlauates a peer based on TrustScore and location to decide to keep a new Peer.
+        //public void EvaluateAndReplacePeer(Peer newPeer)
+        //{
+        //    lock (Peers)
+        //    {
+        //        if (Peers.Values.Count < MaxPeers)
+        //        {
+        //            Peers[newPeer.NodeId] = newPeer;
+        //            Console.WriteLine($"Added new peer: {newPeer.NodeId}");
+        //            return;
+        //        }
 
-                // Find the weakest peer
-                Peer weakestPeer = Peers.Values
-                    .OrderBy(peer => peer.CalculateProximity(peer))
-                    .ThenBy(peer => peer.TrustScore)
-                    .FirstOrDefault();
+        //        // Find the weakest peer
+        //        Peer weakestPeer = Peers.Values
+        //            .OrderBy(peer => peer.CalculateProximity(peer))
+        //            .ThenBy(peer => peer.TrustScore)
+        //            .FirstOrDefault();
 
-                if (weakestPeer != null &&
-                    (newPeer.CalculateProximity(newPeer) > weakestPeer.CalculateProximity(weakestPeer) ||
-                    newPeer.TrustScore > weakestPeer.TrustScore))
-                {
-                    Peers.Remove(weakestPeer.NodeId);
-                    Peers[newPeer.NodeId] = newPeer;
-                    Console.WriteLine($"Replaced peer {weakestPeer.NodeId} with {newPeer.NodeId}");
-                }
-            }
-        }
-
-        // Adds a Peer to the PeerList.
-        public void AddPeerToPeers(Peer peer)
-        {
-            if (peer == null)
-            {
-                throw new ArgumentNullException(nameof(peer), "Peer cannot be null.");
-            }
-
-            lock (stateLock) // Ensures thread safety
-            {
-                if (!Peers.ContainsKey(peer.NodeId)) // Optional: Prevent duplicate keys
-                {
-                    Peers.Add(peer.NodeId, peer);
-                    Console.WriteLine($"Peer {peer.NodeId} added successfully.");
-                }
-                else
-                {
-                    Console.WriteLine($"Peer {peer.NodeId} already exists.");
-                }
-            }
-        }
-        
-        //Removes a Peer from the PeerList
-        public void RemovePeerFromPeers(Node node)
-        {
-            Peers.Remove(node.Peer.NodeId);
-        }
+        //        if (weakestPeer != null &&
+        //            (newPeer.CalculateProximity(newPeer) > weakestPeer.CalculateProximity(weakestPeer) ||
+        //            newPeer.TrustScore > weakestPeer.TrustScore))
+        //        {
+        //            Peers.Remove(weakestPeer.NodeId);
+        //            Peers[newPeer.NodeId] = newPeer;
+        //            Console.WriteLine($"Replaced peer {weakestPeer.NodeId} with {newPeer.NodeId}");
+        //        }
+        //    }
+        //}
 
         // Returns a peer from the Peerlist based on their IP
-        public  Peer GetPeerByIPAddress(string ipAddress)
-        {
-            lock (stateLock)
-            {
-                return Peers.Values.FirstOrDefault(peer => peer.NodeIP == ipAddress);
-            }
-        }
+        //public  Peer GetPeerByIPAddress(string ipAddress)
+        //{
+        //    lock (stateLock)
+        //    {
+        //        return Peers.Values.FirstOrDefault(peer => peer.NodeIP == ipAddress);
+        //    }
+        //}
 
         //Returns a Peer from the Peer List By ID.
-        public Peer GetPeerByID(string peerID)
-        {
-            if (string.IsNullOrEmpty(peerID))
-            {
-                throw new ArgumentException("Node ID cannot be null or empty.", nameof(peerID));
-            }
+        //public Peer GetPeerByID(string peerID)
+        //{
+        //    if (string.IsNullOrEmpty(peerID))
+        //    {
+        //        throw new ArgumentException("Node ID cannot be null or empty.", nameof(peerID));
+        //    }
 
-            lock (stateLock) // Ensures thread-safe access to the Peers dictionary
-            {
-                return Peers.ContainsKey(peerID) ? Peers[peerID] : null;
-            }
-        }
+        //    lock (stateLock) // Ensures thread-safe access to the Peers dictionary
+        //    {
+        //        return Peers.ContainsKey(peerID) ? Peers[peerID] : null;
+        //    }
+        //}
 
         // Send response to a Ping request.
         public async Task RespondToPingAsync(Packet packet)
         {
-           
             try
             {
                 // Validate the incoming packet
@@ -716,7 +638,7 @@ namespace SPHERE.Blockchain
                 string senderIPAddress = packet.Header.IPAddress;
                 int senderPort = int.Parse(packet.Header.Port);
                 string senderPublicSignatureKey = packet.Header.PublicSignatureKey;
-                string sendersPublicEncryptKey = packet.Header.PublicEncryptKey;
+                string senderPublicEncryptKey = packet.Header.PublicEncryptKey;
 
                 if (string.IsNullOrWhiteSpace(senderIPAddress) || string.IsNullOrWhiteSpace(senderPublicSignatureKey))
                 {
@@ -724,27 +646,46 @@ namespace SPHERE.Blockchain
                     return;
                 }
 
+                // Validate and potentially add the sender to the routing table
+                lock (RoutingTable)
+                {
+                    // Create a new peer object
+                    Peer newPeer = new Peer
+                    {
+                        NodeIP = senderIPAddress,
+                        NodePort = senderPort,
+                        PublicSignatureKey = senderPublicSignatureKey,
+                        PublicEncryptKey = senderPublicEncryptKey,
+                        NodeId = packet.Header.NodeId,
+                        TrustScore = 0 // Initial trust score
+                    };
+
+                    // Add the peer to the RoutingTable (handles duplicates and updates)
+                    RoutingTable.AddPeer(newPeer);
+                    Console.WriteLine($"Added or updated peer {newPeer.NodeId} in the routing table.");
+                }
+
                 // Build the ping response packet
                 Packet responsePacket = new Packet
                 {
                     Header = new Packet.PacketHeader
                     {
-                        NodeId = "PingResponse",
+                        NodeId = this.Peer.NodeId,
                         IPAddress = Client.clientIP.ToString(),
                         Port = Client.clientListenerPort.ToString(),
-                        PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey), 
-                        PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey), 
-                        Packet_Type = "PingResponse",
+                        PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
+                        PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
+                        Packet_Type = "Pong",
                         TTL = "1"
                     },
-                    Content = Convert.ToBase64String(Encoding.UTF8.GetBytes("PingResponse")),
-                    Signature = SignatureGenerator.SignByteArray(Encoding.UTF8.GetBytes("PingResponse"))
+                    Content = Convert.ToBase64String(Encoding.UTF8.GetBytes("Pong")),
+                    Signature = SignatureGenerator.SignByteArray(Encoding.UTF8.GetBytes("Pong"))
                 };
 
                 // Serialize and send the response packet
                 byte[] encryptedResponseData = Encryption.EncryptWithPersonalKey(
                     Encoding.UTF8.GetBytes(responsePacket.Content),
-                    sendersPublicEncryptKey
+                    senderPublicEncryptKey
                 );
 
                 bool success = await Client.SendPacketToPeerAsync(senderIPAddress, senderPort, encryptedResponseData, responsePacket.Signature);
@@ -767,25 +708,34 @@ namespace SPHERE.Blockchain
         // Pings the Peerlist Staggard.
         public async Task StartStaggeredPingAsync()
         {
-            if (Peers == null || Peers.Count == 0)
-            {
-                Console.WriteLine("No peers available to ping.");
-                return;
-            }
-
-            Console.WriteLine("Starting staggered hourly pings to peers...");
-
-            // Calculate the staggered interval in milliseconds
-            int staggeredInterval = (int)(TimeSpan.FromHours(1).TotalMilliseconds / Peers.Count);
-
             while (true) // Keep the pinging process running
             {
-                foreach (var peer in Peers.Values)
+                // Step 1: Collect all peers from the routing table
+                List<Peer> allPeers;
+                lock (RoutingTable)
                 {
-                    // Ping each peer asynchronously with a delay
+                    allPeers = RoutingTable.GetAllPeers(); // Retrieve all peers from the routing table
+                }
+
+                if (allPeers == null || allPeers.Count == 0)
+                {
+                    Console.WriteLine("No peers available to ping.");
+                    await Task.Delay(TimeSpan.FromHours(1)); // Wait for an hour before checking again
+                    continue;
+                }
+
+                Console.WriteLine("Starting staggered hourly pings to peers...");
+
+                // Step 2: Calculate the staggered interval in milliseconds
+                int staggeredInterval = (int)(TimeSpan.FromHours(1).TotalMilliseconds / allPeers.Count);
+
+                // Step 3: Ping each peer asynchronously with a staggered delay
+                foreach (var peer in allPeers)
+                {
+                    // Ping each peer
                     _ = SafeTask(async () =>
                     {
-                        bool isAlive = await PingPeerAsync(peer);
+                        bool isAlive = await PingPeerAsync(this, peer);
                         if (isAlive)
                         {
                             Console.WriteLine($"Peer {peer.NodeId} responded successfully.");
@@ -793,9 +743,9 @@ namespace SPHERE.Blockchain
                         else
                         {
                             Console.WriteLine($"Peer {peer.NodeId} did not respond. Marking as inactive.");
-                            lock (stateLock)
+                            lock (RoutingTable)
                             {
-                                Peers.Remove(peer.NodeId); // Remove the peer if unreachable
+                                RoutingTable.RemovePeer(peer.NodeId); // Remove the peer if unreachable
                             }
                         }
                     });
@@ -810,7 +760,7 @@ namespace SPHERE.Blockchain
         }
 
         //Ping a single peer. Returns True or false based on successful ping. 
-        private async Task<bool> PingPeerAsync(Peer peer)
+        public static async Task<bool> PingPeerAsync(Node node,Peer peer)
         {
             try
             {
@@ -819,11 +769,11 @@ namespace SPHERE.Blockchain
                 {
                     Header = new Packet.PacketHeader
                     {
-                        NodeId = "Ping",
-                        IPAddress = peer.NodeIP,
-                        Port = peer.NodePort.ToString(),
-                        PublicSignatureKey = peer.PublicSignatureKey,
-                        PublicEncryptKey=peer.PublicEncryptKey,
+                        NodeId = node.Peer.NodeId,
+                        IPAddress = node.Peer.NodeIP,
+                        Port = node.Peer.NodePort.ToString(),
+                        PublicSignatureKey = node.Peer.PublicSignatureKey,
+                        PublicEncryptKey= node.Peer.PublicEncryptKey,
                         Packet_Type = "Ping",
                         TTL = "1"
                     },

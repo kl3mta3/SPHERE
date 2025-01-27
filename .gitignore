@@ -408,5 +408,5 @@ FodyWeavers.xsd
 /Security/
 
 # Testing project and DLL
-/SPHERE/Libs/ForTesting.dll
+/SPHERE/Libs/Testing.dll
 /Testing/

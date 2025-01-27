@@ -251,15 +251,22 @@ namespace SPHERE.Blockchain
                 .ToList();
         }
 
-        public void RebuildRoutingTable(Node node)
+        public void RebuildRoutingTable()
         {
             lock (stateLock)
             {
-                foreach (var peer in node.Peers.Values
+                // Get all peers from the routing table
+                List<Peer> allPeers = RoutingTable.GetAllPeers();
+
+                // Clear the current routing table
+                RoutingTable.ClearRoutingTable();
+
+                // Re-add peers to the routing table, sorted by TrustScore and proximity
+                foreach (var peer in allPeers
                     .OrderByDescending(peer => peer.TrustScore)
                     .ThenBy(peer => peer.CalculateProximity(peer)))
                 {
-                    RoutingTable.AddPeer(peer); // Use RoutingTable class for re-adding peers
+                    RoutingTable.AddPeer(peer);
                 }
             }
         }

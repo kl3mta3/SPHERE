@@ -10,11 +10,13 @@
   <ItemGroup>
     <None Remove="Libs\Packet.dll" />
     <None Remove="Libs\Security.dll" />
+    <None Remove="Libs\Testing.dll" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="Libs\Packet.dll" />
     <EmbeddedResource Include="Libs\Security.dll" />
+    <EmbeddedResource Include="Libs\Testing.dll" />
   </ItemGroup>
 
   <ItemGroup>
@@ -23,7 +25,7 @@
 
   <ItemGroup>
     <Reference Include="Packet">
-      <HintPath>..\Packet\bin\Debug\net8.0\Packet.dll</HintPath>
+      <HintPath>Libs\Packet.dll</HintPath>
     </Reference>
     <Reference Include="Security">
       <HintPath>Libs\Security.dll</HintPath>
