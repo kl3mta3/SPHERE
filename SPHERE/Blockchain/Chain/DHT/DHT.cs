@@ -83,6 +83,13 @@ namespace SPHERE.Blockchain
                 }
             }
         }
+        public int GetTotalBlockCount()
+        {
+            lock (stateLock) // Ensure thread safety
+            {
+                return _blocks.Count;
+            }
+        }
 
         public static string GetAppDataPath(string fileName)
         {

@@ -23,9 +23,18 @@ public class RoutingTable
     {
         lock (_lock)
         {
-            int bucketIndex = GetBucketIndex(peer.NodeId);
-            var bucket = _buckets[bucketIndex];
-            bucket.AddPeer(peer, _bucketSize);
+            try
+            {
+               // Console.WriteLine($"Adding peer to bucket: NodeId={peer.NodeId}");
+                int bucketIndex = GetBucketIndex(peer.NodeId);
+                //Console.WriteLine($"Bucket index for NodeId {peer.NodeId}: {bucketIndex}");
+                _buckets[bucketIndex].AddPeer(peer, _bucketSize);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in AddPeer: {ex.Message}");
+                throw;
+            }
         }
     }
 
@@ -76,8 +85,34 @@ public class RoutingTable
         }
     }
 
+    public static bool IsHexString(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return false;
+
+        foreach (char c in input)
+        {
+            if (!Uri.IsHexDigit(c))
+                return false;
+        }
+
+        return true;
+    }
+
     private int GetBucketIndex(string nodeId)
     {
+
+        // Validate that the input is not null or empty
+        if (string.IsNullOrWhiteSpace(nodeId))
+        {
+            throw new ArgumentNullException(nameof(nodeId), "NodeId cannot be null or empty.");
+        }
+
+        // Validate that the input is a valid hexadecimal string
+        if (!IsHexString(nodeId))
+        {
+            throw new FormatException($"NodeId '{nodeId}' is not a valid hexadecimal string.");
+        }
         string localNodeId = "0000000000000000000000000000000000000000000000000000000000000000"; // Example local node ID (256 bits in hex)
         BigInteger distance = CalculateXorDistance(localNodeId, nodeId);
 
@@ -87,20 +122,45 @@ public class RoutingTable
         return 255 - (int)Math.Log2((double)distance);
     }
 
-    private static BigInteger CalculateXorDistance(string id1, string id2)
+    private static BigInteger CalculateXorDistance(string localNodeId, string nodeId)
     {
-        byte[] id1Bytes = Convert.FromHexString(id1);
-        byte[] id2Bytes = Convert.FromHexString(id2);
-
-        byte[] xorResult = new byte[id1Bytes.Length];
-        for (int i = 0; i < id1Bytes.Length; i++)
+        if (string.IsNullOrWhiteSpace(localNodeId) || string.IsNullOrWhiteSpace(nodeId))
         {
-            xorResult[i] = (byte)(id1Bytes[i] ^ id2Bytes[i]);
+            throw new ArgumentNullException("Both localNodeId and nodeId must be non-null and non-empty.");
         }
 
-        return new BigInteger(xorResult.Reverse().ToArray());
+        if (localNodeId.Length != nodeId.Length)
+        {
+            throw new ArgumentException("localNodeId and nodeId must have the same length.");
+        }
+
+        byte[] localNodeBytes = HexStringToByteArray(localNodeId);
+        byte[] nodeBytes = HexStringToByteArray(nodeId);
+
+        BigInteger xorDistance = new BigInteger(localNodeBytes) ^ new BigInteger(nodeBytes);
+
+        if (xorDistance.Sign < 0)
+        {
+            xorDistance = BigInteger.Abs(xorDistance); // Ensure non-negative result
+        }
+
+        return xorDistance;
     }
 
+    private static byte[] HexStringToByteArray(string hex)
+    {
+        if (hex.Length % 2 != 0)
+        {
+            throw new ArgumentException("Hex string must have an even length.");
+        }
+
+        byte[] bytes = new byte[hex.Length / 2];
+        for (int i = 0; i < hex.Length; i += 2)
+        {
+            bytes[i / 2] = Convert.ToByte(hex.Substring(i, 2), 16);
+        }
+        return bytes;
+    }
     public void DisplayTable()
     {
         lock (_lock)

@@ -9,30 +9,36 @@ namespace SPHERE.Configure
 {
     public static class DllLoader
     {
-        public static void LoadAllEmbeddedDlls()
+        // Static constructor to handle DLL loading on first use of the library
+        static DllLoader()
         {
-            var assembly = Assembly.GetExecutingAssembly();
-            var resourceNames = assembly.GetManifestResourceNames();
-
-            foreach (var resourceName in resourceNames)
+            AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
             {
-                if (resourceName.StartsWith("SPHERE.Libs.") && resourceName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                try
                 {
-                    using (var stream = assembly.GetManifestResourceStream(resourceName))
+                    string resourceName = args.Name.Split(',')[0] + ".dll";
+                    var assembly = Assembly.GetExecutingAssembly();
+                    using (var stream = assembly.GetManifestResourceStream($"SPHERE.Libs.{resourceName}"))
                     {
-                        if (stream == null)
-                        {
-                            throw new InvalidOperationException($"Resource {resourceName} not found.");
-                        }
-
+                        if (stream == null) return null;
                         var buffer = new byte[stream.Length];
                         stream.Read(buffer, 0, buffer.Length);
-                        Assembly.Load(buffer);
+                        return Assembly.Load(buffer);
                     }
                 }
-            }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to resolve assembly: {args.Name}. Error: {ex.Message}");
+                    return null;
+                }
+            };
+        }
 
-            Console.WriteLine("All DLLs in SPHERE/Libs loaded successfully.");
+        // Optional method to allow manual initialization, if necessary
+        public static void Initialize()
+        {
+            // This method can be empty; calling it ensures the static constructor runs
         }
     }
 }
+

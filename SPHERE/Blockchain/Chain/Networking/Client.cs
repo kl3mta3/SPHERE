@@ -5,7 +5,10 @@ using static SPHERE.Blockchain.Node;
 using SPHERE.PacketLib;
 using SPHERE.Blockchain;
 using static SPHERE.PacketLib.Packet;
+using SharedLibraries;
 using SPHERE.Configure;
+using SPHERE.TestingLib;
+using SPHERE.Security;
 
 
 namespace SPHERE.Networking
@@ -35,8 +38,16 @@ namespace SPHERE.Networking
     /// !!!
     /// 
     /// </summary>
-    public class Client
+    public class Client 
     {
+
+        public readonly IKeyProvider _keyProvider;
+
+        public  Client(IKeyProvider keyProvider)
+        {
+            _keyProvider = keyProvider;
+        }
+
         private const int StartPort = 5000;                     // Start of the port range
         private const int EndPort = 6000;                       // End of the port range
         public TcpClient client;
@@ -44,8 +55,8 @@ namespace SPHERE.Networking
         public Packet.PacketBuilder packetBuilder;
         public Packet.PacketReader packetReader;
 
-        public IPAddress clientIP ;
-        public int clientListenerPort=0;                             //Port for listening to incoming messages Should be static and provided to other clinets 
+        public IPAddress clientIP;
+        public int clientListenerPort = 0;                             //Port for listening to incoming messages Should be static and provided to other clinets 
         public int clientCommunicationPort;
 
 
@@ -73,7 +84,7 @@ namespace SPHERE.Networking
             }
         }
 
-        
+
         private static byte[] CombineEncryptedDataAndSignature(byte[] encryptedData, byte[] signature)
         {
             // Create a byte array to hold the signature length, signature, and encrypted data
@@ -107,7 +118,7 @@ namespace SPHERE.Networking
         {
             var stun = new STUN();
             var (PublicIP, PublicPort) = stun.GetPublicEndpoint();
-            client.clientIP= PublicIP; 
+            client.clientIP = PublicIP;
             client.clientListenerPort = PublicPort;
         }
 
@@ -115,7 +126,7 @@ namespace SPHERE.Networking
         {
             for (int port = StartPort; port <= EndPort; port++)
             {
-                if ( IsPortAvailableAsync(port))
+                if (IsPortAvailableAsync(port))
                 {
                     return port;
                 }
@@ -127,32 +138,32 @@ namespace SPHERE.Networking
 
         private static bool IsPortAvailableAsync(int port)
         {
-            
-                try
+
+            try
+            {
+                using (var listener = new TcpListener(IPAddress.Any, port))
                 {
-                    using (var listener = new TcpListener(IPAddress.Any, port))
-                    {
-                        listener.Start();
-                        listener.Stop();
-                        return true;
-                    }
+                    listener.Start();
+                    listener.Stop();
+                    return true;
                 }
-                catch (SocketException)
-                {
-                    return false;
-                }
-           
+            }
+            catch (SocketException)
+            {
+                return false;
+            }
+
         }
 
-        public static async Task StartClientListenerAsync(Client client)
+        public  async Task StartClientListenerAsync(Node node, Client client)
         {
-            DllLoader.LoadAllEmbeddedDlls();
-            if (client.clientListenerPort==0)
+            // DllLoader.LoadAllEmbeddedDlls();
+            if (client.clientListenerPort == 0)
             {
                 client.clientListenerPort = FindAvailablePort();
 
             }
-            
+
             client.Listener = new TcpListener(IPAddress.Any, client.clientListenerPort);
             client.Listener.Start();
             Console.WriteLine($"Async server is listening on port {client.clientListenerPort}");
@@ -164,7 +175,7 @@ namespace SPHERE.Networking
                     client.client = await client.Listener.AcceptTcpClientAsync();
                     Console.WriteLine($"Connection established with {client.client.Client.RemoteEndPoint}");
 
-                    _ = HandleClientAsync(client.client); 
+                    _ = HandleClientAsync(node, client.client);
                 }
                 catch (Exception ex)
                 {
@@ -173,11 +184,11 @@ namespace SPHERE.Networking
             }
         }
 
-        public static async Task StartClientListenerWithSTUNAsync(Client client)
+        public  async Task StartClientListenerWithSTUNAsync(Node node, Client client)
         {
             try
             {
-                DllLoader.LoadAllEmbeddedDlls();
+                // DllLoader.LoadAllEmbeddedDlls();
                 var stun = new STUN();
                 var (PublicIP, PublicPort) = stun.GetPublicEndpoint();
 
@@ -207,7 +218,7 @@ namespace SPHERE.Networking
                         client.client = await client.Listener.AcceptTcpClientAsync();
                         Console.WriteLine($"Connection established with {client.client.Client.RemoteEndPoint}");
 
-                        _ = HandleClientAsync(client.client);
+                        _ = HandleClientAsync(node, client.client);
                     }
                     catch (Exception ex)
                     {
@@ -225,25 +236,46 @@ namespace SPHERE.Networking
 
 
         // Synchronous method to start the client listener using STUN
-        public static void StartClientListenerWithSTUNSync(Client client)
+        public  void StartClientListenerWithSTUNSync(Node node, Client client)
         {
-            var stun = new STUN();
-            var (PublicIP, PublicPort) = stun.GetPublicEndpoint();
-
-            if (PublicIP == null || PublicPort == 0)
+            try
             {
-                Console.WriteLine("Failed to retrieve public endpoint. Exiting.");
-                throw new Exception("STUN failed to retrieve public endpoint.");
-            }
+                // Step 1: Retrieve public IP and port using STUN
+                var stun = new STUN();
+                var (PublicIP, PublicPort) = stun.GetPublicEndpoint();
 
-            client.clientListenerPort = PublicPort;
-            client.clientIP = PublicIP;
-            client.Listener = new TcpListener(client.clientIP, client.clientListenerPort);
-            client.Listener.Start();
-            Console.WriteLine($"Server is listening on port {client.clientListenerPort}");
+                if (PublicIP == null || PublicPort == 0)
+                {
+                    Console.WriteLine("Failed to retrieve public endpoint. Exiting.");
+                    throw new Exception("STUN failed to retrieve public endpoint.");
+                }
+
+                client.clientListenerPort = PublicPort;
+                client.clientIP = PublicIP;
+                client.Listener = new TcpListener(client.clientIP, client.clientListenerPort);
+
+                // Step 2: Start the listener
+                client.Listener.Start();
+                Console.WriteLine($"Server is listening on {client.clientIP}:{client.clientListenerPort}");
+
+                while (true)
+                {
+                    // Step 3: Accept a new client connection
+                    TcpClient incomingClient = client.Listener.AcceptTcpClient();
+                    Console.WriteLine($"New client connected from {((IPEndPoint)incomingClient.Client.RemoteEndPoint).Address}");
+
+                    // Step 4: Handle the client in a separate task
+                    _ = Task.Run(() => HandleClientAsync(node, incomingClient));
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error starting client listener: {ex.Message}");
+            }
         }
 
-        private static async Task HandleClientAsync(TcpClient client)
+
+        private  async Task HandleClientAsync(Node node, TcpClient client)
         {
             try
             {
@@ -256,11 +288,13 @@ namespace SPHERE.Networking
                     string message = await reader.ReadMessage();
                     Console.WriteLine($"Received message: {message}");
 
+                    byte[] encryptedMessage = Convert.FromBase64String(message);
+                    Console.WriteLine($"Debug: Encrypted Message Length: {encryptedMessage.Length} bytes");
 
-                    // message needs to be sent to node processed encrypted. 
 
-                    //(Missing Fucntionality) will add. 
-                  
+                    ProcessIncomingPacket(node, encryptedMessage);
+
+
                 }
             }
             catch (Exception ex)
@@ -273,10 +307,20 @@ namespace SPHERE.Networking
             }
         }
 
-        public async Task ProcessIncomingPacket(Node node, byte[] packetData)
+        public  async Task ProcessIncomingPacket(Node node, byte[] packetData, bool? testing=false)
         {
             try
             {
+                if (testing == true)
+                {
+                    string key = _keyProvider.GetPrivateKey(node.Peer.NodeId);
+                }
+                else
+                {
+                    byte[] decryptedData = Encryption.DecryptWithPrivateKey(packetData, ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeEncryptionKey));
+                }
+
+
                 Packet packet = PacketBuilder.DeserializePacket(packetData);
 
                 PacketBuilder.PacketType type = ParsePacketType(packet.Header.Packet_Type);
@@ -306,8 +350,9 @@ namespace SPHERE.Networking
             }
         }
 
-    }
 
+
+    }
     /// <summary>
     /// The STUN server is used to get an IP and port that is open for listening for traffic without needing pinholes or portforwarding. 
     /// It needs to be ran evertime a listener is started. It reaches out to a list of known STUN servers and then parses the response it gets to get a valid usable IP an port.
@@ -434,6 +479,7 @@ namespace SPHERE.Networking
         }
 
     }
+
 
 }
 

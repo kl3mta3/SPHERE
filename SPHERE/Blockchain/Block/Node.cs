@@ -2,10 +2,13 @@
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using SharedLibraries;
 using SPHERE.Configure;
 using SPHERE.Networking;
 using SPHERE.PacketLib;
 using SPHERE.Security;
+using SharedLibraries;
+using SPHERE.TestingLib;
 
 namespace SPHERE.Blockchain
 {
@@ -45,7 +48,7 @@ namespace SPHERE.Blockchain
         Leech,          // Does not store or support the chain in any way other than to look up info in the chain and return it.  (Verification servers, and entities that dont need to store blocks, or are high risk for attacks)
 
     }
-    public class Node
+    public class Node 
     {
         public static readonly object stateLock = new object();
         public const string DefaultPreviousHash = "UNKNOWN";
@@ -62,8 +65,7 @@ namespace SPHERE.Blockchain
 
         public static Node CreateNode(Client client, NodeType nodeType)
         {
-            // If not loaded load needed Libraries
-            DllLoader.LoadAllEmbeddedDlls();
+
 
             //create a node.
             Node node = new Node();
@@ -82,12 +84,12 @@ namespace SPHERE.Blockchain
 
             try
             {
-                
+
                 // Initialize PeerHeader
                 Peer peer = new Peer
                 {
                     Node_Type = nodeType,
-                    NodeId = AppIdentifier.GetOrCreateDHTNodeID(),
+                    NodeId = ServiceAccountManager.GenerateKademliaId(),
                     NodeIP = client.clientIP.ToString(),
                     NodePort = client.clientListenerPort,
                     PreviousNodesHash = DefaultPreviousHash, // Placeholder value
@@ -161,16 +163,15 @@ namespace SPHERE.Blockchain
         //This is used to Create the Node or Load one if it exists. 
         public static Node CreateNodeWithClientListenerUsingSTUN(NodeType nodeType)
         {
-            // If not loaded load needed Libraries
-            DllLoader.LoadAllEmbeddedDlls();
+
 
             //create a node.
             Node node = new Node();
 
             //Create a client get listeners using STUN. 
-            Client client = new Client();
-            Client.StartClientListenerWithSTUNSync(client);
-            node.Client= client;
+            IKeyProvider keyProvider = new Testing();
+            Client client = new Client(keyProvider);
+            
 
             // Thread-safe key generation
             lock (stateLock)
@@ -181,7 +182,8 @@ namespace SPHERE.Blockchain
                     KeyGenerator.GenerateNodeKeyPairs();
                 }
             }
-
+            client.StartClientListenerWithSTUNSync(node, client);
+            node.Client = client;
             try
             {
 
@@ -189,7 +191,7 @@ namespace SPHERE.Blockchain
                 Peer peer = new Peer
                 {
                     Node_Type = nodeType,
-                    NodeId = AppIdentifier.GetOrCreateDHTNodeID(),
+                    NodeId = ServiceAccountManager.GenerateKademliaId(),
                     NodeIP = client.clientIP.ToString(),
                     NodePort = client.clientListenerPort,
                     PreviousNodesHash = DefaultPreviousHash, // Placeholder value
@@ -256,61 +258,98 @@ namespace SPHERE.Blockchain
 
 
         //Sends a Bootstrap Request You will need to be provided the IP, Port and public communication Key of the Host. (It can be provided by any othter node on request. But is only good till they go off and back online and thier ip and port reset.
-        public async Task SendBootstrapRequest(string iPAddress, int port, string recipientsPublicComKey)
+        public async Task SendBootstrapRequest(string iPAddress, int port, string recipientsPublicEncryptKey)
         {
-
             Node node = this;
-            // Validate inputs
-            if (node == null)
+
+            try
             {
-                throw new ArgumentNullException(nameof(node), "Node cannot be null.");
-            }
+                Console.WriteLine("Debug: Starting Bootstrap Request...");
 
-            if (string.IsNullOrWhiteSpace(iPAddress))
-            {
-                throw new ArgumentException("IP address cannot be null or empty.", nameof(iPAddress));
-            }
-
-            if (port <= 0 || port > 65535)
-            {
-                throw new ArgumentOutOfRangeException(nameof(port), "Port must be a valid number between 1 and 65535.");
-            }
-
-            if (string.IsNullOrWhiteSpace(recipientsPublicComKey))
-            {
-                throw new ArgumentException("Recipient's public communication key cannot be null or empty.", nameof(recipientsPublicComKey));
-            }
-
-            // Use RetryAsync to retry the operation on failure
-            await RetryAsync<bool>(async () =>
-            {
-                // Build the bootstrap request packet
-                Packet.PacketHeader header = Packet.PacketBuilder.BuildPacketHeader(Packet.PacketBuilder.PacketType.BootstrapRequest,node.Peer.NodeId, node.Peer.PublicSignatureKey,node.Client.clientListenerPort, node.Client.clientIP.ToString(), 75);
-                Packet packet = Packet.PacketBuilder.BuildPacket(header, "BootstrapRequest");
-
-                // Serialize the packet into a byte array
-                byte[] data = Packet.PacketBuilder.SerializePacket(packet);
-
-                // Encrypt the packet using the recipient's public communication key
-                byte[] encryptedData = Encryption.EncryptWithPersonalKey(data, recipientsPublicComKey);
-
-                // Generate a signature for the encrypted data using the node's private key
-                string signature = SignatureGenerator.SignByteArray(encryptedData);
-
-                // Send the encrypted data and signature to the recipient
-                bool success = await Client.SendPacketToPeerAsync(iPAddress, port, encryptedData, signature);
-
-                // If the send operation fails, throw an exception to trigger a retry
-                if (!success)
+                // Validate inputs
+                if (node == null)
                 {
-                    throw new Exception($"Failed to send bootstrap request to {iPAddress}:{port}.");
+                    Console.WriteLine("Debug: Node is null.");
+                    throw new ArgumentNullException(nameof(node), "Node cannot be null.");
                 }
 
-                // Log successful bootstrap request
-                Console.WriteLine($"Bootstrap request successfully sent to {iPAddress}:{port}.");
+                if (string.IsNullOrWhiteSpace(iPAddress))
+                {
+                    Console.WriteLine("Debug: Invalid IP address input.");
+                    throw new ArgumentException("IP address cannot be null or empty.", nameof(iPAddress));
+                }
 
-                return success; // Explicitly return the success status
-            });
+                if (port <= 0 || port > 65535)
+                {
+                    Console.WriteLine($"Debug: Invalid port: {port}.");
+                    throw new ArgumentOutOfRangeException(nameof(port), "Port must be a valid number between 1 and 65535.");
+                }
+
+                if (string.IsNullOrWhiteSpace(recipientsPublicEncryptKey))
+                {
+                    Console.WriteLine("Debug: Recipient's public communication key is null or empty.");
+                    throw new ArgumentException("Recipient's public communication key cannot be null or empty.", nameof(recipientsPublicEncryptKey));
+                }
+
+                Console.WriteLine($"Debug: Inputs validated. IP: {iPAddress}, Port: {port}, PublicComKey: {recipientsPublicEncryptKey}");
+
+                // Use RetryAsync to retry the operation on failure
+                await RetryAsync<bool>(async () =>
+                {
+                    Console.WriteLine("Debug: Building bootstrap request packet...");
+                    Packet.PacketHeader header = Packet.PacketBuilder.BuildPacketHeader(
+                        Packet.PacketBuilder.PacketType.BootstrapRequest,
+                        node.Peer.NodeId,
+                        node.Peer.PublicSignatureKey,
+                        node.Peer.PublicEncryptKey,
+                        node.Client.clientListenerPort,
+                        node.Client.clientIP.ToString(),
+                        75
+                    );
+
+                    Packet packet = Packet.PacketBuilder.BuildPacket(header, "BootstrapRequest");
+                    Console.WriteLine($"Debug: Packet built with NodeId: {node.Peer.NodeId}, IP: {node.Client.clientIP}, Port: {node.Client.clientListenerPort}");
+
+                    // Serialize the packet into a byte array
+                    Console.WriteLine("Debug: Serializing packet...");
+                    byte[] data = Packet.PacketBuilder.SerializePacket(packet);
+                    Console.WriteLine($"Debug: Packet serialized. Data Length: {data.Length} bytes");
+
+                    // Encrypt the packet using the recipient's public communication key
+                    Console.WriteLine("Debug: Encrypting packet...");
+                    byte[] encryptedData = Encryption.EncryptWithPersonalKey(data, recipientsPublicEncryptKey);
+                    Console.WriteLine($"Debug: Packet encrypted. Encrypted Data Length: {encryptedData.Length} bytes");
+
+                    // Generate a signature for the encrypted data using the node's private key
+                    Console.WriteLine("Debug: Generating signature...");
+                    string signature = SignatureGenerator.SignByteArray(encryptedData);
+                    Console.WriteLine($"Debug: Signature generated. Signature Length: {signature.Length} characters");
+
+                    // Send the encrypted data and signature to the recipient
+                    Console.WriteLine($"Debug: Sending packet to {iPAddress}:{port}...");
+                    bool success = await Client.SendPacketToPeerAsync(iPAddress, port, encryptedData, signature);
+
+                    // If the send operation fails, throw an exception to trigger a retry
+                    if (!success)
+                    {
+                        Console.WriteLine($"Debug: Failed to send bootstrap request to {iPAddress}:{port}");
+                        throw new Exception($"Failed to send bootstrap request to {iPAddress}:{port}.");
+                    }
+
+                    // Log successful bootstrap request
+                    Console.WriteLine($"Debug: Bootstrap request successfully sent to {iPAddress}:{port}");
+
+                    return success; // Explicitly return the success status
+                });
+
+                Console.WriteLine("Debug: Bootstrap Request process completed.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+                Console.WriteLine($"Debug Trace: {ex.StackTrace}");
+                throw;
+            }
         }
 
         //Process Bootstrap Response
@@ -320,52 +359,65 @@ namespace SPHERE.Blockchain
 
             try
             {
+                Console.WriteLine("Debug: Starting to process bootstrap response...");
+
                 // Verify Node isn't already Bootstrapped, prevents re-bootstrapping by accident
                 if (node.isBootstrapped)
                 {
-                    Console.WriteLine("Node is already Bootstrapped. Ignoring the response.");
+                    Console.WriteLine("Debug: Node is already bootstrapped. Ignoring the response.");
                     return;
                 }
 
                 // Validate the packet and extract the header details
                 if (packet == null || packet.Header == null)
                 {
-                    Console.WriteLine("Invalid packet or missing header.");
+                    Console.WriteLine("Debug: Invalid packet or missing header.");
                     return;
                 }
+
+                Console.WriteLine($"Debug: Processing packet from Node ID: {packet.Header.NodeId}, IP: {packet.Header.IPAddress}, Port: {packet.Header.Port}");
 
                 // Extract details from the packet header
                 string senderPublicKey = packet.Header.PublicSignatureKey;
                 string signature = packet.Signature;
                 byte[] encryptedData = Convert.FromBase64String(packet.Content);
 
+                Console.WriteLine($"Debug: Packet signature: {signature}. Content size: {encryptedData.Length} bytes");
+
                 // Verify the signature
+                Console.WriteLine("Debug: Verifying packet signature...");
                 bool isSignatureValid = SignatureGenerator.VerifyByteArray(encryptedData, signature, senderPublicKey);
                 if (!isSignatureValid)
                 {
-                    Console.WriteLine("Invalid signature. Response has been tampered with.");
+                    Console.WriteLine("Debug: Invalid signature. Response has been tampered with.");
                     return;
                 }
+                Console.WriteLine("Debug: Signature verification passed.");
 
                 // Decrypt the data
+                Console.WriteLine("Debug: Decrypting packet data...");
                 byte[] decryptedData = Encryption.DecryptWithPrivateKey(
                     encryptedData,
                     ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeEncryptionKey)
                 );
+                Console.WriteLine($"Debug: Decryption successful. Decrypted data size: {decryptedData.Length} bytes");
 
                 // Deserialize the response payload
+                Console.WriteLine("Debug: Deserializing bootstrap response payload...");
                 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 var responsePayload = JsonSerializer.Deserialize<BootstrapResponsePayload>(decryptedData, options);
 
                 if (responsePayload == null)
                 {
-                    Console.WriteLine("Failed to deserialize bootstrap response payload.");
+                    Console.WriteLine("Debug: Failed to deserialize bootstrap response payload.");
                     return;
                 }
+                Console.WriteLine("Debug: Bootstrap response payload deserialized successfully.");
 
                 // Process the peer list
                 if (responsePayload.Peers != null)
                 {
+                    Console.WriteLine($"Debug: Processing {responsePayload.Peers.Count} peers...");
                     lock (RoutingTable) // Ensure thread-safe access to the RoutingTable
                     {
                         foreach (var peer in responsePayload.Peers)
@@ -382,7 +434,7 @@ namespace SPHERE.Blockchain
 
                             // Add the peer to the RoutingTable (will handle duplicates automatically)
                             RoutingTable.AddPeer(newPeer);
-                            Console.WriteLine($"Added or updated peer {peer.NodeId} in the routing table.");
+                            Console.WriteLine($"Debug: Added or updated peer {peer.NodeId} in the routing table.");
                         }
                     }
                 }
@@ -390,6 +442,7 @@ namespace SPHERE.Blockchain
                 // Process the DHT state (if included)
                 if (responsePayload.DHT != null)
                 {
+                    Console.WriteLine($"Debug: Processing {responsePayload.DHT.Count} DHT blocks...");
                     lock (stateLock) // Ensure thread-safe access to the DHT
                     {
                         foreach (var block in responsePayload.DHT)
@@ -398,129 +451,173 @@ namespace SPHERE.Blockchain
                             if (DHT.IsBlockValid(block))
                             {
                                 node.DHT.AddBlock(block);
-                                Console.WriteLine($"Added DHT block: {block.Header.BlockId}");
+                                Console.WriteLine($"Debug: Added DHT block: {block.Header.BlockId}");
                             }
                             else
                             {
-                                Console.WriteLine($"Invalid block {block.Header.BlockId}. Skipping.");
+                                Console.WriteLine($"Debug: Invalid block {block.Header.BlockId}. Skipping.");
                             }
                         }
                     }
                 }
 
-                Console.WriteLine("Bootstrap response processed successfully.");
+                Console.WriteLine("Debug: Bootstrap response processed successfully.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error processing bootstrap response: {ex.Message}");
+                Console.WriteLine($"Error: {ex.Message}");
+                Console.WriteLine($"Debug Trace: {ex.StackTrace}");
             }
         }
 
         // Sends a response to a request to Bootstrap.  Sends a peer list and copy of DHT (Or shards at some point)
-        public async Task SendBootstrapResponse( Packet packet)
+        public async Task SendBootstrapResponse(Packet packet)
         {
             Node node = this;
-            string recipientsID = packet.Header.NodeId;
-            string recipientIPAddress = packet.Header.IPAddress;
-            int recipientPort = int.Parse(packet.Header.Port);
-            string recipientPublicComKey= packet.Header.PublicSignatureKey;
-            // Validate inputs
-            if (packet == null)
-            {
-                throw new ArgumentNullException(nameof(packet), "Packet cannot be null.");
-            }
 
-            if (node == null)
+            try
             {
-                throw new ArgumentNullException(nameof(node), "The Node cannot be null.");
-            }
+                Console.WriteLine("Debug: Starting to send bootstrap response...");
 
-            if (string.IsNullOrWhiteSpace(recipientIPAddress))
-            {
-                throw new ArgumentException("Packet's IP address cannot be null or empty.", nameof(recipientIPAddress));
-            }
+                // Extract recipient details from the packet
+                string recipientsID = packet.Header.NodeId;
+                string recipientIPAddress = packet.Header.IPAddress;
+                int recipientPort = int.Parse(packet.Header.Port);
+                string recipientPublicEncryptKey = packet.Header.PublicSignatureKey;
 
-            if (recipientPort <= 0 || recipientPort > 65535)
-            {
-                throw new ArgumentOutOfRangeException(nameof(recipientPort), "Packet port must be a valid number between 1 and 65535.");
-            }
+                Console.WriteLine($"Debug: Recipient details - NodeId: {recipientsID}, IP: {recipientIPAddress}, Port: {recipientPort}, PublicComKey: {recipientPublicEncryptKey}");
 
-            if (string.IsNullOrWhiteSpace(recipientPublicComKey))
-            {
-                throw new ArgumentException("Recipient's public communication key cannot be null or empty.", nameof(recipientPublicComKey));
-            }
-
-            // Use RetryAsync to ensure the response is sent
-            await RetryAsync<bool>(async () =>
-            {
-                // Collect peers from the RoutingTable
-                List<Peer> peerList;
-                lock (node.RoutingTable)
+                // Validate inputs
+                if (packet == null)
                 {
-                    if (!string.IsNullOrWhiteSpace(recipientsID))
-                    {
-                        peerList = node.RoutingTable.GetClosestPeers(recipientsID, 20); // Adjust '20' as needed
-                    }
-                    else
-                    {
-
-                        peerList= node.RoutingTable.GetAllPeers();
-                    }
+                    Console.WriteLine("Debug: Packet is null.");
+                    throw new ArgumentNullException(nameof(packet), "Packet cannot be null.");
                 }
 
-                // Prepare a lightweight peer list for the response payload
-                var responsePeerList = peerList.Select(peer => new
+                if (node == null)
                 {
-                    peer.NodeId,
-                    peer.NodeIP,
-                    peer.NodePort,
-                    peer.PublicSignatureKey,
-                    peer.PublicEncryptKey
-                }).ToList();
-
-                // Include DHT state (if necessary)
-                var dhtState = node.DHT.GetCurrentState();
-
-                // Build the response payload
-                var responsePayload = new
-                {
-                    MessageType = "BootstrapResponse",
-                    Peers = responsePeerList,
-                    DHT = dhtState
-                };
-
-                // Serialize the response payload into a byte array
-                byte[] responseData = JsonSerializer.SerializeToUtf8Bytes(responsePayload);
-
-                // Encrypt the response data using the recipient's public communication key
-                byte[] encryptedResponseData = Encryption.EncryptWithPersonalKey(responseData, recipientPublicComKey);
-
-                // Generate a signature for the encrypted data using the node's private key
-                string responseSignature = SignatureGenerator.SignByteArray(encryptedResponseData);
-
-                // Send the encrypted response data and signature to the recipient
-                bool success = await Client.SendPacketToPeerAsync(recipientIPAddress, recipientPort, encryptedResponseData, responseSignature);
-
-                // If the send operation fails, throw an exception to trigger a retry
-                if (!success)
-                {
-                    throw new Exception($"Failed to send bootstrap response to {recipientIPAddress}:{recipientPort}.");
+                    Console.WriteLine("Debug: Node is null.");
+                    throw new ArgumentNullException(nameof(node), "The Node cannot be null.");
                 }
 
-                //  Reward the recipient with a trust score for a valid request
-                lock (node.RoutingTable)
+                if (string.IsNullOrWhiteSpace(recipientIPAddress))
                 {
-                    var peer = node.RoutingTable.GetPeerByIPAddress(recipientIPAddress);
-                    if (peer != null)
+                    Console.WriteLine("Debug: Recipient IP address is invalid.");
+                    throw new ArgumentException("Packet's IP address cannot be null or empty.", nameof(recipientIPAddress));
+                }
+
+                if (recipientPort <= 0 || recipientPort > 65535)
+                {
+                    Console.WriteLine($"Debug: Invalid recipient port: {recipientPort}");
+                    throw new ArgumentOutOfRangeException(nameof(recipientPort), "Packet port must be a valid number between 1 and 65535.");
+                }
+
+                if (string.IsNullOrWhiteSpace(recipientPublicEncryptKey))
+                {
+                    Console.WriteLine("Debug: Recipient's public communication key is invalid.");
+                    throw new ArgumentException("Recipient's public communication key cannot be null or empty.", nameof(recipientPublicEncryptKey));
+                }
+
+                Console.WriteLine("Debug: Inputs validated successfully.");
+
+                // Use RetryAsync to ensure the response is sent
+                await RetryAsync<bool>(async () =>
+                {
+                    Console.WriteLine("Debug: Preparing peer list for response...");
+                    List<Peer> peerList;
+
+                    lock (node.RoutingTable)
                     {
-                        peer.UpdateTrustScore(peer, +5); // Reward 5 points
+                        if (!string.IsNullOrWhiteSpace(recipientsID))
+                        {
+                            peerList = node.RoutingTable.GetClosestPeers(recipientsID, 20); // Adjust '20' as needed
+                            Console.WriteLine($"Debug: Retrieved {peerList.Count} closest peers for NodeId {recipientsID}.");
+                        }
+                        else
+                        {
+                            peerList = node.RoutingTable.GetAllPeers();
+                            Console.WriteLine($"Debug: Retrieved all peers. Total: {peerList.Count}");
+                        }
                     }
-                }
 
-                //  Log successful bootstrap response
-                Console.WriteLine($"Bootstrap response successfully sent to {recipientIPAddress}:{recipientPort}.");
-                return success; // Explicitly return success
-            });
+                    // Prepare a lightweight peer list for the response payload
+                    var responsePeerList = peerList.Select(peer => new
+                    {
+                        peer.NodeId,
+                        peer.NodeIP,
+                        peer.NodePort,
+                        peer.PublicSignatureKey,
+                        peer.PublicEncryptKey
+                    }).ToList();
+                    Console.WriteLine($"Debug: Peer list prepared. Count: {responsePeerList.Count}");
+
+                    // Include DHT state (if necessary)
+                    Console.WriteLine("Debug: Retrieving DHT state...");
+                    var dhtState = node.DHT.GetCurrentState();
+                    Console.WriteLine($"Debug: Retrieved DHT state. Block count: {dhtState.Count}");
+
+                    // Build the response payload
+                    var responsePayload = new
+                    {
+                        MessageType = "BootstrapResponse",
+                        Peers = responsePeerList,
+                        DHT = dhtState
+                    };
+
+                    Console.WriteLine("Debug: Serializing response payload...");
+                    byte[] responseData = JsonSerializer.SerializeToUtf8Bytes(responsePayload);
+                    Console.WriteLine($"Debug: Serialized response payload. Size: {responseData.Length} bytes");
+
+                    // Encrypt the response data using the recipient's public communication key
+                    Console.WriteLine("Debug: Encrypting response data...");
+                    byte[] encryptedResponseData = Encryption.EncryptWithPersonalKey(responseData, recipientPublicEncryptKey);
+                    Console.WriteLine($"Debug: Encrypted response data. Encrypted size: {encryptedResponseData.Length} bytes");
+
+                    // Generate a signature for the encrypted data using the node's private key
+                    Console.WriteLine("Debug: Generating signature for response...");
+                    string responseSignature = SignatureGenerator.SignByteArray(encryptedResponseData);
+                    Console.WriteLine($"Debug: Signature generated. Length: {responseSignature.Length} characters");
+
+                    // Send the encrypted response data and signature to the recipient
+                    Console.WriteLine($"Debug: Sending response to {recipientIPAddress}:{recipientPort}...");
+                    bool success = await Client.SendPacketToPeerAsync(recipientIPAddress, recipientPort, encryptedResponseData, responseSignature);
+
+                    // If the send operation fails, throw an exception to trigger a retry
+                    if (!success)
+                    {
+                        Console.WriteLine($"Debug: Failed to send bootstrap response to {recipientIPAddress}:{recipientPort}");
+                        throw new Exception($"Failed to send bootstrap response to {recipientIPAddress}:{recipientPort}.");
+                    }
+
+                    // Reward the recipient with a trust score for a valid request
+                    Console.WriteLine("Debug: Updating trust score for recipient...");
+                    lock (node.RoutingTable)
+                    {
+                        var peer = node.RoutingTable.GetPeerByIPAddress(recipientIPAddress);
+                        if (peer != null)
+                        {
+                            peer.UpdateTrustScore(peer, +5); // Reward 5 points
+                            Console.WriteLine($"Debug: Trust score updated for peer {peer.NodeId}. New Trust Score: {peer.TrustScore}");
+                        }
+                        else
+                        {
+                            Console.WriteLine("Debug: Recipient peer not found in the routing table.");
+                        }
+                    }
+
+                    // Log successful bootstrap response
+                    Console.WriteLine($"Debug: Bootstrap response successfully sent to {recipientIPAddress}:{recipientPort}.");
+                    return success; // Explicitly return success
+                });
+
+                Console.WriteLine("Debug: Bootstrap response process completed successfully.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+                Console.WriteLine($"Debug Trace: {ex.StackTrace}");
+                throw;
+            }
         }
 
         //Resets the Bootstrap Status to allow a corupted node to "Reset" it's peers and DHT.
@@ -571,58 +668,8 @@ namespace SPHERE.Blockchain
             }
         }
 
-        //// Evlauates a peer based on TrustScore and location to decide to keep a new Peer.
-        //public void EvaluateAndReplacePeer(Peer newPeer)
-        //{
-        //    lock (Peers)
-        //    {
-        //        if (Peers.Values.Count < MaxPeers)
-        //        {
-        //            Peers[newPeer.NodeId] = newPeer;
-        //            Console.WriteLine($"Added new peer: {newPeer.NodeId}");
-        //            return;
-        //        }
 
-        //        // Find the weakest peer
-        //        Peer weakestPeer = Peers.Values
-        //            .OrderBy(peer => peer.CalculateProximity(peer))
-        //            .ThenBy(peer => peer.TrustScore)
-        //            .FirstOrDefault();
-
-        //        if (weakestPeer != null &&
-        //            (newPeer.CalculateProximity(newPeer) > weakestPeer.CalculateProximity(weakestPeer) ||
-        //            newPeer.TrustScore > weakestPeer.TrustScore))
-        //        {
-        //            Peers.Remove(weakestPeer.NodeId);
-        //            Peers[newPeer.NodeId] = newPeer;
-        //            Console.WriteLine($"Replaced peer {weakestPeer.NodeId} with {newPeer.NodeId}");
-        //        }
-        //    }
-        //}
-
-        // Returns a peer from the Peerlist based on their IP
-        //public  Peer GetPeerByIPAddress(string ipAddress)
-        //{
-        //    lock (stateLock)
-        //    {
-        //        return Peers.Values.FirstOrDefault(peer => peer.NodeIP == ipAddress);
-        //    }
-        //}
-
-        //Returns a Peer from the Peer List By ID.
-        //public Peer GetPeerByID(string peerID)
-        //{
-        //    if (string.IsNullOrEmpty(peerID))
-        //    {
-        //        throw new ArgumentException("Node ID cannot be null or empty.", nameof(peerID));
-        //    }
-
-        //    lock (stateLock) // Ensures thread-safe access to the Peers dictionary
-        //    {
-        //        return Peers.ContainsKey(peerID) ? Peers[peerID] : null;
-        //    }
-        //}
-
+      
         // Send response to a Ping request.
         public async Task RespondToPingAsync(Packet packet)
         {
