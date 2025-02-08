@@ -5,15 +5,16 @@ using static SPHERE.Blockchain.Node;
 using SPHERE.PacketLib;
 using SPHERE.Blockchain;
 using static SPHERE.PacketLib.Packet;
-using SharedLibraries;
 using SPHERE.Configure;
-using SPHERE.TestingLib;
+
 using SPHERE.Security;
+using System.Collections;
+using System.Text.RegularExpressions;
+using SPHERE.TestingLib;
 
 
 namespace SPHERE.Networking
 {
-
     /// <summary>
     /// The client is a standard TCP/IP listener. 
     /// We use STUN (Session Traversal Utilities for NAT) to get a port and Ip for the listener to allow the client to connect and listen to the outside world without portfowarding.
@@ -41,12 +42,6 @@ namespace SPHERE.Networking
     public class Client 
     {
 
-        public readonly IKeyProvider _keyProvider;
-
-        public  Client(IKeyProvider keyProvider)
-        {
-            _keyProvider = keyProvider;
-        }
 
         private const int StartPort = 5000;                     // Start of the port range
         private const int EndPort = 6000;                       // End of the port range
@@ -60,30 +55,107 @@ namespace SPHERE.Networking
         public int clientCommunicationPort;
 
 
-
-        public static async Task<bool> SendPacketToPeerAsync(string ip, int port, byte[] encryptedData, string signature)
+        public static async Task<bool> SendPacketToPeerAsync(string ip, int port, byte[] encryptedData)
         {
-            // Combine the signature and encrypted data
-            byte[] combinedData = CombineEncryptedDataAndSignature(encryptedData, Encoding.UTF8.GetBytes(signature));
-
             try
             {
-                using TcpClient client = new TcpClient();
-                await client.ConnectAsync(ip, port);
+                bool isTesting = Environment.GetEnvironmentVariable("SPHERE_TEST_MODE") == "true";
 
-                using NetworkStream stream = client.GetStream();
+                if (isTesting)
+                {
 
-                // Send the packet
-                await stream.WriteAsync(combinedData, 0, combinedData.Length);
-                return true; // Indicate success
+                    byte[] sendersKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicTestNodeEncryptionKey);
+                    using TcpClient client = new TcpClient();
+                    await client.ConnectAsync(ip, port);
+                    using NetworkStream stream = client.GetStream();
+
+                    Console.WriteLine($"Debug-SendPacketToPeerAsync: Encrypted Data Length: {encryptedData.Length}");
+                    Console.WriteLine($"Debug-SendPacketToPeerAsync: Sender's Public Key Length: {sendersKey.Length} bytes");
+                    //Console.WriteLine($"Debug: Encrypted Data Length: {Convert.ToBase64String(encryptedData)}");
+                    Console.WriteLine($"Debug-SendPacketToPeerAsync: Sender's Public Key Length: {Convert.ToBase64String(sendersKey)} bytes");
+
+                    // ✅ Compute full packet size
+                    int totalPacketLength = 4 + 4 + sendersKey.Length + encryptedData.Length;
+                    byte[] lengthPrefix = BitConverter.GetBytes(totalPacketLength);
+                    byte[] keyLengthPrefix = BitConverter.GetBytes(sendersKey.Length);
+
+                    // ✅ Create final packet
+                    byte[] finalPacket = new byte[lengthPrefix.Length + keyLengthPrefix.Length + sendersKey.Length + encryptedData.Length];
+
+                    Buffer.BlockCopy(lengthPrefix, 0, finalPacket, 0, lengthPrefix.Length);
+                    Buffer.BlockCopy(keyLengthPrefix, 0, finalPacket, lengthPrefix.Length, keyLengthPrefix.Length);
+                    Buffer.BlockCopy(sendersKey, 0, finalPacket, lengthPrefix.Length + keyLengthPrefix.Length, sendersKey.Length);
+                    Buffer.BlockCopy(encryptedData, 0, finalPacket, lengthPrefix.Length + keyLengthPrefix.Length + sendersKey.Length, encryptedData.Length);
+
+                    // ✅ Log before sending
+                    Console.WriteLine($"Debug-SendPacketToPeerAsync: Sending Final Packet of {finalPacket.Length} bytes to {ip}:{port}");
+
+                    // ✅ Ensure all bytes are sent before closing connection
+                    await stream.WriteAsync(finalPacket, 0, finalPacket.Length);
+                    await stream.FlushAsync();
+
+                    // ✅ Log success
+                    Console.WriteLine($"Debug-SendPacketToPeerAsync: Successfully sent {finalPacket.Length} bytes.");
+
+                    return true;
+                }
+                else
+                {
+                    byte[] sendersKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey);
+                    using TcpClient client = new TcpClient();
+                    await client.ConnectAsync(ip, port);
+                    using NetworkStream stream = client.GetStream();
+
+                    Console.WriteLine($"Debug: Encrypted Data Length: {encryptedData.Length}");
+                    Console.WriteLine($"Debug: Sender's Public Key Length: {sendersKey.Length} bytes");
+                    Console.WriteLine($"Debug: Encrypted Data Length: {Convert.ToBase64String(encryptedData)}");
+                    Console.WriteLine($"Debug: Sender's Public Key Length: {Convert.ToBase64String(sendersKey)} bytes");
+
+                    // ✅ Compute full packet size
+                    int totalPacketLength = 4 + 4 + sendersKey.Length + encryptedData.Length;
+                    byte[] lengthPrefix = BitConverter.GetBytes(totalPacketLength);
+                    byte[] keyLengthPrefix = BitConverter.GetBytes(sendersKey.Length);
+
+                    // ✅ Create final packet
+                    byte[] finalPacket = new byte[lengthPrefix.Length + keyLengthPrefix.Length + sendersKey.Length + encryptedData.Length];
+
+                    Buffer.BlockCopy(lengthPrefix, 0, finalPacket, 0, lengthPrefix.Length);
+                    Buffer.BlockCopy(keyLengthPrefix, 0, finalPacket, lengthPrefix.Length, keyLengthPrefix.Length);
+                    Buffer.BlockCopy(sendersKey, 0, finalPacket, lengthPrefix.Length + keyLengthPrefix.Length, sendersKey.Length);
+                    Buffer.BlockCopy(encryptedData, 0, finalPacket, lengthPrefix.Length + keyLengthPrefix.Length + sendersKey.Length, encryptedData.Length);
+
+                    // ✅ Log before sending
+                    Console.WriteLine($"✅ Debug: Sending Final Packet of {finalPacket.Length} bytes to {ip}:{port}");
+
+                    // ✅ Ensure all bytes are sent before closing connection
+                    await stream.WriteAsync(finalPacket, 0, finalPacket.Length);
+                    await stream.FlushAsync();
+
+                    // ✅ Log success
+                    Console.WriteLine($"✅ Debug: Successfully sent {finalPacket.Length} bytes.");
+
+                    return true;
+
+                }
+
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error: {ex.Message}");
-                return false; // Indicate failure
+                Console.WriteLine($"Error-SendPacketToPeerAsync: {ex.Message}");
+                return false;
             }
         }
 
+        private static async Task SendFullyAsync(NetworkStream stream, byte[] data)
+        {
+            int totalSent = 0;
+            while (totalSent < data.Length)
+            {
+                await stream.WriteAsync(data.AsMemory(totalSent, data.Length - totalSent));
+                totalSent = data.Length; 
+            }
+            await stream.FlushAsync();
+        }
 
         private static byte[] CombineEncryptedDataAndSignature(byte[] encryptedData, byte[] signature)
         {
@@ -155,61 +227,18 @@ namespace SPHERE.Networking
 
         }
 
-        public  async Task StartClientListenerAsync(Node node, Client client)
-        {
-            // DllLoader.LoadAllEmbeddedDlls();
-            if (client.clientListenerPort == 0)
-            {
-                client.clientListenerPort = FindAvailablePort();
-
-            }
-
-            client.Listener = new TcpListener(IPAddress.Any, client.clientListenerPort);
-            client.Listener.Start();
-            Console.WriteLine($"Async server is listening on port {client.clientListenerPort}");
-
-            while (true)
-            {
-                try
-                {
-                    client.client = await client.Listener.AcceptTcpClientAsync();
-                    Console.WriteLine($"Connection established with {client.client.Client.RemoteEndPoint}");
-
-                    _ = HandleClientAsync(node, client.client);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Server error: {ex.Message}");
-                }
-            }
-        }
-
-        public  async Task StartClientListenerWithSTUNAsync(Node node, Client client)
+        public async Task StartClientListenerAsync(Node node, Client client)
         {
             try
             {
-                // DllLoader.LoadAllEmbeddedDlls();
-                var stun = new STUN();
-                var (PublicIP, PublicPort) = stun.GetPublicEndpoint();
-
-                if (PublicIP == null || PublicPort == 0)
+                // Ensure we have a valid listener port
+                if (client.clientListenerPort == 0)
                 {
-                    Console.WriteLine("Failed to retrieve public endpoint. Trying once more.");
-                    var (PublicIP1, PublicPort1) = stun.GetPublicEndpoint();
-                    if (PublicIP1 == null || PublicPort1 == 0)
-                    {
-                        Console.WriteLine("Failed to retrieve public endpoint again. Exiting.");
-                        return;
-                    }
-
+                    client.clientListenerPort = FindAvailablePort();
                 }
-
-                client.clientListenerPort = PublicPort;
-                client.clientIP = PublicIP;
                 client.Listener = new TcpListener(client.clientIP, client.clientListenerPort);
                 client.Listener.Start();
                 Console.WriteLine($"Async server is listening on port {client.clientListenerPort}");
-
 
                 while (true)
                 {
@@ -225,11 +254,60 @@ namespace SPHERE.Networking
                         Console.WriteLine($"Server error: {ex.Message}");
                     }
                 }
-
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error starting listener: {ex.Message}");
+                return;
+            }
+        }
+
+        public  async Task StartClientListenerWithSTUNAsync(Node node, Client client)
+        {
+            try
+            {
+                // DllLoader.LoadAllEmbeddedDlls();
+                var stun = new STUN();
+                var (PublicIP, PublicPort) = stun.GetPublicEndpoint();
+
+                if (PublicIP == null || PublicPort == 0)
+                {
+                    Console.WriteLine("StartClientListenerWithSTUNAsync: Failed to retrieve public endpoint. Trying once more.");
+                    var (PublicIP1, PublicPort1) = stun.GetPublicEndpoint();
+                    if (PublicIP1 == null || PublicPort1 == 0)
+                    {
+                        Console.WriteLine("StartClientListenerWithSTUNAsync: Failed to retrieve public endpoint again. Exiting.");
+                        return;
+                    }
+
+                }
+
+                client.clientListenerPort = PublicPort;
+                client.clientIP = PublicIP;
+                client.Listener = new TcpListener(client.clientIP, client.clientListenerPort);
+                client.Listener.Start();
+                Console.WriteLine($"StartClientListenerWithSTUNAsync: Async server is listening on port {client.clientListenerPort}");
+
+
+                while (true)
+                {
+                    try
+                    {
+                        client.client = await client.Listener.AcceptTcpClientAsync();
+                        Console.WriteLine($"StartClientListenerWithSTUNAsync: Connection established with {client.client.Client.RemoteEndPoint}");
+
+                        _ = HandleClientAsync(node, client.client);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"StartClientListenerWithSTUNAsync: Server error: {ex.Message}");
+                    }
+                }
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"StartClientListenerWithSTUNAsync: Error starting listener: {ex.Message}");
                 return;
             }
         }
@@ -275,7 +353,7 @@ namespace SPHERE.Networking
         }
 
 
-        private  async Task HandleClientAsync(Node node, TcpClient client)
+        private async Task HandleClientAsync(Node node, TcpClient client)
         {
             try
             {
@@ -284,22 +362,69 @@ namespace SPHERE.Networking
 
                 while (client.Connected)
                 {
-                    // Read the incoming message using the PacketReader
-                    string message = await reader.ReadMessage();
-                    Console.WriteLine($"Received message: {message}");
+                    try
+                    {
+                        // Correct: Read and unpack the message tuple
+                        var (encryptedMessage, senderPublicEncryptionKey) = await reader.ReadMessage();
 
-                    byte[] encryptedMessage = Convert.FromBase64String(message);
-                    Console.WriteLine($"Debug: Encrypted Message Length: {encryptedMessage.Length} bytes");
+                        // Ensure values are valid before processing
+                        if (encryptedMessage == null || senderPublicEncryptionKey == null)
+                        {
+                            Console.WriteLine("Error-HandleClientAsync: Received an invalid packet. Closing connection.");
+                            break; 
+                        }
 
+                        int receivedPacketSize = senderPublicEncryptionKey.Length + encryptedMessage.Length + 4;
+                        Console.WriteLine($"Debug: Total received packet size (Reconstructed): {receivedPacketSize} bytes");
+                        Console.WriteLine($"Debug-HandleClientAsync: Extracted Sender's Public Key Length: {senderPublicEncryptionKey.Length} bytes");
+                        Console.WriteLine($"Debug-HandleClientAsync: Sender Public Key (Base64): {Convert.ToBase64String(senderPublicEncryptionKey)}");
+                        Console.WriteLine($"Debug-HandleClientAsync: Extracted Encrypted Message Length: {encryptedMessage.Length} bytes");
+                        // Console.WriteLine($"Debug: Encrypted Message (Base64): {Convert.ToBase64String(encryptedMessage)}");
 
-                    ProcessIncomingPacket(node, encryptedMessage);
+                        // Check for unexpected key length mismatches
+                        if (senderPublicEncryptionKey.Length != 72 && senderPublicEncryptionKey.Length != 91)
+                        {
+                            Console.WriteLine($"Error-HandleClientAsync: Unexpected sender public key length! Expected 72 or 91, got {senderPublicEncryptionKey.Length}");
+                        }
 
+                        // Process message 
+                        ProcessIncomingPacket(node, encryptedMessage, senderPublicEncryptionKey);
+                    }
+                    catch (EndOfStreamException eosEx)
+                    {
+                      
+                        Console.WriteLine($"Info-HandleClientAsync: Stream ended normally: {eosEx.Message}");
+                        break;
+                    }
+                    catch (IOException ioEx)
+                    {
+                        Console.WriteLine($"Info-HandleClientAsync: Connection closed by peer: {ioEx.Message}");
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error-HandleClientAsync: Unexpected error processing packet: {ex.Message}");
+                        break;
+                    }
 
                 }
             }
+            catch (EndOfStreamException eosEx)
+            {
+               
+                Console.WriteLine($"Info-HandleClientAsync: Stream ended normally: {eosEx.Message}");
+             
+            }
+            catch (IOException ioEx)
+            {
+                
+                Console.WriteLine($"Info-HandleClientAsync: Connection closed by peer: {ioEx.Message}");
+                
+            }
             catch (Exception ex)
             {
-                Console.WriteLine($"Client handling error: {ex.Message}");
+                Console.WriteLine($"Error-HandleClientAsync: Unexpected error processing packet: {ex.Message}");
+            
             }
             finally
             {
@@ -307,21 +432,45 @@ namespace SPHERE.Networking
             }
         }
 
-        public  async Task ProcessIncomingPacket(Node node, byte[] packetData, bool? testing=false)
+        bool IsBase64String(string input)
         {
+            input = input.Trim();
+            return (input.Length % 4 == 0) && Regex.IsMatch(input, @"^[a-zA-Z0-9\+/]*={0,2}$", RegexOptions.None);
+        }
+
+        public async Task ProcessIncomingPacket(Node node, byte[] packetData, byte[] senderPublicEncryptKey)
+        {
+            Console.WriteLine($"Debug-ProcessIncomingPacket: Processing Incoming Encrypted.");
             try
             {
-                if (testing == true)
+                Packet packet = new Packet();
+                packet.Header = new PacketHeader();
+                bool isTesting = Environment.GetEnvironmentVariable("SPHERE_TEST_MODE") == "true";
+                if (isTesting)
                 {
-                    string key = _keyProvider.GetPrivateKey(node.Peer.NodeId);
+                    byte[] recipientsPublicKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateTestNodeEncryptionKey);
+                    Console.WriteLine($"Debug-ProcessIncomingPacket: Getting Test Key from Test Environment.");
+                 
+                    
+                    //byte[] privateKeyBytes = Convert.FromBase64String(recipientsPublicKey);
+                    Console.WriteLine($"Debug-ProcessIncomingPacket: Test Key: {recipientsPublicKey}");
+
+                    // ✅ Decrypt using both the sender’s public key & recipient’s private key
+                    byte[] decryptedData = Encryption.DecryptPacketWithPrivateKey(packetData, senderPublicEncryptKey);
+
+                    Console.WriteLine($"Debug-ProcessIncomingPacket: Deserializing Test Packet.");
+                    packet = PacketBuilder.DeserializePacket(decryptedData);
                 }
                 else
                 {
-                    byte[] decryptedData = Encryption.DecryptWithPrivateKey(packetData, ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeEncryptionKey));
+                    string sendersPublicEncryptKey = Convert.ToBase64String(senderPublicEncryptKey);
+                    Console.WriteLine($"Debug-ProcessIncomingPacket: Getting Stored Key from Container.");
+                    byte[] decryptedData = Encryption.DecryptPacketWithPrivateKey(packetData,
+                        senderPublicEncryptKey);
+
+                    Console.WriteLine($"Debug-ProcessIncomingPacket: Deserializing Packet.");
+                    packet = PacketBuilder.DeserializePacket(decryptedData);
                 }
-
-
-                Packet packet = PacketBuilder.DeserializePacket(packetData);
 
                 PacketBuilder.PacketType type = ParsePacketType(packet.Header.Packet_Type);
 
@@ -340,17 +489,15 @@ namespace SPHERE.Networking
                         break;
 
                     default:
-                        Console.WriteLine($"Unknown packet type: {packet.Header.Packet_Type}");
+                        Console.WriteLine($"ProcessIncomingPacket:Unknown packet type: {packet.Header.Packet_Type}");
                         break;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error processing packet: {ex.Message}");
+                Console.WriteLine($"ProcessIncomingPacket: Error processing packet: {ex.Message}");
             }
         }
-
-
 
     }
     /// <summary>

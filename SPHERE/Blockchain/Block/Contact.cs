@@ -74,7 +74,7 @@ namespace SPHERE.Blockchain
         }
 
 
-        public static string BuildEncryptedContact(Contact contact)
+        public static byte[] BuildEncryptedContact(Contact contact)
         {
 
             var encryptedContact = Encryption.EncryptWithSymmetric(contact, contact.Keys.LocalSymmetricKey);
@@ -119,10 +119,10 @@ namespace SPHERE.Blockchain
 
         public class ContactKeys()
         {
-            public string SemiPublicKey { get; set; }                   // Semi-public key
-            public string LocalSymmetricKey { get; set; }               // Unencrypted Local Symetric code used to encrypt the Contact. 
-            public string PublicPersonalEncryptionKey { get; set; }                 // Personal Communication key for encrypting messages only the user can decrypt
-            public string PublicPersonalSignatureKey { get; set; }              // Used to verify signatures created with the PrivateSignatureKey
+            public byte[] SemiPublicKey { get; set; }                   // Semi-public key
+            public byte[] LocalSymmetricKey { get; set; }               // Unencrypted Local Symetric code used to encrypt the Contact. 
+            public byte[] PublicPersonalEncryptionKey { get; set; }                 // Personal Communication key for encrypting messages only the user can decrypt
+            public byte[] PublicPersonalSignatureKey { get; set; }              // Used to verify signatures created with the PrivateSignatureKey
         }
 
     }

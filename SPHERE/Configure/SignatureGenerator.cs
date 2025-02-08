@@ -33,7 +33,7 @@ namespace SPHERE.Configure
             // Create the signature using the private key
             using (var ecdsa = ECDsa.Create())
             {
-                ecdsa.ImportPkcs8PrivateKey(Convert.FromBase64String(ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivatePersonalSignatureKey)), out _);
+                ecdsa.ImportPkcs8PrivateKey(ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivatePersonalSignatureKey), out _);
                 byte[] signature = ecdsa.SignData(blockBytes, HashAlgorithmName.SHA256);
 
                 // Return the signature as a Base64-encoded string
@@ -49,7 +49,7 @@ namespace SPHERE.Configure
             // Create the signature using the private key
             using (var ecdsa = ECDsa.Create())
             {
-                ecdsa.ImportPkcs8PrivateKey(Convert.FromBase64String(ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeSignatureKey)), out _);
+                ecdsa.ImportPkcs8PrivateKey(ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeSignatureKey), out _);
                 byte[] signature = ecdsa.SignData(blockBytes, HashAlgorithmName.SHA256);
 
                 // Return the signature as a Base64-encoded string
@@ -65,7 +65,8 @@ namespace SPHERE.Configure
             // Create the signature using the private key
             using (var ecdsa = ECDsa.Create())
             {
-                ecdsa.ImportPkcs8PrivateKey(Convert.FromBase64String(ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeSignatureKey)), out _);
+              
+                ecdsa.ImportPkcs8PrivateKey(ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeSignatureKey), out _);
                 byte[] signature = ecdsa.SignData(data, HashAlgorithmName.SHA256);
 
                 // Return the signature as a Base64-encoded string
@@ -75,12 +76,12 @@ namespace SPHERE.Configure
         }
 
 
-        public static bool VerifyByteArray(byte[] data, string signature, string publicKey)
+        public static bool VerifyByteArray(byte[] data, string signature, byte[] publicKey)
         {
             try
             {
                 // Convert the Base64 public key back to a byte array
-                byte[] publicKeyBytes = Convert.FromBase64String(publicKey);
+                byte[] publicKeyBytes = publicKey;
 
                 // Import the public key
                 using (ECDsa ecdsa = ECDsa.Create())
@@ -103,7 +104,7 @@ namespace SPHERE.Configure
         }
     
 
-    public static bool VerifyBlockSignature(string blockId, string base64Signature, string publicSignatureKey)
+    public static bool VerifyBlockSignature(string blockId, string base64Signature, byte[] publicSignatureKey)
         {
             // Convert the block ID to bytes
             byte[] blockBytes = Encoding.UTF8.GetBytes(blockId);
@@ -114,12 +115,12 @@ namespace SPHERE.Configure
             // Verify the signature using the public key
             using (var ecdsa = ECDsa.Create())
             {
-                ecdsa.ImportSubjectPublicKeyInfo(Convert.FromBase64String(publicSignatureKey), out _);
+                ecdsa.ImportSubjectPublicKeyInfo(publicSignatureKey, out _);
                 return ecdsa.VerifyData(blockBytes, signature, HashAlgorithmName.SHA256);
             }
         }
 
-        public static string CreateSphereCNGCertificate(KeyGenerator.KeyType keyType)
+        public static byte[] CreateSphereCNGCertificate(KeyGenerator.KeyType keyType)
         {
             string containerName=keyType.ToString();
             try
@@ -141,7 +142,7 @@ namespace SPHERE.Configure
                 // Generate a self-signed certificate
                 var certificate = request.CreateSelfSigned(DateTimeOffset.Now, DateTimeOffset.Now.AddYears(5));
                 byte[] certBytes = certificate.Export(X509ContentType.Cert);
-                return Convert.ToBase64String(certBytes);
+                return certBytes;
             }
             catch (Exception ex)
             {

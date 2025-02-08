@@ -403,10 +403,10 @@ FodyWeavers.xsd
 /SPHERE/Libs/Packet.dll
 /Packet/
 
-# Security project and DLL
-/SPHERE/Libs/Security.dll
-/Security/
+# FodyWeaver config
+FodyWeavers.xml
 
-# Testing project and DLL
-/SPHERE/Libs/Testing.dll
-/Testing/
+# Security Folder
+SPHERE/Security/*
+!.gitkeep
+

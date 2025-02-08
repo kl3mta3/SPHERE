@@ -7,9 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Reference Include="Testing">
-      <HintPath>..\SPHERE\Libs\Testing.dll</HintPath>
-    </Reference>
+    <PackageReference Include="System.DirectoryServices.AccountManagement" Version="9.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Packet\Packet.csproj" />
   </ItemGroup>
 
 </Project>

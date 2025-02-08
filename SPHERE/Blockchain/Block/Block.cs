@@ -37,7 +37,7 @@ namespace SPHERE.Blockchain
         public string EncryptedContact { get; set; }                    // Encrypted contact data object
 
         [JsonPropertyName("encryptedLocalSymmetricKey")]
-        public string EncryptedLocalSymmetricKey { get; set; }          // The encrypted key used to encrypt the contact.  can only be decrypted by semi Public Key
+        public byte[] EncryptedLocalSymmetricKey { get; set; }          // The encrypted key used to encrypt the contact.  can only be decrypted by semi Public Key
 
 
         public class BlockHeader
@@ -67,10 +67,10 @@ namespace SPHERE.Blockchain
             public string BlockHash { get; set; }                           // Hash of the block for integrity
 
             [JsonPropertyName("PublicSignatureKey")]
-            public string PublicSignatureKey { get; set; }                  // This is the public key for verifying the signature of commits and the user.
+            public byte[] PublicSignatureKey { get; set; }                  // This is the public key for verifying the signature of commits and the user.
 
             [JsonPropertyName("GNCCertificate")]
-            public string CNGCertificate { get; set; }                      // GNC Container Certificate for the Private Key, Used to validate application used correct security when storing privatekey. 
+            public byte[] CNGCertificate { get; set; }                      // GNC Container Certificate for the Private Key, Used to validate application used correct security when storing privatekey. 
 
             [JsonPropertyName("PreviousHash")]
             public string PreviousHash { get; set; }                        // Hash of the previous block
@@ -141,8 +141,8 @@ namespace SPHERE.Blockchain
                 LastUpdateTime = creationTime,
                 EncryptionAlgorithm = encryptionAlgorithm.ToString(),
                 KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
-                PublicSignatureKey = "TestPublicSignature",
-                CNGCertificate = "TestCNGCertificate",
+                PublicSignatureKey = Convert.FromBase64String("TestPublicSignature"),
+                CNGCertificate = Convert.FromBase64String("TestCNGCertificate"),
             };
 
             // Encrypt and store contact data

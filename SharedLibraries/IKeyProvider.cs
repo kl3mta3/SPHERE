@@ -2,6 +2,6 @@
 {
     public interface IKeyProvider
     {
-        string GetPrivateKey(string nodeId);
+        byte[] GetPrivateKey(string nodeId);
     }
 }

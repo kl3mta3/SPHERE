@@ -8,7 +8,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>SPHERE</PackageId>
 
-    <Version>1.1.6</Version>
+    <Version>1.7.5</Version>
     <Authors>Kenneth Lasyone</Authors>
     <Company>MonoBehaviour</Company>
     <Description>SPHERE (Secure Peer-to-Peer Hosted Encryption Record Exchange) is a robust framework designed for secure, decentralized communication and data sharing. The framework prioritizes user privacy, data integrity, and seamless encryption management while allowing for versatile application development.</Description>
@@ -19,55 +19,16 @@
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
   </PropertyGroup>
 
-  <PropertyGroup>
-    <!-- ILRepack Configuration -->
-    <ILRepackAssemblies>$(OutputPath)\Packet.dll;$(OutputPath)\Security.dll;$(OutputPath)\Testing.dll</ILRepackAssemblies>
-    <ILRepackOutput>$(OutputPath)\SPHERE.dll</ILRepackOutput>
-    <!--<ILRepackInternalize>true</ILRepackInternalize>-->
-    <ILRepackKeepClassNames>true</ILRepackKeepClassNames>
-  </PropertyGroup>
-  
   <ItemGroup>
-    <!-- ILRepack Package -->
-    <PackageReference Include="ILRepack.Lib.MSBuild" Version="2.1.18" />
+    <!-- ✅ Use ProjectReference for Dependencies Needed by SPHERE -->
+    <ProjectReference Include="..\Packet\Packet.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ✅ Fody + Costura for Embedding -->
+    <PackageReference Include="Fody" Version="6.9.1" PrivateAssets="All" />
+    <PackageReference Include="Costura.Fody" Version="6.0.0" PrivateAssets="All" />
     <PackageReference Include="System.DirectoryServices.AccountManagement" Version="9.0.1" />
   </ItemGroup>
-
-  <ItemGroup>
-    <Content Include="Libs\Packet.dll" CopyToOutputDirectory="Always" />
-    <Content Include="Libs\Security.dll" CopyToOutputDirectory="Always" />
-    <Content Include="Libs\Testing.dll" CopyToOutputDirectory="Always" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- DLL References -->
-    <Reference Include="Packet">
-      <HintPath>Libs\Packet.dll</HintPath>
-    </Reference>
-    <Reference Include="Security">
-      <HintPath>Libs\Security.dll</HintPath>
-    </Reference>
-    <Reference Include="Testing">
-      <HintPath>Libs\Testing.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Remove="$(OutputPath)\SPHERE.dll" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\SharedLibraries\SharedLibraries.csproj" />
-  </ItemGroup>
-
-
-  
-  <!-- Merge DLLs into SPHERE.dll -->
-  <Target Name="MergeAssemblies" AfterTargets="Build">
-    <!-- Trigger ILRepack during the build process -->
-    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="ILRepack" Properties="ILRepackAssemblies=$(ILRepackAssemblies);&#xD;&#xA;                         ILRepackOutput=$(ILRepackOutput);&#xD;&#xA;                         ILRepackInternalize=$(ILRepackInternalize);&#xD;&#xA;                         ILRepackKeepClassNames=$(ILRepackKeepClassNames)" />
-  </Target>
-  
-
 
 </Project>

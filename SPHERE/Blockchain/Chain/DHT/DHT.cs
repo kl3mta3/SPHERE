@@ -103,20 +103,21 @@ namespace SPHERE.Blockchain
         /// </summary>
         /// <param name="limit">Optional limit to the number of blocks to include in the response.</param>
         /// <returns>A dictionary representing the current DHT state.</returns>
-        public Dictionary<string, Block> GetCurrentState(int limit = 0)
+        public List<Block> GetCurrentState(int limit = 0)
         {
             lock (stateLock) // Ensure thread safety
             {
-                // Return a limited number of blocks if a limit is specified, otherwise return the full state
+                // If a limit is specified and valid, return a limited number of blocks
                 if (limit > 0 && limit < _blocks.Count)
                 {
-                    return _blocks.Take(limit).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                    return _blocks.Values.Take(limit).ToList();
                 }
 
-                // Return the full DHT state
-                return new Dictionary<string, Block>(_blocks);
+                // Return the full DHT state as a list of blocks
+                return _blocks.Values.ToList();
             }
         }
+
 
         public bool IsBlockValid(Block block)
         {

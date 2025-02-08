@@ -19,14 +19,14 @@ namespace SPHERE.Networking
         public string NodeIP { get; set; }
         public int NodePort { get; set; }
         public string PreviousNodesHash { get; set; }
-        public string PublicSignatureKey { get; set; }
-        public string PublicEncryptKey { get; set; }
+        public byte[] PublicSignatureKey { get; set; }
+        public byte[] PublicEncryptKey { get; set; }
         public int TrustScore {  get; set; } 
 
-        public static Peer CreatePeerHeader(NodeType nodeType, string nodeID, string nodeIP, int nodePort, string previousHash, string publicSignatureKey, string publicEncryptKey)
+        public static Peer CreatePeer(NodeType nodeType, string nodeID, string nodeIP, int nodePort, string previousHash, byte[] publicSignatureKey, byte[] publicEncryptKey)
         {
 
-            Peer header = new Peer
+            Peer peer = new Peer
             {
                 Node_Type = nodeType,
                 NodeId = nodeID,
@@ -39,17 +39,9 @@ namespace SPHERE.Networking
             };
 
 
-            return header;
+            return peer;
         }
 
-        public class PeerInfo
-        {
-            public string NodeId { get; set; }
-            public string NodeIP { get; set; }
-            public int NodePort { get; set; }
-            public string PublicSignatureKey { get; set; }
-            public string PublicEncryptKey { get; set; }
-        }
         public void UpdateTrustScore( Peer targetPeer, int change)
         {
             lock (stateLock)
