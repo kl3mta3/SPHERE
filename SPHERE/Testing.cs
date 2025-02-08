@@ -199,7 +199,6 @@ namespace SPHERE.TestingLib
             }
         }
 
-
         public static bool DoesCngKeyExist(KeyGenerator.KeyType keytype)
         {
             string keyName = keytype.ToString();
@@ -307,8 +306,6 @@ namespace SPHERE.TestingLib
             NodeManager.AddNodeToNodes(testNode);
             return testNode;
         }
-
-
 
         //Populate a DHT with fake blocks from a peer list.
         public static void PopulateTestDHTWithFakeBlocks(DHT dht, List<Peer> peerList, int numberOfBlocks)
@@ -531,7 +528,6 @@ namespace SPHERE.TestingLib
             return routingTable;
         }
 
-
         public static void StoreTestSignaturePrivateKey(byte[] keyBlob)
         {
             try
@@ -594,7 +590,6 @@ namespace SPHERE.TestingLib
                 Console.WriteLine($"Error storing public signature key: {ex.Message}");
             }
         }
-
 
         public static void StoreEncryptionPrivateKey(byte[] keyBlob)
         {
@@ -688,54 +683,6 @@ namespace SPHERE.TestingLib
             }
         }
 
-        //public static void StoreEcdhKey(KeyGenerator.KeyType keyName, byte[] keyBlob)
-        //{
-        //    try
-        //    {
-        //        // Determine the format based on whether it's a private or public key
-        //        var format = keyName.ToString().Contains("Private")
-        //            ? CngKeyBlobFormat.Pkcs8PrivateBlob // Use PKCS#8 for private keys
-        //            : CngKeyBlobFormat.EccPublicBlob;   // Use ECC format for public keys
-
-        //        // Check if the key already exists before importing
-        //        if (CngKey.Exists(keyName.ToString(), CngProvider.MicrosoftSoftwareKeyStorageProvider))
-        //        {
-        //            Console.WriteLine($"🔑 Key '{keyName}' already exists in CNG. Skipping storage.");
-        //            return;
-        //        }
-
-        //        // Import the key into CNG, using the appropriate format
-        //        using var newCngKey = CngKey.Import(keyBlob, format, CngProvider.MicrosoftSoftwareKeyStorageProvider);
-        //        Console.WriteLine($"✅ Key '{keyName}' stored in CNG.");
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        Console.WriteLine($"❌ Error storing key '{keyName}': {ex.Message}");
-        //    }
-        //}
-
-
-
-
-        //public static void StoreEcdhKey(KeyGenerator.KeyType keyName, byte[] keyBlob)
-        //{
-        //    try
-        //    {
-        //        // Determine the format based on whether it's a private or public key
-        //        var format = keyName.ToString().Contains("Private")
-        //            ? CngKeyBlobFormat.EccPrivateBlob
-        //            : CngKeyBlobFormat.GenericPublicBlob;
-
-        //        using var newCngKey = CngKey.Import(keyBlob, format, CngProvider.MicrosoftSoftwareKeyStorageProvider);
-
-        //        Console.WriteLine($" ECDSA key '{keyName}' stored in CNG (using 3-parameter Import).");
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        Console.WriteLine($" Error storing ECDSA CNG key: {ex.Message}");
-        //    }
-        //}
-
         public static void DeleteTestKeys()
         {
             Console.WriteLine(" Checking for test keys to delete...");
@@ -781,7 +728,6 @@ namespace SPHERE.TestingLib
 
             Console.WriteLine(" Finished deleting test keys.");
         }
-
 
         public static void GenerateTestNodeKeyPairs()
         {
