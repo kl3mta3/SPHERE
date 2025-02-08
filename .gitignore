@@ -407,5 +407,6 @@ FodyWeavers.xsd
 FodyWeavers.xml
 
 # Security Folder
-SPHERE/Security/
+Security/
+!Security/.gitkeep
 
