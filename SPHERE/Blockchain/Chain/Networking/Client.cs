@@ -157,22 +157,6 @@ namespace SPHERE.Networking
             await stream.FlushAsync();
         }
 
-        private static byte[] CombineEncryptedDataAndSignature(byte[] encryptedData, byte[] signature)
-        {
-            // Create a byte array to hold the signature length, signature, and encrypted data
-            byte[] result = new byte[4 + signature.Length + encryptedData.Length];
-
-            // Add the signature length as a 4-byte prefix
-            BitConverter.GetBytes(signature.Length).CopyTo(result, 0);
-
-            // Add the signature
-            Buffer.BlockCopy(signature, 0, result, 4, signature.Length);
-
-            // Add the encrypted data
-            Buffer.BlockCopy(encryptedData, 0, result, 4 + signature.Length, encryptedData.Length);
-
-            return result;
-        }
 
         public static void SetListenerPort(Client client, int port)
         {

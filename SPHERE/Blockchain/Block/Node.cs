@@ -679,6 +679,7 @@ namespace SPHERE.Blockchain
                         Console.WriteLine("Debug-SendBootstrapResponse: Encrypting Disabled for internal testing");
                         string responseSignature = "TestSignature";
                         Console.WriteLine("Debug-SendBootstrapResponse: Signature Disabled for internal testing");
+
                         // Send the encrypted response data and signature to the recipient
                         Console.WriteLine($"Debug-SendBootstrapResponse: Sending response to {recipientIPAddress}:{recipientPort}...");
                         success = await Client.SendPacketToPeerAsync(recipientIPAddress, recipientPort, encryptedResponseData);
@@ -699,10 +700,6 @@ namespace SPHERE.Blockchain
                         Console.WriteLine($"Debug-SendBootstrapResponse: Sending response to {recipientIPAddress}:{recipientPort}...");
                         success = await Client.SendPacketToPeerAsync(recipientIPAddress, recipientPort, encryptedResponseData);
                     }
-
-
-
-
 
                     // If the send operation fails, throw an exception to trigger a retry
                     if (!success)

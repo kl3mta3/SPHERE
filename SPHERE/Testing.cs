@@ -65,25 +65,25 @@ namespace SPHERE.TestingLib
 
                 try
                 {
-                    Console.WriteLine("🔍 Checking if CNG Keys Exist...");
+                    Console.WriteLine("Checking if CNG Keys Exist...");
                     if (!DoesCngKeyExist(KeyGenerator.KeyType.PrivateTestNodeEncryptionKey) ||
                         !DoesCngKeyExist(KeyGenerator.KeyType.PublicTestNodeEncryptionKey) ||
                         !DoesCngKeyExist(KeyGenerator.KeyType.PrivateTestNodeSignatureKey) ||
                         !DoesCngKeyExist(KeyGenerator.KeyType.PublicTestNodeSignatureKey))
                     {
-                        Console.WriteLine("⚠️ CNG Keys Missing. Generating Test Keys...");
+                        Console.WriteLine("CNG Keys Missing. Generating Test Keys...");
                         GenerateTestNodeKeyPairs();
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"❌ Error Checking or Generating CNG Keys: {ex.Message}");
+                    Console.WriteLine($"Error Checking or Generating CNG Keys: {ex.Message}");
                     throw;
                 }
 
                 try
                 {
-                    Console.WriteLine("🔑 Retrieving Keys from Storage...");
+                    Console.WriteLine("Retrieving Keys from Storage...");
                     byte[] publicSigKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicTestNodeSignatureKey);
                     byte[] privateSigKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateTestNodeSignatureKey);
                     byte[] publicEncKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicTestNodeEncryptionKey);
@@ -93,37 +93,37 @@ namespace SPHERE.TestingLib
                     string encKeyBase64 = Convert.ToBase64String(publicEncKey);
 
 
-                    Console.WriteLine($"🔹 Signature Public Key: {sigKeyBase64}");
+                    Console.WriteLine($"Signature Public Key: {sigKeyBase64}");
 
-                    Console.WriteLine($"🔹 Encryption Public Key: {encKeyBase64}");
+                    Console.WriteLine($"Encryption Public Key: {encKeyBase64}");
 
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"❌ Error Retrieving Keys: {ex.Message}");
+                    Console.WriteLine($"Error Retrieving Keys: {ex.Message}");
                     throw;
                 }
 
                 try
                 {
-                    Console.WriteLine("🔢 Generating Random Node Port...");
+                    Console.WriteLine("Generating Random Node Port...");
                     Random random = new Random();
                     int nodePort = random.Next(5000, 6000);
                     if (nodePort < 5000 || nodePort > 6000)
                     {
-                        Console.WriteLine($"⚠️ Warning: Generated NodePort {nodePort} is outside expected range.");
+                        Console.WriteLine($"Warning: Generated NodePort {nodePort} is outside expected range.");
                     }
                     client.clientListenerPort = nodePort;
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"❌ Error Generating NodePort: {ex.Message}");
+                    Console.WriteLine($"Error Generating NodePort: {ex.Message}");
                     throw;
                 }
 
                 try
                 {
-                    Console.WriteLine("🌐 Initializing Peer Header...");
+                    Console.WriteLine("Initializing Peer Header...");
                     Peer peer = new Peer
                     {
                         Node_Type = nodeType,
@@ -138,13 +138,13 @@ namespace SPHERE.TestingLib
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"❌ Error Creating Peer Header: {ex.Message}");
+                    Console.WriteLine($"Error Creating Peer Header: {ex.Message}");
                     throw;
                 }
 
                 try
                 {
-                    Console.WriteLine("🛠️ Initializing DHT and Routing Table...");
+                    Console.WriteLine("Initializing DHT and Routing Table...");
                     testNode.Client = client;
                     List<Peer> fakePeers = GenerateFakePeers(25);
                     testNode.DHT = new DHT();
@@ -155,8 +155,8 @@ namespace SPHERE.TestingLib
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"❌ Error Populating DHT: {ex.Message}");
-                        Console.WriteLine("🔄 Resetting to Fresh DHT...");
+                        Console.WriteLine($"Error Populating DHT: {ex.Message}");
+                        Console.WriteLine("Resetting to Fresh DHT...");
                         testNode.DHT = new DHT();
                     }
 
@@ -166,35 +166,35 @@ namespace SPHERE.TestingLib
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"❌ Error Loading RoutingTable: {ex.Message}");
-                        Console.WriteLine("🔄 Resetting to Fresh RoutingTable...");
+                        Console.WriteLine($"Error Loading RoutingTable: {ex.Message}");
+                        Console.WriteLine("Resetting to Fresh RoutingTable...");
                         testNode.RoutingTable = new RoutingTable();
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"❌ Error Initializing DHT or Routing Table: {ex.Message}");
+                    Console.WriteLine($"Error Initializing DHT or Routing Table: {ex.Message}");
                     throw;
                 }
 
                 try
                 {
-                    Console.WriteLine("📌 Assigning Node ID and Storing in NodeManager...");
+                    Console.WriteLine("Assigning Node ID and Storing in NodeManager...");
 
                     NodeManager.AddNodeToNodes(testNode);
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"❌ Error Assigning Node ID: {ex.Message}");
+                    Console.WriteLine($"Error Assigning Node ID: {ex.Message}");
                     throw;
                 }
 
-                Console.WriteLine("✅ Node Created Successfully!");
+                Console.WriteLine("Node Created Successfully!");
                 return testNode;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Fatal Error Creating Test Node: {ex.Message}");
+                Console.WriteLine($"Fatal Error Creating Test Node: {ex.Message}");
                 throw;
             }
         }
@@ -210,10 +210,11 @@ namespace SPHERE.TestingLib
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error checking CNG key existence: {ex.Message}");
+                Console.WriteLine($"Error checking CNG key existence: {ex.Message}");
                 return false;
             }
         }
+
         //This is used to Create the Node With an Empty RT and DHT
         public  static Node CreateTestNodeWithNoDHTorRoutingTable(NodeType nodeType)
         {
@@ -236,10 +237,6 @@ namespace SPHERE.TestingLib
 
             byte[] publicEncKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicTestNodeEncryptionKey);
             byte[] privateEncKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateTestNodeEncryptionKey);
-
-
-            //testNode.nodeSignaturePrivateKey = priveateSigKey;
-            //testNode.nodeEncryptPrivateKey = privateEncKey;
 
             Random random = new Random();
             // Generate NodePort
@@ -498,8 +495,6 @@ namespace SPHERE.TestingLib
                         continue;
                     }
 
-                    // Log the peer being added
-                    //Console.WriteLine($"Adding Peer: NodeId={peer.NodeId}, NodeIP={peer.NodeIP}, NodePort={peer.NodePort}");
 
                     // Add the peer to the routing table
                     try
@@ -536,56 +531,6 @@ namespace SPHERE.TestingLib
             return routingTable;
         }
 
-        public static void TestServiceAccountLogon()
-        {
-            bool testMode = true;
-
-            if (testMode)
-            {
-                Console.WriteLine("Test mode: Simulating service account behavior...");
-                Console.WriteLine($"Simulated account name: {AppIdentifier.GetOrCreateServiceName()}");
-                Console.WriteLine($"Simulated account password: {Guid.NewGuid()}");
-                return;
-            }
-
-            try
-            {
-                using (var context = new PrincipalContext(ContextType.Machine))
-                {
-                    // Check if the service account exists
-                    UserPrincipal user = UserPrincipal.FindByIdentity(context, ServiceAccountName);
-
-                    if (user == null)
-                    {
-                        // Create the service account
-                        Console.WriteLine("Service account does not exist. Creating...");
-                        var newPass = Guid.NewGuid().ToString();
-                        using (var newUser = new UserPrincipal(context))
-                        {
-                            newUser.SamAccountName = AppIdentifier.GetOrCreateServiceName();
-                            newUser.SetPassword(newPass);
-                            newUser.PasswordNeverExpires = true;
-                            newUser.UserCannotChangePassword = false;
-                            newUser.Save();
-                            AccountRestrictionManager.RestrictLogonRights(newUser.SamAccountName);
-
-                            Console.WriteLine($"Service account '{newUser.SamAccountName}' created successfully.");
-                        }
-                    }
-                    else
-                    {
-                        // Simulate getting credentials
-                        var (username, password) = CredentialManager.GetOrCreateCredentials(AppIdentifier.GetOrCreateAppId());
-                        Console.WriteLine($"Existing service account found. Username: {username}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error ensuring service account existence: {ex.Message}");
-                throw;
-            }
-        }
 
         public static void StoreTestSignaturePrivateKey(byte[] keyBlob)
         {
@@ -596,7 +541,7 @@ namespace SPHERE.TestingLib
 
                 if (CngKey.Exists(keyName, provider))
                 {
-                    Console.WriteLine($"🔑 Private signature key '{keyName}' already exists. Skipping storage.");
+                    Console.WriteLine($"Private signature key '{keyName}' already exists. Skipping storage.");
                     return;
                 }
 
@@ -611,11 +556,11 @@ namespace SPHERE.TestingLib
                 using var newCngKey = CngKey.Create(CngAlgorithm.ECDsaP256, keyName, creationParams);
                 newCngKey.SetProperty(new CngProperty("Length", BitConverter.GetBytes(256), CngPropertyOptions.None));
 
-                Console.WriteLine($"✅ Private signature key '{keyName}' stored permanently in CNG.");
+                Console.WriteLine($"Private signature key '{keyName}' stored permanently in CNG.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error storing private signature key: {ex.Message}");
+                Console.WriteLine($"Error storing private signature key: {ex.Message}");
             }
         }
 
@@ -628,7 +573,7 @@ namespace SPHERE.TestingLib
 
                 if (CngKey.Exists(keyName, provider))
                 {
-                    Console.WriteLine($"🔑 Public signature key '{keyName}' already exists. Skipping storage.");
+                    Console.WriteLine($"Public signature key '{keyName}' already exists. Skipping storage.");
                     return;
                 }
 
@@ -642,11 +587,11 @@ namespace SPHERE.TestingLib
                 using var newCngKey = CngKey.Create(CngAlgorithm.ECDsaP256, keyName, creationParams);
                 newCngKey.SetProperty(new CngProperty("Length", BitConverter.GetBytes(256), CngPropertyOptions.None));
 
-                Console.WriteLine($"✅ Public signature key '{keyName}' stored permanently in CNG.");
+                Console.WriteLine($"Public signature key '{keyName}' stored permanently in CNG.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error storing public signature key: {ex.Message}");
+                Console.WriteLine($"Error storing public signature key: {ex.Message}");
             }
         }
 
@@ -660,7 +605,7 @@ namespace SPHERE.TestingLib
 
                 if (CngKey.Exists(keyName, provider))
                 {
-                    Console.WriteLine($"🔑 Private encryption key '{keyName}' already exists. Skipping storage.");
+                    Console.WriteLine($"Private encryption key '{keyName}' already exists. Skipping storage.");
                     return;
                 }
 
@@ -675,11 +620,11 @@ namespace SPHERE.TestingLib
                 using var newCngKey = CngKey.Create(CngAlgorithm.ECDiffieHellmanP256, keyName, creationParams);
                 newCngKey.SetProperty(new CngProperty("Length", BitConverter.GetBytes(256), CngPropertyOptions.None));
 
-                Console.WriteLine($"✅ Private encryption key '{keyName}' stored permanently in CNG.");
+                Console.WriteLine($"Private encryption key '{keyName}' stored permanently in CNG.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error storing private encryption key: {ex.Message}");
+                Console.WriteLine($"Error storing private encryption key: {ex.Message}");
             }
         }
 
@@ -695,7 +640,7 @@ namespace SPHERE.TestingLib
 
                 if (CngKey.Exists(keyName, provider))
                 {
-                    Console.WriteLine($"🔑 Public encryption key '{keyName}' already exists. Skipping storage.");
+                    Console.WriteLine($"Public encryption key '{keyName}' already exists. Skipping storage.");
                     return;
                 }
 
@@ -709,22 +654,22 @@ namespace SPHERE.TestingLib
                 using var newCngKey = CngKey.Create(CngAlgorithm.ECDiffieHellmanP256, keyName, creationParams);
                 newCngKey.SetProperty(new CngProperty("Length", BitConverter.GetBytes(256), CngPropertyOptions.None));
 
-                Console.WriteLine($"✅ Public encryption key '{keyName}' stored permanently in CNG.");
+                Console.WriteLine($"Public encryption key '{keyName}' stored permanently in CNG.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error storing public encryption key: {ex.Message}");
+                Console.WriteLine($"Error storing public encryption key: {ex.Message}");
             }
         }
 
         public static byte[] UseTestKeyInStorageContainer(KeyGenerator.KeyType keyType)
         {
             string keyName = keyType.ToString();
-            Console.WriteLine($"🔍 Using Key From Storage {keyName}.");
+            Console.WriteLine($"Using Key From Storage {keyName}.");
 
             if (!CngKey.Exists(keyName, CngProvider.MicrosoftSoftwareKeyStorageProvider))
             {
-                throw new InvalidOperationException($"❌ Key '{keyName}' does not exist in CNG storage.");
+                throw new InvalidOperationException($"Key '{keyName}' does not exist in CNG storage.");
             }
 
             try
@@ -733,12 +678,12 @@ namespace SPHERE.TestingLib
                 var format = keyType.ToString().Contains("Private") ? CngKeyBlobFormat.Pkcs8PrivateBlob : CngKeyBlobFormat.EccPublicBlob;
                 byte[] keyData = cngKey.Export(format);
 
-                Console.WriteLine($"✅ Key '{keyName}' retrieved successfully from CNG storage.");
+                Console.WriteLine($"Key '{keyName}' retrieved successfully from CNG storage.");
                 return keyData;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error retrieving key '{keyName}': {ex.Message}");
+                Console.WriteLine($"Error retrieving key '{keyName}': {ex.Message}");
                 throw;
             }
         }
@@ -871,7 +816,7 @@ namespace SPHERE.TestingLib
                 privateSigKeyBlob = sigKey.Export(CngKeyBlobFormat.Pkcs8PrivateBlob);
 
 
-                //publicSigKeyBlob = sigKey.Export(CngKeyBlobFormat.EccPublicBlob);
+              
 
             }
 
