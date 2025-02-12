@@ -14,8 +14,8 @@ namespace SPHERE.Networking
     {
         private static readonly object stateLock = new object();
 
-        public NodeType Node_Type { get; set; }
         public string NodeId { get; set; }
+        public NodeType Node_Type { get; set; }
         public string NodeIP { get; set; }
         public int NodePort { get; set; }
         public string PreviousNodesHash { get; set; }
@@ -23,7 +23,7 @@ namespace SPHERE.Networking
         public byte[] PublicEncryptKey { get; set; }
         public int TrustScore {  get; set; } 
 
-        public static Peer CreatePeer(NodeType nodeType, string nodeID, string nodeIP, int nodePort, string previousHash, byte[] publicSignatureKey, byte[] publicEncryptKey)
+        public static Peer CreatePeer(NodeType nodeType, string nodeID, string nodeIP, int nodePort, string? previousHash, byte[] publicSignatureKey, byte[] publicEncryptKey)
         {
 
             Peer peer = new Peer
@@ -32,12 +32,14 @@ namespace SPHERE.Networking
                 NodeId = nodeID,
                 NodeIP = nodeIP,
                 NodePort = nodePort,
-                PreviousNodesHash = previousHash,
                 PublicSignatureKey = publicSignatureKey,
                 PublicEncryptKey = publicEncryptKey,
                 TrustScore=0
             };
-
+            if (!String.IsNullOrWhiteSpace(previousHash))
+            {
+                peer.PreviousNodesHash = previousHash;
+            }
 
             return peer;
         }

@@ -75,18 +75,15 @@ namespace SPHERE.Configure
         {
             try
             {
-                Console.WriteLine("Debug-EncryptPacketWithPublicKey: Encrypting using recipient's public key...");
-                Console.WriteLine($"Debug-EncryptPacketWithPublicKey: Recipient Public Key Length: {recipientPublicKey.Length}");
-
                 bool isTesting = Environment.GetEnvironmentVariable("SPHERE_TEST_MODE") == "true";
 
                 byte[] recipientSubjectPublicKey = ConvertCngPublicKeyToSubjectPublicKeyInfo(recipientPublicKey);
 
                 if (isTesting)
                 {
-                    Console.WriteLine("Debug-EncryptPacketWithPublicKey: IN TESTING ENVIRONMENT!!!");
+                 
                     byte[] sendersPrivateKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateTestNodeEncryptionKey);
-                    Console.WriteLine($"Debug-EncryptPacketWithPublicKey: Sender Private Key Length: {sendersPrivateKey.Length}");
+                 
 
                     using var recipientKey = ECDiffieHellman.Create();
                     recipientKey.ImportSubjectPublicKeyInfo(recipientSubjectPublicKey, out _);
@@ -103,7 +100,7 @@ namespace SPHERE.Configure
                     using var sha256 = SHA256.Create();
                     byte[] aesKey = sha256.ComputeHash(sharedSecret);
 
-                    Console.WriteLine($"Debug-EncryptPacketWithPublicKey: AES Key (First 16 Bytes) - {BitConverter.ToString(aesKey.Take(16).ToArray())} Total Length: {aesKey.Length}.");
+                  
 
                     using var aes = Aes.Create();
                     aes.KeySize = 256;
@@ -115,16 +112,13 @@ namespace SPHERE.Configure
                     using var encryptor = aes.CreateEncryptor();
                     byte[] encryptedData = encryptor.TransformFinalBlock(data, 0, data.Length);
 
-                    Console.WriteLine($"Debug-EncryptPacketWithPublicKey: AES Key Length: {aesKey.Length}");
-                    Console.WriteLine($"Debug-EncryptPacketWithPublicKey: IV Length: {iv.Length}");
-                    Console.WriteLine($"Debug-EncryptPacketWithPublicKey: Encrypted Data Length: {encryptedData.Length}");
 
                     // Construct final message: [IV] + [Encrypted Data]
                     byte[] result = new byte[iv.Length + encryptedData.Length];
                     Buffer.BlockCopy(iv, 0, result, 0, iv.Length);
                     Buffer.BlockCopy(encryptedData, 0, result, iv.Length, encryptedData.Length);
 
-                    Console.WriteLine($"Debug-EncryptPacketWithPublicKey: Final Encrypted Message Length (IV + Ciphertext): {result.Length}");
+                  
                     return result;
 
 
@@ -132,7 +126,6 @@ namespace SPHERE.Configure
                 else
                 {
                     byte[] sendersPrivateKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeEncryptionKey);
-                    Console.WriteLine($"Debug-EncryptPacketWithPublicKey: Sender Private Key Length: {sendersPrivateKey.Length}");
 
                     using var recipientKey = ECDiffieHellman.Create();
                     recipientKey.ImportSubjectPublicKeyInfo(recipientSubjectPublicKey, out _);
@@ -149,7 +142,7 @@ namespace SPHERE.Configure
                     using var sha256 = SHA256.Create();
                     byte[] aesKey = sha256.ComputeHash(sharedSecret);
 
-                    Console.WriteLine($"Debug-EncryptPacketWithPublicKey: AES Key (First 16 Bytes) - {BitConverter.ToString(aesKey.Take(16).ToArray())} Total Length: {aesKey.Length}.");
+
 
                     using var aes = Aes.Create();
                     aes.KeySize = 256;
@@ -161,16 +154,13 @@ namespace SPHERE.Configure
                     using var encryptor = aes.CreateEncryptor();
                     byte[] encryptedData = encryptor.TransformFinalBlock(data, 0, data.Length);
 
-                    Console.WriteLine($"Debug-EncryptPacketWithPublicKey: AES Key Length: {aesKey.Length}");
-                    Console.WriteLine($"Debug-EncryptPacketWithPublicKey: IV Length: {iv.Length}");
-                    Console.WriteLine($"Debug-EncryptPacketWithPublicKey: Encrypted Data Length: {encryptedData.Length}");
 
                     // Construct final message: [IV] + [Encrypted Data]
                     byte[] result = new byte[iv.Length + encryptedData.Length];
                     Buffer.BlockCopy(iv, 0, result, 0, iv.Length);
                     Buffer.BlockCopy(encryptedData, 0, result, iv.Length, encryptedData.Length);
 
-                    Console.WriteLine($"Debug-EncryptPacketWithPublicKey: Final Encrypted Message Length (IV + Ciphertext): {result.Length}");
+
                     return result;
 
 
@@ -188,7 +178,7 @@ namespace SPHERE.Configure
         {
             try
             {
-                Console.WriteLine($"Debug-DecryptPacketWithPrivateKey: Decrypting using private key...");
+              
                 bool isTesting = Environment.GetEnvironmentVariable("SPHERE_TEST_MODE") == "true";
 
                 byte[] senderSubjectPublicKey = ConvertCngPublicKeyToSubjectPublicKeyInfo(sendersPublicKey);
@@ -199,33 +189,25 @@ namespace SPHERE.Configure
 
                     byte[] recipientPrivateKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateTestNodeEncryptionKey);
                     using var recipientKeyPair = ECDiffieHellman.Create();
-                    recipientKeyPair.ImportPkcs8PrivateKey(recipientPrivateKey, out _); // ✅ Import private key correctly
+                    recipientKeyPair.ImportPkcs8PrivateKey(recipientPrivateKey, out _); 
 
-                    // ✅ Ensure the sender's public key is in SubjectPublicKeyInfo format
-
+                    // Ensure the sender's public key is in SubjectPublicKeyInfo format
                     using var senderKeyPair = ECDiffieHellman.Create();
-                    senderKeyPair.ImportSubjectPublicKeyInfo(senderSubjectPublicKey, out _); // ✅ Import public key correctly
+                    senderKeyPair.ImportSubjectPublicKeyInfo(senderSubjectPublicKey, out _); 
 
-                    // ✅ Derive the shared secret using recipient’s private key and sender’s public key
+                    // Derive the shared secret using recipient’s private key and sender’s public key
                     byte[] sharedSecret = recipientKeyPair.DeriveKeyMaterial(senderKeyPair.PublicKey);
 
-                    // ✅ Hash the shared secret to create AES key
+                    // Hash the shared secret to create AES key
                     using var sha256 = SHA256.Create();
                     byte[] aesKey = sha256.ComputeHash(sharedSecret);
 
-                    Console.WriteLine($"Debug-DecryptPacketWithPrivateKey: AES Key (First 16 Bytes) - {BitConverter.ToString(aesKey.Take(16).ToArray())}");
-
-                    // ✅ Extract IV and Ciphertext
+                    // Extract IV and Ciphertext
                     byte[] iv = new byte[16];
                     byte[] ciphertext = new byte[encryptedData.Length - 16];
 
-
-
                     Buffer.BlockCopy(encryptedData, 0, iv, 0, 16);
                     Buffer.BlockCopy(encryptedData, 16, ciphertext, 0, ciphertext.Length);
-
-                    Console.WriteLine($"Debug-DecryptPacketWithPrivateKey: Extracted IV Length: {iv.Length}");
-                    Console.WriteLine($"Debug-DecryptPacketWithPrivateKey: Extracted Ciphertext Length: {ciphertext.Length}");
 
                     using var aes = Aes.Create();
                     aes.Key = aesKey;
@@ -240,32 +222,25 @@ namespace SPHERE.Configure
 
                     byte[] recipientPrivateKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey);
                     using var recipientKeyPair = ECDiffieHellman.Create();
-                    recipientKeyPair.ImportPkcs8PrivateKey(recipientPrivateKey, out _); // ✅ Import private key correctly
+                    recipientKeyPair.ImportPkcs8PrivateKey(recipientPrivateKey, out _);
 
-                    // ✅ Ensure the sender's public key is in SubjectPublicKeyInfo format
-                    //byte[] senderSubjectPublicKey = ConvertCngPublicKeyToSubjectPublicKeyInfo(sendersPublicKey);
-
+                    // Ensure the sender's public key is in SubjectPublicKeyInfo format
                     using var senderKeyPair = ECDiffieHellman.Create();
-                    senderKeyPair.ImportSubjectPublicKeyInfo(senderSubjectPublicKey, out _); // ✅ Import public key correctly
+                    senderKeyPair.ImportSubjectPublicKeyInfo(senderSubjectPublicKey, out _);
 
-                    // ✅ Derive the shared secret using recipient’s private key and sender’s public key
+                    // Derive the shared secret using recipient’s private key and sender’s public key
                     byte[] sharedSecret = recipientKeyPair.DeriveKeyMaterial(senderKeyPair.PublicKey);
 
-                    // ✅ Hash the shared secret to create AES key
+                    // Hash the shared secret to create AES key
                     using var sha256 = SHA256.Create();
                     byte[] aesKey = sha256.ComputeHash(sharedSecret);
 
-                    Console.WriteLine($"Debug-DecryptPacketWithPrivateKey: AES Key (First 16 Bytes) - {BitConverter.ToString(aesKey.Take(16).ToArray())}");
-
-                    // ✅ Extract IV and Ciphertext
+                    // Extract IV and Ciphertext
                     byte[] iv = new byte[16];
-                    byte[] ciphertext = new byte[encryptedData.Length - iv.Length];
+                    byte[] ciphertext = new byte[encryptedData.Length - 16];
 
-                    Buffer.BlockCopy(encryptedData, 0, iv, 0, iv.Length);
-                    Buffer.BlockCopy(encryptedData, iv.Length, ciphertext, 0, ciphertext.Length);
-
-                    Console.WriteLine($"Debug-DecryptPacketWithPrivateKey: Extracted IV Length: {iv.Length}");
-                    Console.WriteLine($"Debug-DecryptPacketWithPrivateKey: Extracted Ciphertext Length: {ciphertext.Length}");
+                    Buffer.BlockCopy(encryptedData, 0, iv, 0, 16);
+                    Buffer.BlockCopy(encryptedData, 16, ciphertext, 0, ciphertext.Length);
 
                     using var aes = Aes.Create();
                     aes.Key = aesKey;

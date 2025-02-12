@@ -24,10 +24,9 @@ public class RoutingTable
         lock (_lock)
         {
             try
-            {
-               // Console.WriteLine($"Adding peer to bucket: NodeId={peer.NodeId}");
+            { 
                 int bucketIndex = GetBucketIndex(peer.NodeId);
-                //Console.WriteLine($"Bucket index for NodeId {peer.NodeId}: {bucketIndex}");
+          
                 _buckets[bucketIndex].AddPeer(peer, _bucketSize);
             }
             catch (Exception ex)

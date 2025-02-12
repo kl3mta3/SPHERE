@@ -30,6 +30,12 @@ namespace SPHERE.Blockchain
     /// </summary>
     public class Block
     {
+        public enum BlockType
+        {
+            Node,
+            Contact
+        }
+
         [JsonPropertyName("header")]
         public BlockHeader Header { get; set; }                         // Header containing block metadata
 
@@ -45,6 +51,9 @@ namespace SPHERE.Blockchain
             [JsonPropertyName("BlockId")]
             public string BlockId { get; set; }                             // Unique identifier for the block
 
+            [JsonPropertyName("BlockType")]
+            public string BlockType { get; set; }                           // "Node" or "Contact"
+
             [JsonPropertyName("BlockVersion")]
             public string BlockVersion {  get; set; }                       // Block Versions allow for deserialvation of different blocks as the platform evolves.
 
@@ -58,7 +67,7 @@ namespace SPHERE.Blockchain
             public DateTime LastUpdateTime { get; set; }                    // Timestap of last Update to the block by validated user.
 
             [JsonPropertyName("EncryptionAlgorithm")]
-            public string EncryptionAlgorithm { get; set; }    // Algorithm used for encryption (e.g. AES256, RSA2048, ECDsa)
+            public string EncryptionAlgorithm { get; set; }                 // Algorithm used for encryption (e.g. AES256, RSA2048, ECDsa)
 
             [JsonPropertyName("KeyUsagePolicies")]
             public string? KeyUsagePolicies { get; set; }                   // Policies for key usage
@@ -87,7 +96,7 @@ namespace SPHERE.Blockchain
         }
 
             // Creating a Block
-            public static Block CreateBlock(string previousHash, string encryptedContactData, EncryptionAlgorithm encryptionAlgorithm)
+            public static Block CreateBlock(string previousHash, string encryptedContactData, EncryptionAlgorithm encryptionAlgorithm, BlockType blockType=BlockType.Contact)
             {
 
                 //Check to see if Keys exist.
@@ -98,17 +107,18 @@ namespace SPHERE.Blockchain
 
                 DateTime creationTime = DateTime.Now;
 
-                var header = new BlockHeader
-                {
-                    BlockId = GenerateBlockID(),
-                    PreviousHash = previousHash,
-                    BlockCreationTime = creationTime,
-                    LastUpdateTime = creationTime,
-                    EncryptionAlgorithm = encryptionAlgorithm.ToString(),
-                    KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
-                    PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalSignatureKey),
-                    CNGCertificate = SignatureGenerator.CreateSphereCNGCertificate(KeyGenerator.KeyType.PrivatePersonalEncryptionKey),
-                };
+            var header = new BlockHeader
+            {
+                BlockId = GenerateBlockID(),
+                BlockType = blockType.ToString(),
+                PreviousHash = previousHash,
+                BlockCreationTime = creationTime,
+                LastUpdateTime = creationTime,
+                EncryptionAlgorithm = encryptionAlgorithm.ToString(),
+                KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
+                PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalSignatureKey),
+                CNGCertificate = SignatureGenerator.CreateSphereCNGCertificate(KeyGenerator.KeyType.PrivatePersonalEncryptionKey),
+            };
 
                 // Encrypt and store contact data
                 string serializedContactData = JsonSerializer.Serialize(encryptedContactData);
@@ -124,7 +134,11 @@ namespace SPHERE.Blockchain
                 };
             }
 
-
+        public bool IsContactBlock(Block block)
+        {
+            return block?.Header?.BlockType != null &&
+                   block.Header.BlockType == BlockType.Contact.ToString();
+        }
         // Creating a Block
         public static Block CreateTestBlock(string previousHash, string encryptedContactData, EncryptionAlgorithm encryptionAlgorithm)
         {

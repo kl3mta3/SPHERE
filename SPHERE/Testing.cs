@@ -9,6 +9,7 @@ using System.DirectoryServices.AccountManagement;
 using System.Security.Cryptography;
 using static SPHERE.Blockchain.Contact;
 using System;
+using System.Xml.Linq;
 
 
 namespace SPHERE.TestingLib
@@ -36,7 +37,7 @@ namespace SPHERE.TestingLib
 
         public static Packet BuildTestPacket(PacketBuilder.PacketType packetType, string message, byte[] publicSigKey, byte[] publicEncKey)
         {
-            Packet.PacketHeader header = PacketBuilder.BuildPacketHeader(packetType, 9999.ToString(), publicSigKey, publicEncKey, 6969, "127.0.0.1", 75);
+            PacketHeader header = PacketBuilder.BuildPacketHeader(packetType, 9999.ToString(), "Full", publicSigKey, publicEncKey, 6969, "127.0.0.1", 75);
 
             Packet packet = new Packet
             {
@@ -657,78 +658,6 @@ namespace SPHERE.TestingLib
             }
         }
 
-        public static byte[] UseTestKeyInStorageContainer(KeyGenerator.KeyType keyType)
-        {
-            string keyName = keyType.ToString();
-            Console.WriteLine($"Using Key From Storage {keyName}.");
-
-            if (!CngKey.Exists(keyName, CngProvider.MicrosoftSoftwareKeyStorageProvider))
-            {
-                throw new InvalidOperationException($"Key '{keyName}' does not exist in CNG storage.");
-            }
-
-            try
-            {
-                using var cngKey = CngKey.Open(keyName, CngProvider.MicrosoftSoftwareKeyStorageProvider);
-                var format = keyType.ToString().Contains("Private") ? CngKeyBlobFormat.Pkcs8PrivateBlob : CngKeyBlobFormat.EccPublicBlob;
-                byte[] keyData = cngKey.Export(format);
-
-                Console.WriteLine($"Key '{keyName}' retrieved successfully from CNG storage.");
-                return keyData;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error retrieving key '{keyName}': {ex.Message}");
-                throw;
-            }
-        }
-
-        public static void DeleteTestKeys()
-        {
-            Console.WriteLine(" Checking for test keys to delete...");
-
-            foreach (KeyGenerator.KeyType keyType in Enum.GetValues(typeof(KeyGenerator.KeyType)))
-            {
-                string keyName = keyType.ToString();
-
-                if (keyName.Contains("Test", StringComparison.OrdinalIgnoreCase))
-                {
-                    try
-                    {
-                        if (CngKey.Exists(keyName, CngProvider.MicrosoftSoftwareKeyStorageProvider))
-                        {
-                            Console.WriteLine($" Deleting test key: {keyName}");
-                            using (var key = CngKey.Open(keyName, CngProvider.MicrosoftSoftwareKeyStorageProvider))
-                            {
-                                key.Delete();
-                            }
-
-                            if (!CngKey.Exists(keyName, CngProvider.MicrosoftSoftwareKeyStorageProvider))
-                            {
-                                
-                                Console.WriteLine($" Test key '{keyName}' deleted successfully.");
-                            }
-                            else 
-                            { 
-
-                            Console.WriteLine($" Test key '{keyName}' deletion failed it still exists.");
-                            }
-                        }
-                        else
-                        {
-                            Console.WriteLine($" Test key '{keyName}' does not exist, skipping...");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($" Error deleting test key '{keyName}': {ex.Message}");
-                    }
-                }
-            }
-
-            Console.WriteLine(" Finished deleting test keys.");
-        }
-
         public static void GenerateTestNodeKeyPairs()
         {
             Console.WriteLine(" Starting key pair generation...");
@@ -857,63 +786,52 @@ namespace SPHERE.TestingLib
             Console.WriteLine(" Test node key pairs verified and stored (with exportable private keys)!");
         }
 
-        //Sends a Bootstrap Request You will need to be provided the IP, Port and public communication Key of the Host. (It can be provided by any othter node on request. But is only good till they go off and back online and thier ip and port reset.
-        public static async Task SendTestBootstrapRequest(Node testNode)
+
+
+        public static void DeleteTestKeys()
         {
-            string iPAddress = testNode.Client.clientIP.ToString();
-            int port = testNode.Client.clientListenerPort;
-            byte[] recipientsPublicEncryptionKey = testNode.Peer.PublicEncryptKey;
+            Console.WriteLine(" Checking for test keys to delete...");
 
-            // Validate inputs
-            if (testNode == null)
+            foreach (KeyGenerator.KeyType keyType in Enum.GetValues(typeof(KeyGenerator.KeyType)))
             {
-                throw new ArgumentNullException(nameof(testNode), "Node cannot be null.");
-            }
+                string keyName = keyType.ToString();
 
-            if (string.IsNullOrWhiteSpace(iPAddress))
-            {
-                throw new ArgumentException("IP address cannot be null or empty.", nameof(iPAddress));
-            }
-
-            if (port <= 0 || port > 65535)
-            {
-                throw new ArgumentOutOfRangeException(nameof(port), "Port must be a valid number between 1 and 65535.");
-            }
-
-            if (string.IsNullOrWhiteSpace(Convert.ToBase64String(recipientsPublicEncryptionKey)))
-            {
-                throw new ArgumentException("Recipient's public communication key cannot be null or empty.", nameof(recipientsPublicEncryptionKey));
-            }
-
-            // Use RetryAsync to retry the operation on failure
-            await TestRetryAsync<bool>(async () =>
-            {
-                // Build the Test bootstrap request packet
-                Packet packet = BuildTestPacket(PacketBuilder.PacketType.BootstrapRequest, "BootstrapRequest", testNode.Peer.PublicSignatureKey, testNode.Peer.PublicEncryptKey);
-
-                // Serialize the packet into a byte array
-                byte[] data = Packet.PacketBuilder.SerializePacket(packet);
-
-                // Encrypt the packet using the recipient's public communication key
-                byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(data, recipientsPublicEncryptionKey);
-
-                // Generate a signature for the encrypted data using the node's private key
-                string signature = SignatureGenerator.SignByteArray(encryptedData);
-
-                // Send the encrypted data and signature to the recipient
-                bool success = await Client.SendPacketToPeerAsync(iPAddress, port, encryptedData);
-
-                // If the send operation fails, throw an exception to trigger a retry
-                if (!success)
+                if (keyName.Contains("Test", StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new Exception($"Failed to send bootstrap request to {iPAddress}:{port}.");
+                    try
+                    {
+                        if (CngKey.Exists(keyName, CngProvider.MicrosoftSoftwareKeyStorageProvider))
+                        {
+                            Console.WriteLine($" Deleting test key: {keyName}");
+                            using (var key = CngKey.Open(keyName, CngProvider.MicrosoftSoftwareKeyStorageProvider))
+                            {
+                                key.Delete();
+                            }
+
+                            if (!CngKey.Exists(keyName, CngProvider.MicrosoftSoftwareKeyStorageProvider))
+                            {
+
+                                Console.WriteLine($" Test key '{keyName}' deleted successfully.");
+                            }
+                            else
+                            {
+
+                                Console.WriteLine($" Test key '{keyName}' deletion failed it still exists.");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($" Test key '{keyName}' does not exist, skipping...");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($" Error deleting test key '{keyName}': {ex.Message}");
+                    }
                 }
+            }
 
-                // Log successful bootstrap request
-                Console.WriteLine($"Bootstrap request successfully sent to {iPAddress}:{port}.");
-
-                return success; // Explicitly return the success status
-            });
+            Console.WriteLine(" Finished deleting test keys.");
         }
 
         // This is used to allow for retries on sending out messages to other nodes.
@@ -950,11 +868,6 @@ namespace SPHERE.TestingLib
                 default:
                     throw new ArgumentException($"Key '{keyName}' not found.", nameof(keyName));
             }
-
-
-
-
-
         }
 
         public static  Contact TestCreateNewContact(string displayName, string name, string blockId, string? avatarURL, string? description, Password privateKeyPassword)
@@ -1153,6 +1066,110 @@ namespace SPHERE.TestingLib
                     Console.WriteLine($"Failed To TestBootStrap Process: {ex.Message}");
                 }
 
+            }
+
+            public static async Task TestBrodcastToPeers()
+            {
+                Environment.SetEnvironmentVariable("SPHERE_TEST_MODE", "true");
+                string testModeEnv = Environment.GetEnvironmentVariable("SPHERE_TEST_MODE");
+                Console.WriteLine($"Debug-TestBrodcastToPeers: SPHERE_TEST_MODE = {testModeEnv}");
+
+                List<Node> hostNodes = new List<Node>();
+
+                Node hostNode1 = new Node();
+                Node hostNode2 = new Node();
+                Node hostNode3 = new Node();
+                Node hostNode4 = new Node();
+                Node babyNode = new Node();
+
+                try
+                {
+                    Console.WriteLine("Debug-TestBrodcastToPeers: Initializing test environment...");
+
+                    // Reset and create test nodes
+                    Nodes.Clear();
+                    CreateFakeNodeTest(5);
+
+                    hostNode1 = Nodes[0];
+                    hostNodes.Add(hostNode1);
+                    hostNode2 = Nodes[1];
+                    hostNodes.Add(hostNode2);
+                    hostNode3 = Nodes[2];
+                    hostNodes.Add(hostNode3);
+                    hostNode4 = Nodes[3];
+                    hostNodes.Add(hostNode4);
+
+                    Console.WriteLine("Debug-TestBrodcastToPeers: Nodes created successfully!");
+
+                    // Clearing routing tables to prevent stale data
+                    Console.WriteLine("Debug-TestBrodcastToPeers: Clearing routing tables...");
+                    hostNode1.RoutingTable.ClearRoutingTable();
+                    hostNode2.RoutingTable.ClearRoutingTable();
+                    hostNode3.RoutingTable.ClearRoutingTable();
+                    hostNode4.RoutingTable.ClearRoutingTable();
+                    Console.WriteLine("Debug-TestBrodcastToPeers: Routing tables cleared.");
+
+                    // Adding initial peer connections
+                    Console.WriteLine("Debug-TestBrodcastToPeers: Adding peers to routing tables...");
+
+                    hostNode1.RoutingTable.AddPeer(hostNode2.Peer);
+                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode1 → Added peer: {hostNode2.Peer.NodeId}");
+
+                    hostNode2.RoutingTable.AddPeer(hostNode1.Peer);
+                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode2 → Added peer: {hostNode1.Peer.NodeId}");
+
+                    hostNode3.RoutingTable.AddPeer(hostNode2.Peer);
+                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode3 → Added peer: {hostNode2.Peer.NodeId}");
+
+                    hostNode4.RoutingTable.AddPeer(hostNode3.Peer);
+                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode4 → Added peer: {hostNode3.Peer.NodeId}");
+
+                    // Print routing table sizes before broadcast
+                    Console.WriteLine("Debug-TestBrodcastToPeers: Routing Table Sizes BEFORE Broadcast:");
+                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode1 → {hostNode1.RoutingTable.GetAllPeers().Count} peers.");
+                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode2 → {hostNode2.RoutingTable.GetAllPeers().Count} peers.");
+                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode3 → {hostNode3.RoutingTable.GetAllPeers().Count} peers.");
+                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode4 → {hostNode4.RoutingTable.GetAllPeers().Count} peers.");
+
+                    // Create a baby node and add a connection
+                    Console.WriteLine("Debug-TestBrodcastToPeers: Creating babyNode...");
+                    babyNode = Nodes[4];
+                    babyNode.RoutingTable.ClearRoutingTable();
+                    babyNode.RoutingTable.AddPeer(hostNode4.Peer);
+                    Console.WriteLine($"Debug-TestBrodcastToPeers: babyNode has {babyNode.RoutingTable.GetAllPeers().Count} peers");
+                    Console.WriteLine($"Debug-TestBrodcastToPeers: babyNode → Added initial peer: {hostNode4.Peer.NodeId}");
+
+                    foreach (var node in hostNodes)
+                    {
+                        node.Client.StartClientListenerAsync(node, node.Client);
+                    }
+                    babyNode.Client.StartClientListenerAsync(babyNode, babyNode.Client);
+
+
+                    // Broadcasting network connection
+                    Console.WriteLine("Debug-TestBrodcastToPeers: babyNode Broadcasting Connection to Network...");
+                    await babyNode.BrodcastConnectionToNetwork();
+                    Console.WriteLine("Debug-TestBrodcastToPeers: babyNode Broadcast completed.");
+
+                    // Print routing table sizes AFTER broadcast
+                    // 🕒 Wait for peer propagation
+                    await Task.Delay(TimeSpan.FromSeconds(2)); // Adjust delay if needed
+
+                    // Print routing table sizes AFTER broadcast
+                    Console.WriteLine("Debug-TestBrodcastToPeers: Routing Table Sizes AFTER Broadcast:");
+                    Console.WriteLine($"Debug-TestBrodcastToPeers: babyNode  → {babyNode.RoutingTable.GetAllPeers().Count} peers.");
+                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode1 → {hostNode1.RoutingTable.GetAllPeers().Count} peers.");
+                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode2 → {hostNode2.RoutingTable.GetAllPeers().Count} peers.");
+                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode3 → {hostNode3.RoutingTable.GetAllPeers().Count} peers.");
+                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode4 → {hostNode4.RoutingTable.GetAllPeers().Count} peers.");
+
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Debug-TestBrodcastToPeers: [ERROR] {ex.Message}");
+                    Console.WriteLine($"Debug-TestBrodcastToPeers: [ERROR] Stack Trace: {ex.StackTrace}");
+                    throw;
+                }
             }
 
             public static void AddNodeToNodes(Node node)
