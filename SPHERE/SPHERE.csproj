@@ -8,7 +8,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>SPHERE</PackageId>
 
-    <Version>1.7.5</Version>
+    <Version>1.9.4</Version>
     <Authors>Kenneth Lasyone</Authors>
     <Company>MonoBehaviour</Company>
     <Description>SPHERE (Secure Peer-to-Peer Hosted Encryption Record Exchange) is a robust framework designed for secure, decentralized communication and data sharing. The framework prioritizes user privacy, data integrity, and seamless encryption management while allowing for versatile application development.</Description>
@@ -18,17 +18,34 @@
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
   </PropertyGroup>
-
+  
   <ItemGroup>
-    <!-- ✅ Use ProjectReference for Dependencies Needed by SPHERE -->
+  
+    <PackageReference Include="System.DirectoryServices.AccountManagement" Version="9.0.2" PackagePath="lib/net8.0/" />
+  </ItemGroup>
+
+  <!-- <ItemGroup>
     <ProjectReference Include="..\Packet\Packet.csproj" />
   </ItemGroup>
 
+ <Target Name="RemovePacketReference" BeforeTargets="Build">
+    <ItemGroup>
+      <ProjectReference Remove="..\Packet\Packet.csproj" />
+    </ItemGroup>
+  </Target>
+
+
   <ItemGroup>
-    <!-- ✅ Fody + Costura for Embedding -->
-    <PackageReference Include="Fody" Version="6.9.1" PrivateAssets="All" />
-    <PackageReference Include="Costura.Fody" Version="6.0.0" PrivateAssets="All" />
-    <PackageReference Include="System.DirectoryServices.AccountManagement" Version="9.0.1" />
+    <None Include="..\Packet\bin\Release\net8.0\win-x64\Packet.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
+  
+  <Target Name="CopyPacketDll" AfterTargets="Build">
+    <Copy
+        SourceFiles="..\Packet\bin\Release\net8.0\win-x64\Packet.dll"
+        DestinationFolder="$(OutputPath)"
+        Condition="Exists('..\Packet\bin\Release\net8.0\win-x64\Packet.dll')" />
+  </Target>-->
 
 </Project>

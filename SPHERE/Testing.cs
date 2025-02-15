@@ -35,7 +35,7 @@ namespace SPHERE.TestingLib
         private static readonly string ServiceAccountName = "TestServiceAccount";
         private static readonly string testCNGCertificate = "TestCNGCertificate";
 
-        public static Packet BuildTestPacket(PacketBuilder.PacketType packetType, string message, byte[] publicSigKey, byte[] publicEncKey)
+        internal static Packet BuildTestPacket(PacketBuilder.PacketType packetType, string message, byte[] publicSigKey, byte[] publicEncKey)
         {
             PacketHeader header = PacketBuilder.BuildPacketHeader(packetType, 9999.ToString(), "Full", publicSigKey, publicEncKey, 6969, "127.0.0.1", 75);
 

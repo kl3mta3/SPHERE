@@ -6,7 +6,6 @@ using SPHERE.PacketLib;
 using SPHERE.Blockchain;
 using static SPHERE.PacketLib.Packet;
 using SPHERE.Configure;
-
 using SPHERE.Security;
 using System.Collections;
 using System.Text.RegularExpressions;
@@ -50,7 +49,7 @@ namespace SPHERE.Networking
         private const int EndPort = 6000;                       // End of the port range
         public TcpClient client;
         public TcpListener Listener;
-        public Packet.PacketBuilder packetBuilder;
+        public PacketBuilder packetBuilder;
         public Packet.PacketReader packetReader;
 
         public IPAddress clientIP;

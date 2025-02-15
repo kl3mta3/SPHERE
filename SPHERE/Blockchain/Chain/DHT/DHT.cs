@@ -239,7 +239,7 @@ namespace SPHERE.Blockchain
             }
         }
 
-        //
+        // Update Routing Table
         public void UpdateRoutingTable(IEnumerable<Peer> bootstrapPeers)
         {
             lock (stateLock)

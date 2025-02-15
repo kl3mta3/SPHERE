@@ -14,6 +14,9 @@ using System;
 using static SPHERE.PacketLib.Packet.PacketBuilder;
 using System.Net;
 using System.Collections.Concurrent;
+using System.Runtime.ConstrainedExecution;
+using System.Linq.Expressions;
+using System.Net.Http.Headers;
 
 namespace SPHERE.Blockchain
 {
@@ -47,13 +50,13 @@ namespace SPHERE.Blockchain
     /// </summary>
     public enum NodeType
     {
-        Full,           //Stores the full DHT has most athority on chain discrepancies
+        Full,           //Stores the full DHT has most authority on chain discrepancies
         Power,          //Stores a Larger amount of the chain (Super Shards) or whole thing if the size is small.
         Mini,           //Stores a standard shard or whole thing if the size is small.
         Leech,          // Does not store or support the chain in any way other than to look up info in the chain and return it.  (Verification servers, and entities that dont need to store blocks, or are high risk for attacks)
 
     }
-    public class Node 
+    public class Node
     {
 
 
@@ -121,7 +124,7 @@ namespace SPHERE.Blockchain
             node.DHT = new DHT();
             //node.Peers = new Dictionary<string, Peer>();
             node.RoutingTable = new RoutingTable();
-            
+
 
             try
             {
@@ -153,7 +156,7 @@ namespace SPHERE.Blockchain
                 }
                 else
                 {
-                   
+
                     Console.WriteLine("Routing Table state file not found. Starting with a fresh state.");
                 }
 
@@ -178,9 +181,9 @@ namespace SPHERE.Blockchain
             Node node = new Node();
 
             //Create a client get listeners using STUN. 
-           
+
             Client client = new Client();
-            
+
 
             // Thread-safe key generation
             lock (stateLock)
@@ -344,14 +347,14 @@ namespace SPHERE.Blockchain
 
                         // Encrypt the packet using the recipient's public communication key
                         Console.WriteLine("Debug-SendBootstrapRequest: Encrypting packet...");
-                        byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(data, recipientsPublicEncryptKey); 
+                        byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(data, recipientsPublicEncryptKey);
                         Console.WriteLine($"Debug-SendBootstrapRequest: Packet encrypted. Encrypted Data Length: {encryptedData.Length} bytes");
 
-                    
+
 
                         // Send the encrypted data and signature to the recipient
                         Console.WriteLine($"Debug-SendBootstrapRequest: Sending packet to {iPAddress}:{port}...");
-                         success = await Client.SendPacketToPeerAsync(iPAddress, port, encryptedData);
+                        success = await Client.SendPacketToPeerAsync(iPAddress, port, encryptedData);
                     }
 
 
@@ -366,7 +369,7 @@ namespace SPHERE.Blockchain
                     Console.WriteLine($"Debug-SendBootstrapRequest: Bootstrap request successfully sent to {iPAddress}:{port}");
 
                     Console.WriteLine("Debug-SendBootstrapRequest: Bootstrap Request process completed.");
-                    return success; 
+                    return success;
                 });
 
             }
@@ -382,6 +385,13 @@ namespace SPHERE.Blockchain
         public async Task ProcessBootstrapResponse(Packet packet)
         {
             Node node = this;
+            int trustScoreUpdate = 0;
+            Peer senderPeer = node.RoutingTable.GetPeerByID(packet.Header.NodeId);
+            if (senderPeer == null)
+            {
+                Console.WriteLine($"Warning: Sender {packet.Header.NodeId} is not in routing table. Ignoring response.");
+                return;
+            }
 
             try
             {
@@ -398,6 +408,8 @@ namespace SPHERE.Blockchain
                 if (packet == null || packet.Header == null)
                 {
                     Console.WriteLine("Debug-ProcessBootstrapResponse: Invalid packet or missing header.");
+                    trustScoreUpdate = -10;
+                    senderPeer.UpdateTrustScore(senderPeer, trustScoreUpdate);
                     return;
                 }
 
@@ -407,144 +419,137 @@ namespace SPHERE.Blockchain
                 byte[] senderPublicEncrptyKey = packet.Header.PublicEncryptKey;
                 string signature = packet.Signature;
 
-                // Deserialize the response payload
+                // De-serialize the response payload
                 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 BootstrapResponsePayload responsePayload = JsonSerializer.Deserialize<BootstrapResponsePayload>(packet.Content, options);
-
-
-
 
                 Console.WriteLine($"Debug-ProcessBootstrapResponse: Packet signature: {signature}.");
 
 
-                bool isTesting = Environment.GetEnvironmentVariable("SPHERE_TEST_MODE") == "true";
-                if (isTesting)
+                // Verify the signature
+                byte[] packetArray = SerializePacket(packet);
+                Console.WriteLine("Debug-ProcessBootstrapResponse: Verifying packet signature...");
+
+
+                if (responsePayload == null)
                 {
+                    Console.WriteLine("Debug-ProcessBootstrapResponse: Failed to deserialize bootstrap response payload.");
+                    return;
+                }
+                Console.WriteLine("Debug-ProcessBootstrapResponse: Bootstrap response payload deserialized successfully.");
 
-                    // Verify the signature
-                    byte[] packetArray = SerializePacket(packet);
-                        Console.WriteLine("Debug-ProcessBootstrapResponse: Verifying packet signature...");
+                // Process the peer list
+                if (responsePayload.Peers != null)
+                {
+                    Console.WriteLine($"Debug-ProcessBootstrapResponse: Processing {responsePayload.Peers.Count} peers...");
 
- 
-                        if (responsePayload == null)
-                        {
-                            Console.WriteLine("Debug-ProcessBootstrapResponse: Failed to deserialize bootstrap response payload.");
-                            return;
-                        }
-                        Console.WriteLine("Debug-ProcessBootstrapResponse: Bootstrap response payload deserialized successfully.");
+                    int invalidPeers = 0;
+                    int maxAllowedInvalidPeers = 15;
+                    int penaltyThreshold = 5;
 
-                        // Process the peer list
-                        if (responsePayload.Peers != null)
-                        {
-                            Console.WriteLine($"Debug-ProcessBootstrapResponse: Processing {responsePayload.Peers.Count} peers...");
-                            lock (RoutingTable) // Ensure thread-safe access to the RoutingTable
-                            {
-                                foreach (var peer in responsePayload.Peers)
-                                {
-                                    // Create a Peer object for each entry
-                                    var newPeer = new Peer
-                                    {
-                                        NodeId = peer.NodeId,
-                                        NodeIP = peer.NodeIP,
-                                        NodePort = peer.NodePort,
-                                        PublicSignatureKey = peer.PublicSignatureKey,
-                                        PublicEncryptKey = peer.PublicEncryptKey
-                                    };
-
-                                    // Add the peer to the RoutingTable (will handle duplicates automatically)
-                                    RoutingTable.AddPeer(newPeer);
-                                    Console.WriteLine($"Debug-ProcessBootstrapResponse: Added or updated peer {peer.NodeId} in the routing table.");
-                                }
-                            }
-                        }
-
-                        // Process the DHT state (if included)
-                        if (responsePayload.DHT != null)
-                        {
-                            Console.WriteLine($"Debug-ProcessBootstrapResponse: Processing {responsePayload.DHT.Count} DHT blocks...");
-                            lock (stateLock) // Ensure thread-safe access to the DHT
-                            {
-                                foreach (var block in responsePayload.DHT)
-                                {
-                                    // Validate the block before adding it
-                                    if (DHT.IsBlockValid(block))
-                                    {
-                                        node.DHT.AddBlock(block);
-                                        Console.WriteLine($"Debug-ProcessBootstrapResponse: Added DHT block: {block.Header.BlockId}");
-                                    }
-                                    else
-                                    {
-                                        Console.WriteLine($"Debug-ProcessBootstrapResponse: Invalid block {block.Header.BlockId}. Skipping.");
-                                    }
-                                }
-                            }
-                        }
-
-                        Console.WriteLine("Debug-ProcessBootstrapResponse: Bootstrap response processed successfully.");
-                    }
-                    else
+                    foreach (var peer in responsePayload.Peers)
                     {
-               
-                        if (responsePayload == null)
+
+                        bool isValidPeer = false;
+                        try
                         {
-                            Console.WriteLine("Debug-ProcessBootstrapResponse: Failed to deserialize bootstrap response payload.");
-                            return;
+                            isValidPeer = Peer.ValidatePeer(peer);
                         }
-                        Console.WriteLine("Debug-ProcessBootstrapResponse: Bootstrap response payload deserialized successfully.");
-
-                        // Process the peer list
-                        if (responsePayload.Peers != null)
+                        catch (Exception ex)
                         {
-                            Console.WriteLine($"Debug-ProcessBootstrapResponse: Processing {responsePayload.Peers.Count} peers...");
-                            lock (RoutingTable) // Ensure thread-safe access to the RoutingTable
-                            {
-                                foreach (var peer in responsePayload.Peers)
-                                {
-                                    // Create a Peer object for each entry
-                                    var newPeer = new Peer
-                                    {
-                                        NodeId = peer.NodeId,
-                                        NodeIP = peer.NodeIP,
-                                        NodePort = peer.NodePort,
-                                        PublicSignatureKey = peer.PublicSignatureKey,
-                                        PublicEncryptKey = peer.PublicEncryptKey
-                                    };
+                            Console.WriteLine($"Error-ProcessBootstrapResponse: {ex.Message}");
+                        }
 
-                                    // Add the peer to the RoutingTable (will handle duplicates automatically)
-                                    RoutingTable.AddPeer(newPeer);
-                                    //Console.WriteLine($"Debug-ProcessBootstrapResponse: Added or updated peer {peer.NodeId} in the routing table.");
-                                }
+                        if (peer == null || !isValidPeer)
+                        {
+                            invalidPeers++;
+
+                            // Apply trust penalties at specific thresholds
+                            if (invalidPeers == penaltyThreshold)
+                            {
+                                trustScoreUpdate -= 5; // Moderate penalty
                             }
+                            else if (invalidPeers >= penaltyThreshold && invalidPeers < maxAllowedInvalidPeers)
+                            {
+                                trustScoreUpdate--; // Minor penalty for additional invalid peers
+                            }
+                            else if (invalidPeers >= maxAllowedInvalidPeers)
+                            {
+                                Console.WriteLine($"Debug-ProcessBootstrapResponse: Too Many Invalid Peers. Applying severe penalty.");
+                                trustScoreUpdate--;
+                                break;
+                            }
+                            continue;
                         }
 
-                        // Process the DHT state (if included)
-                        if (responsePayload.DHT != null)
-                        {
-                            Console.WriteLine($"Debug-ProcessBootstrapResponse: Processing {responsePayload.DHT.Count} DHT blocks...");
-                            lock (stateLock) // Ensure thread-safe access to the DHT
-                            {
-                                foreach (var block in responsePayload.DHT)
-                                {
+                        // Add the peer to the RoutingTable (will handle duplicates automatically)
+                        RoutingTable.AddPeer(peer);
+                        trustScoreUpdate++;
+                        Console.WriteLine($"Debug-ProcessBootstrapResponse: Added or updated peer {peer.NodeId} in the routing table.");
 
-                                        node.DHT.AddBlock(block);
-                                        //Console.WriteLine($"Debug-ProcessBootstrapResponse: Added DHT block: {block.Header.BlockId}");
-                          
+                    }
+
+                    // Process the DHT state (if included)
+                    if (responsePayload.DHT != null)
+                    {
+                        int validDHTBlocks = 0;
+                        int invalidBlockThreshhold = 5;
+                        int invalidDHTBlocks = 0;
+                        int maxInvalidBlock = 15;
+
+                        Console.WriteLine($"Debug-ProcessBootstrapResponse: Processing {responsePayload.DHT.Count} DHT blocks...");
+                        lock (stateLock) // Ensure thread-safe access to the DHT
+                        {
+                            foreach (var block in responsePayload.DHT)
+                            {
+                                // Validate the block before adding it
+                                if (DHT.IsBlockValid(block))
+                                {
+                                    node.DHT.AddBlock(block);
+                                    trustScoreUpdate++;
+                                    validDHTBlocks++;
+                                    Console.WriteLine($"Debug-ProcessBootstrapResponse: Added DHT block: {block.Header.BlockId}");
                                 }
+                                else
+                                {
+                                    Console.WriteLine($"Debug-ProcessBootstrapResponse: Invalid block {block.Header.BlockId}. Skipping.");
+
+                                    invalidDHTBlocks++;
+
+                                }
+
+                                if (invalidDHTBlocks >= maxInvalidBlock)
+                                {
+                                    trustScoreUpdate--;
+                                    break;
+                                }
+                                else if (invalidDHTBlocks >= invalidBlockThreshhold)
+                                {
+                                    trustScoreUpdate -= invalidBlockThreshhold;  
+                                }
+                                else if (invalidDHTBlocks > 0)
+                                {
+                                    trustScoreUpdate--; 
+                                }
+
                             }
                         }
 
                         Console.WriteLine("Debug-ProcessBootstrapResponse: Bootstrap response processed successfully.");
-
-
                     }
 
-                
+                    if (trustScoreUpdate != 0)
+                    {
+                        senderPeer.UpdateTrustScore(senderPeer, trustScoreUpdate);
+                    }
+                }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error-ProcessBootstrapResponse: {ex.Message}");
                 Console.WriteLine($"ProcessBootstrapResponse: Debug Trace: {ex.StackTrace}");
             }
+
         }
 
         // Sends a response to a request to Bootstrap.  Sends a peer list and copy of DHT (Or shards at some point)
@@ -623,7 +628,7 @@ namespace SPHERE.Blockchain
                         peer.NodeId,
                         peer.NodeIP,
                         peer.NodePort,
-                        peer.PreviousNodesHash,  
+                        peer.PreviousNodesHash,
                         peer.PublicSignatureKey,
                         peer.PublicEncryptKey
                     )).ToList();
@@ -645,7 +650,7 @@ namespace SPHERE.Blockchain
                         node.Client.clientListenerPort,
                         node.Client.clientIP.ToString(),
                         1
-                     
+
                      );
 
                     // Build the response payload
@@ -654,7 +659,7 @@ namespace SPHERE.Blockchain
                         Peers = responsePeerList,
                         DHT = dhtState
                     };
-               
+
 
                     Packet responsePacket = Packet.PacketBuilder.BuildPacket(header, JsonSerializer.Serialize(responsePayload));
 
@@ -733,7 +738,7 @@ namespace SPHERE.Blockchain
             }
         }
 
-        //Resets the Bootstrap Status to allow a corupted node to "Reset" it's peers and DHT.
+        //Resets the Bootstrap Status to allow a corrupted node to "Reset" it's peers and DHT.
         public static void ResetBootstrapStatus(Node node)
         {
             node.isBootstrapped = false;
@@ -843,7 +848,7 @@ namespace SPHERE.Blockchain
                 byte[] encryptedResponseData = Encryption.EncryptPacketWithPublicKey(
                     Encoding.UTF8.GetBytes(responsePacket.Content),
                     node.Peer.PublicEncryptKey
-               
+
                 );
 
                 bool success = await Client.SendPacketToPeerAsync(senderIPAddress, senderPort, encryptedResponseData);
@@ -863,7 +868,7 @@ namespace SPHERE.Blockchain
             }
         }
 
-        //Cleans up the Cashe that stores recent messages preventing processing the same message twice
+        //Cleans up the Cache that stores recent messages preventing processing the same message twice
         private async Task StartCacheCleanup()
         {
             while (true)
@@ -939,7 +944,7 @@ namespace SPHERE.Blockchain
             }
         }
 
-        //Brodcast the Nodes Conncetion to the Network
+        //Broadcast the Nodes Connection to the Network
         public async Task BrodcastConnectionToNetwork()
         {
             Node node = this;
@@ -976,27 +981,27 @@ namespace SPHERE.Blockchain
 
                     List<Peer> peers = node.RoutingTable.GetAllPeers();
 
-                        foreach(var peer in peers)
+                    foreach (var peer in peers)
+                    {
+                        Console.WriteLine("Debug-BrodcastConnectionToNetwork: Encrypting packet...");
+                        // Encrypt the packet using the recipient's public communication key
+                        Console.WriteLine("Debug-BrodcastConnectionToNetwokr: Encrypting packet...");
+                        byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(data, peer.PublicEncryptKey);
+                        Console.WriteLine($"Debug-BrodcastConnectionToNetwork: Packet encrypted. Encrypted Data Length: {encryptedData.Length} bytes");
+
+
+                        // Send the encrypted data and signature to the recipient
+                        Console.WriteLine($"Debug-BrodcastConnectionToNetwokr: Sending packet to NODE: {peer.NodeId.Substring(0, 6)} at {peer.NodeIP}:{peer.NodePort}...");
+                        bool success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedData);
+
+                        // If the send operation fails, throw an exception to trigger a retry
+                        if (!success)
                         {
-                            Console.WriteLine("Debug-BrodcastConnectionToNetwork: Encrypting packet...");
-                            // Encrypt the packet using the recipient's public communication key
-                            Console.WriteLine("Debug-BrodcastConnectionToNetwokr: Encrypting packet...");
-                            byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(data, peer.PublicEncryptKey);
-                            Console.WriteLine($"Debug-BrodcastConnectionToNetwork: Packet encrypted. Encrypted Data Length: {encryptedData.Length} bytes");
-
-
-                            // Send the encrypted data and signature to the recipient
-                            Console.WriteLine($"Debug-BrodcastConnectionToNetwokr: Sending packet to NODE: {peer.NodeId.Substring(0, 6)} at {peer.NodeIP}:{peer.NodePort}...");
-                            bool success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedData);
-
-                            // If the send operation fails, throw an exception to trigger a retry
-                            if (!success)
-                            {
-                                Console.WriteLine($"Debug-BrodcastConnectionToNetworkt: Failed to send Brodcast of network connection to {peer.NodeIP}:{peer.NodePort}");
-                                allSuccessful = false;
+                            Console.WriteLine($"Debug-BrodcastConnectionToNetworkt: Failed to send Brodcast of network connection to {peer.NodeIP}:{peer.NodePort}");
+                            allSuccessful = false;
                         }
-                            Console.WriteLine($"Debug-BrodcastConnectionToNetwork: Brodcast of network connection successfully sent to {peer.NodeIP}:{peer.NodePort}");
-                        }
+                        Console.WriteLine($"Debug-BrodcastConnectionToNetwork: Brodcast of network connection successfully sent to {peer.NodeIP}:{peer.NodePort}");
+                    }
 
 
                     if (!allSuccessful)
@@ -1025,7 +1030,7 @@ namespace SPHERE.Blockchain
         {
 
             Node node = this;
-           
+
             try
             {
                 Console.WriteLine("Debug-PeerListResponse: Starting to send bootstrap response...");
@@ -1038,7 +1043,7 @@ namespace SPHERE.Blockchain
                     packet.Header.PublicSignatureKey,
                     packet.Header.PublicEncryptKey);
 
-                if (!node.RoutingTable.GetAllPeers().Contains(peer) || peer.NodeId!=node.Peer.NodeId)
+                if (!node.RoutingTable.GetAllPeers().Contains(peer) || peer.NodeId != node.Peer.NodeId)
                 {
                     node.RoutingTable.AddPeer(peer);
                 }
@@ -1144,13 +1149,13 @@ namespace SPHERE.Blockchain
                     Console.WriteLine("Debug-PeerListResponse: Encrypting response data...");
 
 
-              
+
                     byte[] encryptedResponseData = Encryption.EncryptPacketWithPublicKey(responseData, recipientPublicEncryptKey);
 
                     // Send the encrypted response data and signature to the recipient
                     Console.WriteLine($"Debug-PeerListResponse: Sending response to {recipientIPAddress}:{recipientPort}...");
                     success = await Client.SendPacketToPeerAsync(recipientIPAddress, recipientPort, encryptedResponseData);
-                    
+
 
 
                     // If the send operation fails, throw an exception to trigger a retry
@@ -1199,38 +1204,85 @@ namespace SPHERE.Blockchain
         //Process PeerList Response
         public async Task ProcessPeerListResponse(Packet packet)
         {
-            Console.WriteLine($"Debug-ProcessPeerListResponse: Processing response from {packet.Header.NodeId}...");
-
-            List<Peer> peers = JsonSerializer.Deserialize<List<Peer>>(packet.Content);
-
             Node node = this;
-                
+            Console.WriteLine($"ProcessPeerListResponse: Processing response from {packet.Header.NodeId}...");
+            List<Peer> peers = JsonSerializer.Deserialize<List<Peer>>(packet.Content);
+            Peer senderPeer = this.RoutingTable.GetPeerByID(packet.Header.NodeId);
+            if (senderPeer == null)
+            {
+                Console.WriteLine($"Warning: Sender {packet.Header.NodeId} is not in routing table. Ignoring response.");
+                return;
+            }
+
+            if (peers == null || peers.Count == 0)
+             {
+                Console.WriteLine($"Warning: Received an empty or null peer list from {packet.Header.NodeId}.");
+                senderPeer.UpdateTrustScore(senderPeer, -15); // Penalize peers that send empty responses
+                return;
+             }
+            int validPeerCount = 0;
+            int duplicateCount = 0;
+
+            int invalidPeerCount = 0;
+
+            const int TrustIncreasePerValidPeer = 2;  // Reward for each valid peer
+            const int TrustDecreaseForDuplicates = -2; // Penalty for sending duplicates
+            const int TrustPenaltyForInvalidData = -5; // Severe penalty for bad data
+
+            try
+            {
 
                 if (peers != null)
                 {
-                    Console.WriteLine($"Debug-ProcessPeerListResponse: Received {peers.Count} peers.");
-
-                    lock (RoutingTable) // Ensure thread-safe access
-                    {
                         foreach (var peer in peers)
                         {
                             if (node.RoutingTable.GetAllPeers().Contains(peer))
                             {
-                                Console.WriteLine($"Debug-ProcessPeerListResponse: Skipping duplicate peer {peer.NodeId}.");
+                                Console.WriteLine($"Warning: ProcessPeerListResponse: Skipping duplicate peer {peer.NodeId}.");
+                                duplicateCount++;
+
                                 continue;
                             }
 
-                            if (peer.NodeId == node.Peer.NodeId)
+                            bool isPeerValid = false;
+                            try
                             {
-                                Console.WriteLine($"ERROR: babyNode ({node.Peer.NodeId}) is receiving itself in a peer list. Sender: {packet.Header.NodeId}");
+                                isPeerValid = Peer.ValidatePeer(peer);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Error in ProcessPeerListResponse: {ex.Message}");
+                            }
+
+
+                            if (peer.NodeId == node.Peer.NodeId || peer.NodeId == senderPeer.NodeId || !isPeerValid)
+                            {
+                                Console.WriteLine($"ERROR: Node ({node.Peer.NodeId}) received a bad peer from Sender: {packet.Header.NodeId}");
+                                invalidPeerCount++;
                                 continue;
                             }
 
+                            validPeerCount++;
+                          
                             node.RoutingTable.AddPeer(peer);
                         }
+
+                    int trustChange = (validPeerCount * TrustIncreasePerValidPeer) + (duplicateCount * TrustDecreaseForDuplicates) + (invalidPeerCount * TrustPenaltyForInvalidData);
+
+                    if (trustChange != 0)
+                    {
+                        senderPeer.UpdateTrustScore(senderPeer, trustChange);
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+
+                Console.WriteLine($"Error in ProcessPeerListResponse: {ex.Message}");
+
+            }
         }
+    
 
         //Ping a single peer. Returns True or false based on successful ping. 
         public static async Task<bool> PingPeerAsync(Node node,Peer peer)
@@ -1294,7 +1346,7 @@ namespace SPHERE.Blockchain
             throw new Exception("RetryAsync failed after all attempts."); // Should never reach here
         }
 
-        //same thing here, This is used to assist in retyoing and queueing the tasks.. 
+        //same thing here, This is used to assist in retying and queuing the tasks.. 
         private async Task SafeTask(Func<Task> action)
         {
             try
