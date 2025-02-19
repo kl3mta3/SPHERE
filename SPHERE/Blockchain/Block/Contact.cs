@@ -83,11 +83,11 @@ namespace SPHERE.Blockchain
 
         }
         /// <summary>
-        /// The contact is intented to be the core of a block.  It will be encrypted with a Local Symmentic Key before it is placed on the block.  
-        /// The purpose is to allow for users to control their data, but also gain the security and decenteralization of a p2p DHT.
+        /// The contact is intended to be the core of a block.  It will be encrypted with a Local Symmetric Key before it is placed on the block.  
+        /// The purpose is to allow for users to control their data, but also gain the security and decentralization of a p2p DHT.
         /// 
         /// *Basic Information
-        /// Basic Information like disply Name name and email, the general information you would give out and is on average already condidered publicly accessable. 
+        /// Basic Information like display Name and email, the general information you would give out and is on average already considered publicly accessable. 
         /// *
         /// 
         /// **SSN
@@ -97,7 +97,7 @@ namespace SPHERE.Blockchain
         /// 
         /// ***Accounts and Card numbers. 
         /// The long term idea is you can even store salted and Hash CC and Bank account Info.  The user when needing to purchase an item will use a secure server, they will provied their card info and their key,  
-        /// the server will hash that and compair it against the one on the chain.  If verified the server will make a one way connection between the two accounts securing the account info inside only to the recipient and sender. 
+        /// the server will hash that and compare it against the one on the chain.  If verified the server will make a one way connection between the two accounts securing the account info inside only to the recipient and sender. 
         /// The merchant and even the verifying server do not have access.
         /// ***
         /// </summary>
@@ -105,14 +105,14 @@ namespace SPHERE.Blockchain
         {
             public string DisplayName { get; set; }                     // User's display name
             public string Name { get; set; }                            // Users Name
-            public string ContactVersion {  get; set; }                       // Contact versions would allow for deserialation of different contact styles as the platform evolves.
+            public string ContactVersion {  get; set; }                 // Contact versions would allow for deserialization of different contact styles as the platform evolves.
             public string? HashedSSN {  get; set; }                     // Users can provide a salted Hash of their SSN and this can be used later by applications to comparir it against the a hash of the ssn and key provided by the user. (Optional)
             public string? HashedCardNumber {  get; set; }              // Users can provide a salted Hash of their Card Number, this will by used by verification server when provided the cc and key by the user, if it can verify the hash it creates a 1 way payment tunnel from there to the merchants account. the merchant never sees the data (optional)
-            public string? HashedAccountNumber {  get; set; }           // Users can provide a salted Hash of their Rccount, this will by used by verification server when provided the account number and key by the user, if it can verify the hash it creates a 1 way payment tunnel from there to the merchants account.(optional)
+            public string? HashedAccountNumber {  get; set; }           // Users can provide a salted Hash of their Recount, this will by used by verification server when provided the account number and key by the user, if it can verify the hash it creates a 1 way payment tunnel from there to the merchants account.(optional)
             public string? HashedRoutingNumber { get; set; }            // Users can provide a salted Hash of their Routing, this will by used by verification server when provided the routing number and key by the user, if it can verify the hash it creates a 1 way payment tunnel from there to the merchants account.(optional)
-            public string? Language { get; set; }                       // Users Prefered Language (optional)
-            public string? Email { get; set; }                          // Users Prefered Contact email (optional)
-            public string? PhoneNumber { get; set; }                    // Users Prefered Phone Number. (optional)
+            public string? Language { get; set; }                       // Users Preferred Language (optional)
+            public string? Email { get; set; }                          // Users Preferred Contact email (optional)
+            public string? PhoneNumber { get; set; }                    // Users Preferred Phone Number. (optional)
             public string? AvatarURLHash { get; set; }                  // Hash of the avatar URL stored on a secure server (optional)
             public string? Description { get; set; }                    // Short description or additional contact info (optional)
         }

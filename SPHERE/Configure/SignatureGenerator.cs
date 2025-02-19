@@ -108,29 +108,45 @@ namespace SPHERE.Configure
             if (isTesting)
             {
                 // Create the signature using the private key
-                using (var ecdsa = ECDsa.Create())
+                try
                 {
+                    using (var ecdsa = ECDsa.Create())
+                    {
+                        byte[] hash = SHA256.HashData(data);
+                        ecdsa.ImportPkcs8PrivateKey(ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateTestNodeSignatureKey), out _);
+                        byte[] signature = ecdsa.SignData(hash, HashAlgorithmName.SHA256);
 
-                    ecdsa.ImportPkcs8PrivateKey(ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateTestNodeSignatureKey), out _);
-                    byte[] signature = ecdsa.SignData(data, HashAlgorithmName.SHA256);
+                        // Return the signature as a Base64-encoded string
+                        return signature;
 
-                    // Return the signature as a Base64-encoded string
-                    return signature;
-
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                    return null;
                 }
             }
             else
             {
                 // Create the signature using the private key
-                using (var ecdsa = ECDsa.Create())
+                try
                 {
-
-                    ecdsa.ImportPkcs8PrivateKey(ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeSignatureKey), out _);
-                    byte[] signature = ecdsa.SignData(data, HashAlgorithmName.SHA256);
+                    using (var ecdsa = ECDsa.Create())
+                    {
+                        byte[] hash = SHA256.HashData(data);
+                        ecdsa.ImportPkcs8PrivateKey(ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeSignatureKey), out _);
+                        byte[] signature = ecdsa.SignHash(hash);
 
                     // Return the signature as a Base64-encoded string
                     return signature;
 
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                    return null;
                 }
 
 
@@ -152,9 +168,10 @@ namespace SPHERE.Configure
 
                     // Convert the signature back to a byte array
                     byte[] signatureBytes = signature;
+                    byte[] receivedHash = SHA256.HashData(data);
 
                     // Verify the signature
-                    return ecdsa.VerifyData(data, signatureBytes, HashAlgorithmName.SHA256);
+                    return ecdsa.VerifyHash(receivedHash, signatureBytes);
                 }
             }
             catch (Exception ex)

@@ -3,6 +3,7 @@ using SPHERE.Configure;
 using SPHERE.Networking;
 using System.Text.Json;
 using SPHERE.Security;
+using System.Collections.Concurrent;
 
 namespace SPHERE.Blockchain
 {
@@ -11,7 +12,7 @@ namespace SPHERE.Blockchain
     /// 
     /// The DHT is the Blockchain it is the nodes record of the chain, either all or its shard(Piece).
     /// 
-    /// it is a Dictonary of Blocks with a key of their ID.
+    /// it is a Dictionary of Blocks with a key of their ID.
     /// 
     /// Blocks can be added to the DHT and edited, That is all. 
     /// 
@@ -21,24 +22,49 @@ namespace SPHERE.Blockchain
     {
         private static readonly object stateLock = new object(); // For thread safety
 
-        private readonly Dictionary<string, Block> _blocks = new();
-
-        public RoutingTable RoutingTable { get; set; }
+        private readonly ConcurrentDictionary<string, Block> _blocks = new();
 
         public void AddBlock(Block block)
         {
-            if (block == null || block.Header == null)
-            {
-                throw new ArgumentNullException(nameof(block), "Block or Block Header cannot be null.");
-            }
+            
+                if (block == null || block.Header == null)
+                {
+                    throw new ArgumentNullException(nameof(block), "Block or Block Header cannot be null.");
+                }
 
-            lock (stateLock) // Ensures thread-safe access to the _blocks dictionary
-            {
-                _blocks[block.Header.BlockId] = block;
-            }
+                lock (stateLock) // Ensures thread-safe access to the _blocks dictionary
+                {
+                    _blocks[block.Header.BlockId] = block;
+                }
+            
         }
 
         public Block GetBlock(string blockID)
+        {
+            
+                if (string.IsNullOrEmpty(blockID))
+                {
+                    throw new ArgumentException("Block ID cannot be null or empty.", nameof(blockID));
+                }
+
+                lock (stateLock) // Ensure thread-safe access to _blocks
+                {
+                    if (_blocks.TryGetValue(blockID, out Block block))
+                    {
+                        return block;
+                    }
+                    else
+                    {
+                    Console.WriteLine($"⚠️ Block {blockID} not found in local DHT.");
+                    DHTManagement.IncrementFailedLookups(this);
+                    return null;
+                }
+               
+                }
+            
+        }
+
+        public void RemoveBlock(string blockID)
         {
             if (string.IsNullOrEmpty(blockID))
             {
@@ -47,7 +73,16 @@ namespace SPHERE.Blockchain
 
             lock (stateLock) // Ensure thread-safe access to _blocks
             {
-                return _blocks.TryGetValue(blockID, out var block) ? block : null;
+                try
+                {
+                    _blocks.Remove(blockID, out _);
+                    Console.WriteLine($"Block {blockID} removed successfully.");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to remove block {blockID}: {ex.Message}");
+                }
+               
             }
         }
 
@@ -88,6 +123,14 @@ namespace SPHERE.Blockchain
             lock (stateLock) // Ensure thread safety
             {
                 return _blocks.Count;
+            }
+        }
+
+        public void ClearState()
+        {
+            lock (stateLock) // Ensure thread safety
+            {
+                _blocks.Clear();
             }
         }
 
@@ -237,48 +280,7 @@ namespace SPHERE.Blockchain
                     Console.WriteLine($"Failed to load DHT state: {ex.Message}");
                 }
             }
-        }
-
-        // Update Routing Table
-        public void UpdateRoutingTable(IEnumerable<Peer> bootstrapPeers)
-        {
-            lock (stateLock)
-            {
-                foreach (var peer in bootstrapPeers)
-                {
-                    RoutingTable.AddPeer(peer); // Use the RoutingTable class to handle this
-                }
-            }
-        }
-
-        public List<Peer> SelectPeersForRoutingTable(IEnumerable<Peer> candidatePeers)
-        {
-            return candidatePeers
-                .OrderBy(peer => peer.CalculateProximity(peer)) // Sort by proximity or a custom metric
-                .Take(10) // Limit the number of peers
-                .ToList();
-        }
-
-        public void RebuildRoutingTable()
-        {
-            lock (stateLock)
-            {
-                // Get all peers from the routing table
-                List<Peer> allPeers = RoutingTable.GetAllPeers();
-
-                // Clear the current routing table
-                RoutingTable.ClearRoutingTable();
-
-                // Re-add peers to the routing table, sorted by TrustScore and proximity
-                foreach (var peer in allPeers
-                    .OrderByDescending(peer => peer.TrustScore)
-                    .ThenBy(peer => peer.CalculateProximity(peer)))
-                {
-                    RoutingTable.AddPeer(peer);
-                }
-            }
-        }
-
+        }   
 
 
     }

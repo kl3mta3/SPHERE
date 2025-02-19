@@ -1,5 +1,10 @@
 ﻿using SPHERE.Blockchain;
+using SPHERE.Configure;
+using SPHERE.PacketLib;
 using System.Net.NetworkInformation;
+using System.Text.Json;
+using System.Text;
+using System.Xml.Linq;
 
 
 namespace SPHERE.Networking
@@ -15,17 +20,20 @@ namespace SPHERE.Networking
         private static readonly object stateLock = new object();
 
         public string NodeId { get; set; }
-        public NodeType Node_Type { get; set; }
-        public string NodeIP { get; set; }
-        public int NodePort { get; set; }
+        public NodeType Node_Type { get; set; } = new();
+        public string NodeIP { get; set; } 
+        public int NodePort { get; set; } = new();
         public string PreviousNodesHash { get; set; }
-        public byte[] PublicSignatureKey { get; set; }
+        public byte[] PublicSignatureKey { get; set; } 
         public byte[] PublicEncryptKey { get; set; }
-        public  int TrustScore {  get; set; }       
+        public  double Reputation {  get; set; } = new();
+
+        public DateTime LastSeen { get; set; } =new();
+        public DateTime FirstSeen { get; set; } = new();
 
         public static Peer CreatePeer(NodeType nodeType, string nodeID, string nodeIP, int nodePort, string? previousHash, byte[] publicSignatureKey, byte[] publicEncryptKey)
         {
-
+            DateTime now = DateTime.UtcNow;
             Peer peer = new Peer
             {
                 Node_Type = nodeType,
@@ -34,12 +42,35 @@ namespace SPHERE.Networking
                 NodePort = nodePort,
                 PublicSignatureKey = publicSignatureKey,
                 PublicEncryptKey = publicEncryptKey,
-                TrustScore=0
+                Reputation=0,
+                FirstSeen = now,
+                LastSeen =now,
             };
             if (!String.IsNullOrWhiteSpace(previousHash))
             {
                 peer.PreviousNodesHash = previousHash;
             }
+
+            return peer;
+        }
+
+        public static Peer CreatePeerFromPacket(PacketLib.Packet packet)
+        {
+            NodeType nodeType = (NodeType)Enum.Parse(typeof(NodeType), packet.Header.Node_Type);
+            DateTime now = DateTime.UtcNow;
+            Peer peer = new Peer
+            {
+                Node_Type = nodeType,
+                NodeId = packet.Header.NodeId,
+                NodeIP = packet.Header.IPAddress,
+                NodePort = int.Parse(packet.Header.Port),
+                PublicSignatureKey = packet.Header.PublicSignatureKey,
+                PublicEncryptKey = packet.Header.PublicEncryptKey,
+                PreviousNodesHash = "UNKNOWN",
+                Reputation = 0,
+                FirstSeen = now,
+                LastSeen = now,
+            };
 
             return peer;
         }
@@ -55,10 +86,10 @@ namespace SPHERE.Networking
                     return;
                 }
 
-                int newScore = Math.Clamp(targetPeer.TrustScore + change, 0, 100);
-                targetPeer.TrustScore = newScore;
+                double newScore = Math.Clamp(targetPeer.Reputation + change, 0, 100);
+                targetPeer.Reputation = newScore;
 
-                Console.WriteLine($"Updated trust score for {targetPeer.NodeId} by {this.NodeId}: {targetPeer.TrustScore}");
+                Console.WriteLine($"Updated trust score for {targetPeer.NodeId} by {this.NodeId}: {targetPeer.Reputation}");
             }
         }
 
@@ -81,8 +112,8 @@ namespace SPHERE.Networking
             double latencyWeight = 0.6;
             double trustScoreWeight = 0.4;
 
-            int latency = CalculateLatency(peer); // Use Option 1
-            int trustScore = peer.TrustScore; // Use Option 3
+            int latency = CalculateLatency(peer); 
+            double trustScore = peer.Reputation; 
 
             // Normalize and combine
             return (latencyWeight * NormalizeLatency(latency)) +
@@ -97,7 +128,7 @@ namespace SPHERE.Networking
         }
 
         //Normalize Trustscore
-        private double NormalizeTrust(int trustScore)
+        private double NormalizeTrust(double trustScore)
         {
             const int MaxTrustScore = 100; 
             return (double)trustScore / MaxTrustScore; // Normalize to [0, 1]
@@ -121,6 +152,122 @@ namespace SPHERE.Networking
                 return int.MaxValue;
             }
         }
-        
+
+        //Update the endpoint of a peer.
+        public void UpdatePeerEndpoint(Node node, string peerID, string newIP, int newPort)
+        {
+            if (string.IsNullOrEmpty(peerID))
+            {
+                throw new ArgumentException("Peer ID cannot be null or empty.", nameof(peerID));
+            }
+
+            if (string.IsNullOrEmpty(newIP))
+            {
+                throw new ArgumentException("New IP cannot be null or empty.", nameof(newIP));
+            }
+
+            if (newPort <= 0 || newPort > 65535)
+            {
+                throw new ArgumentOutOfRangeException(nameof(newPort), "Port must be a valid number between 1 and 65535.");
+            }
+
+            lock (stateLock) // Ensure thread safety when accessing and modifying the Peers dictionary
+            {
+                Peer peer = node.RoutingTable.GetPeerByID(peerID);
+                if (peer == null)
+                {
+                    throw new KeyNotFoundException($"Peer with ID {peerID} not found.");
+                }
+
+                // Update the peer's endpoint
+                peer.NodeIP = newIP;
+                peer.NodePort = newPort;
+
+                Console.WriteLine($"Updated endpoint for peer {peerID}: {newIP}:{newPort}");
+            }
+        }
+
+        //Process PeerList Response.
+        public async Task ProcessPeerListResponse(Node node, Packet packet)
+        {
+
+            Console.WriteLine($"ProcessPeerListResponse: Processing response from {packet.Header.NodeId}...");
+            List<Peer> peers = JsonSerializer.Deserialize<List<Peer>>(packet.Content);
+            Peer senderPeer = node.RoutingTable.GetPeerByID(packet.Header.NodeId);
+            if (senderPeer == null)
+            {
+                Console.WriteLine($"Warning: Sender {packet.Header.NodeId} is not in routing table. Ignoring response.");
+                return;
+            }
+
+            if (peers == null || peers.Count == 0)
+            {
+                Console.WriteLine($"Warning: Received an empty or null peer list from {packet.Header.NodeId}.");
+                senderPeer.UpdateTrustScore(senderPeer, -15); // Penalize peers that send empty responses
+                return;
+            }
+            int validPeerCount = 0;
+            int duplicateCount = 0;
+
+            int invalidPeerCount = 0;
+
+            const int TrustIncreasePerValidPeer = 2;  // Reward for each valid peer
+            const int TrustDecreaseForDuplicates = -2; // Penalty for sending duplicates
+            const int TrustPenaltyForInvalidData = -5; // Severe penalty for bad data
+
+            try
+            {
+
+                if (peers != null)
+                {
+                    foreach (var peer in peers)
+                    {
+                        if (node.RoutingTable.GetAllPeers().Contains(peer))
+                        {
+                            Console.WriteLine($"Warning: ProcessPeerListResponse: Skipping duplicate peer {peer.NodeId}.");
+                            duplicateCount++;
+
+                            continue;
+                        }
+
+                        bool isPeerValid = false;
+                        try
+                        {
+                            isPeerValid = Peer.ValidatePeer(peer);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error in ProcessPeerListResponse: {ex.Message}");
+                        }
+
+
+                        if (peer.NodeId == node.Peer.NodeId || peer.NodeId == senderPeer.NodeId || !isPeerValid)
+                        {
+                            Console.WriteLine($"ERROR: Node ({node.Peer.NodeId}) received a bad peer from Sender: {packet.Header.NodeId}");
+                            invalidPeerCount++;
+                            continue;
+                        }
+
+                        validPeerCount++;
+
+                        node.RoutingTable.AddPeer(peer);
+                    }
+
+                    int trustChange = (validPeerCount * TrustIncreasePerValidPeer) + (duplicateCount * TrustDecreaseForDuplicates) + (invalidPeerCount * TrustPenaltyForInvalidData);
+
+                    if (trustChange != 0)
+                    {
+                        senderPeer.UpdateTrustScore(senderPeer, trustChange);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+
+                Console.WriteLine($"Error in ProcessPeerListResponse: {ex.Message}");
+
+            }
+        }
+
     }
 }

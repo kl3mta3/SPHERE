@@ -4,6 +4,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using SPHERE.Configure;
 using SPHERE.Security;
+using static SPHERE.PacketLib.Packet.PacketBuilder;
+using static SPHERE.PacketLib.Packet;
 
 
 namespace SPHERE.Blockchain
@@ -16,13 +18,13 @@ namespace SPHERE.Blockchain
     }
 
     /// <summary>
-    /// The Block exists to store the encrypted contact in a decenterilized manner. 
+    /// The Block exists to store the encrypted contact in a decentralized manner. 
     /// 
     /// Block editing. 
-    /// Blocks are signed with the Private Signature Key. This key is attached to the user that created the block.  Block edits that are recievd by a node, can have attached signatures. 
+    /// Blocks are signed with the Private Signature Key. This key is attached to the user that created the block.  Block edits that are received by a node, can have attached signatures. 
     /// if the signature is valid the node will accept the edit and update the node or pass on the request, updating it to be verified by the node. 
-    /// (Request could not be addded to verified by so much of the network and keep bouncing till that point and then updates will happen)
-    /// The block edit request would be just the signature for approval and the already encryptedcontact, to which the old contact block is replaced as a while.  
+    /// (Request could not be added to verified by so much of the network and keep bouncing till that point and then updates will happen)
+    /// The block edit request would be just the signature for approval and the already encrypted contact, to which the old contact block is replaced as a while.  
     /// 
     /// To create a block Contact the first time Private Keys are needed to be generated so a Password is needed to be made with either Password.CreatePasswordWithString(string password) or Password.GenerateRandomPassword(int length) defaults to 16 characters.
     ///
@@ -32,15 +34,22 @@ namespace SPHERE.Blockchain
     {
         public enum BlockType
         {
-            Node,
-            Contact
+            Contact,
+            Reputation,
+            Transaction,
         }
 
-        [JsonPropertyName("header")]
-        public BlockHeader Header { get; set; }                         // Header containing block metadata
+        [JsonPropertyName("Header")]
+        public BlockHeader Header { get; set; }                         // Header containing block meta data
 
-        [JsonPropertyName("encryptedContact")]
-        public string EncryptedContact { get; set; }                    // Encrypted contact data object
+        [JsonPropertyName("EncryptedContact")]
+        public string? EncryptedContact { get; set; }                   // Encrypted contact data (only for Contact Blocks)
+
+        [JsonPropertyName("ReputationBlock")]
+        public string? ReputationBlock { get; set; }                    // Encrypted reputation data (only for Reputation Blocks)
+
+        [JsonPropertyName("encryptedTransaction")]
+        public string? TransactionBlock { get; set; }                // Encrypted transaction data (only for Transaction Blocks)
 
         [JsonPropertyName("encryptedLocalSymmetricKey")]
         public byte[] EncryptedLocalSymmetricKey { get; set; }          // The encrypted key used to encrypt the contact.  can only be decrypted by semi Public Key
@@ -52,19 +61,19 @@ namespace SPHERE.Blockchain
             public string BlockId { get; set; }                             // Unique identifier for the block
 
             [JsonPropertyName("BlockType")]
-            public string BlockType { get; set; }                           // "Node" or "Contact"
+            public string BlockType { get; set; }                           // "Reputation", "Transaction" or "Contact"
 
             [JsonPropertyName("BlockVersion")]
-            public string BlockVersion {  get; set; }                       // Block Versions allow for deserialvation of different blocks as the platform evolves.
+            public string BlockVersion {  get; set; }                       // Block Versions allow for deserialization of different blocks as the platform evolves.
 
             [JsonPropertyName("ContactVersion")]
-            public string ContactVersion { get; set; }                      // Contact versions would allow for deserialation of different contact styles as the platform evolves must be on the contact and the block.
+            public string ContactVersion { get; set; }                      // Contact versions would allow for deserialization of different contact styles as the platform evolves must be on the contact and the block.
 
             [JsonPropertyName("BlockCreationTime")]
-            public DateTime BlockCreationTime { get; set; }                 // Creation timestamp
+            public DateTime BlockCreationTime { get; set; }                 // Creation time stamp
 
             [JsonPropertyName("LastUpdateTime")]
-            public DateTime LastUpdateTime { get; set; }                    // Timestap of last Update to the block by validated user.
+            public DateTime LastUpdateTime { get; set; }                    // Time stamp of last Update to the block by validated user.
 
             [JsonPropertyName("EncryptionAlgorithm")]
             public string EncryptionAlgorithm { get; set; }                 // Algorithm used for encryption (e.g. AES256, RSA2048, ECDsa)
@@ -77,6 +86,9 @@ namespace SPHERE.Blockchain
 
             [JsonPropertyName("PublicSignatureKey")]
             public byte[] PublicSignatureKey { get; set; }                  // This is the public key for verifying the signature of commits and the user.
+
+            [JsonPropertyName("PublicEncryptionKey")]
+            public byte[] PublicEncryptionKey { get; set; }                  // This is the public key for encrypt messages to the user.
 
             [JsonPropertyName("GNCCertificate")]
             public byte[] CNGCertificate { get; set; }                      // GNC Container Certificate for the Private Key, Used to validate application used correct security when storing privatekey. 
@@ -93,10 +105,29 @@ namespace SPHERE.Blockchain
                 byte[] hashBytes = sha256.ComputeHash(inputBytes);
                 return Convert.ToBase64String(hashBytes);
             }
+
+            // Generates a unique block ID
+            public static string GenerateBlockID()
+            {
+                    byte[] randomBytes = new byte[32]; 
+                    using (var rng = RandomNumberGenerator.Create())
+                    {
+                        rng.GetBytes(randomBytes);
+                    }
+                    return Convert.ToBase64String(randomBytes); 
+            }
+
+            // Parses a block type from a string
+            public static BlockType ParseBlockType(string type)
+            {
+                Enum.TryParse(type, out BlockType parsedEnum);
+                return parsedEnum;
+            }
         }
 
-            // Creating a Block
-            public static Block CreateBlock(string previousHash, string encryptedContactData, EncryptionAlgorithm encryptionAlgorithm, BlockType blockType=BlockType.Contact)
+
+        // Creating a Contact Block
+        public static Block CreateContactBlock(string previousHash, string encryptedContactData, EncryptionAlgorithm encryptionAlgorithm)
             {
 
                 //Check to see if Keys exist.
@@ -107,20 +138,21 @@ namespace SPHERE.Blockchain
 
                 DateTime creationTime = DateTime.Now;
 
-            var header = new BlockHeader
-            {
-                BlockId = GenerateBlockID(),
-                BlockType = blockType.ToString(),
-                PreviousHash = previousHash,
-                BlockCreationTime = creationTime,
-                LastUpdateTime = creationTime,
-                EncryptionAlgorithm = encryptionAlgorithm.ToString(),
-                KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
-                PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalSignatureKey),
-                CNGCertificate = SignatureGenerator.CreateSphereCNGCertificate(KeyGenerator.KeyType.PrivatePersonalEncryptionKey),
-            };
+                var header = new BlockHeader
+                {
+                    BlockId = BlockHeader.GenerateBlockID(),
+                    BlockType = BlockType.Contact.ToString(),
+                    PreviousHash = previousHash,
+                    BlockCreationTime = creationTime,
+                    LastUpdateTime = creationTime,
+                    EncryptionAlgorithm = encryptionAlgorithm.ToString(),
+                    KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
+                    PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalSignatureKey),
+                    PublicEncryptionKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalEncryptionKey),
+                    CNGCertificate = SignatureGenerator.CreateSphereCNGCertificate(KeyGenerator.KeyType.PrivatePersonalEncryptionKey),
+                };
 
-                // Encrypt and store contact data
+                // Serialize and store contact data
                 string serializedContactData = JsonSerializer.Serialize(encryptedContactData);
 
                 header.BlockHash = header.CalculateBlockHash();
@@ -129,7 +161,7 @@ namespace SPHERE.Blockchain
                 return new Block
                 {
                     Header = header,
-                    EncryptedContact = encryptedContactData,
+                    EncryptedContact = serializedContactData,
                     EncryptedLocalSymmetricKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.EncryptedLocalSymmetricKey),
                 };
             }
@@ -139,52 +171,75 @@ namespace SPHERE.Blockchain
             return block?.Header?.BlockType != null &&
                    block.Header.BlockType == BlockType.Contact.ToString();
         }
-        // Creating a Block
-        public static Block CreateTestBlock(string previousHash, string encryptedContactData, EncryptionAlgorithm encryptionAlgorithm)
+
+        // Creating a Reputation Block
+        public static Block CreateReputationBlock(string previousHash, string reputationData, EncryptionAlgorithm encryptionAlgorithm)
         {
-
-            
-
-            DateTime creationTime = DateTime.Now;
+            DateTime creationTime = DateTime.UtcNow;
 
             var header = new BlockHeader
             {
-                BlockId = GenerateBlockID(),
+                BlockId = BlockHeader.GenerateBlockID(),
+                BlockType = BlockType.Reputation.ToString(),
                 PreviousHash = previousHash,
                 BlockCreationTime = creationTime,
                 LastUpdateTime = creationTime,
                 EncryptionAlgorithm = encryptionAlgorithm.ToString(),
-                KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
-                PublicSignatureKey = Convert.FromBase64String("TestPublicSignature"),
-                CNGCertificate = Convert.FromBase64String("TestCNGCertificate"),
+                PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalSignatureKey),
+                PublicEncryptionKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalEncryptionKey),
             };
-
-            // Encrypt and store contact data
-            string serializedContactData = JsonSerializer.Serialize(encryptedContactData);
 
             header.BlockHash = header.CalculateBlockHash();
 
+            // Encrypt and store contact data
+            string serializedContactData = JsonSerializer.Serialize(reputationData);
 
             return new Block
             {
                 Header = header,
-                EncryptedContact = encryptedContactData,
+                ReputationBlock = reputationData,
+                EncryptedLocalSymmetricKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.EncryptedLocalSymmetricKey),
+            };
+        }
+        public bool IsReputationBlock(Block block)
+        {
+            return block?.Header?.BlockType != null &&
+                   block.Header.BlockType == BlockType.Reputation.ToString();
+        }
+
+        // Creating a Reputation Block
+        public static Block CreateTransactionBlock(string previousHash, string transactionData, EncryptionAlgorithm encryptionAlgorithm)
+        {
+            DateTime creationTime = DateTime.UtcNow;
+
+            var header = new BlockHeader
+            {
+                BlockId = BlockHeader.GenerateBlockID(),
+                BlockType = BlockType.Transaction.ToString(),
+                PreviousHash = previousHash,
+                BlockCreationTime = creationTime,
+                LastUpdateTime = creationTime,
+                EncryptionAlgorithm = encryptionAlgorithm.ToString(),
+                PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalSignatureKey),
+                PublicEncryptionKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalEncryptionKey),
+            };
+
+            header.BlockHash = header.CalculateBlockHash();
+
+            return new Block
+            {
+                Header = header,
+                TransactionBlock = transactionData,
                 EncryptedLocalSymmetricKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.EncryptedLocalSymmetricKey),
             };
         }
 
+        public bool IsTransactionBlock(Block block)
+        {
+            return block?.Header?.BlockType != null &&
+                   block.Header.BlockType == BlockType.Transaction.ToString();
+        }
 
-
-
-        public static string GenerateBlockID()
-            {
-                byte[] randomBytes = new byte[32]; // 256 bits = 32 bytes
-                using (var rng = RandomNumberGenerator.Create())
-                {
-                    rng.GetBytes(randomBytes);
-                }
-                return Convert.ToBase64String(randomBytes); // Converted to Base64
-            }
     }
 }
 

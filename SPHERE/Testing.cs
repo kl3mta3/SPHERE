@@ -148,17 +148,17 @@ namespace SPHERE.TestingLib
                     Console.WriteLine("Initializing DHT and Routing Table...");
                     testNode.Client = client;
                     List<Peer> fakePeers = GenerateFakePeers(25);
-                    testNode.DHT = new DHT();
+                    testNode.ContactDHT = new DHT();
 
                     try
                     {
-                        PopulateTestDHTWithFakeBlocks(testNode.DHT, fakePeers, testNode.MaxPeers);
+                        PopulateTestDHTWithFakeBlocks(testNode.ContactDHT, fakePeers, testNode.MaxPeers);
                     }
                     catch (Exception ex)
                     {
                         Console.WriteLine($"Error Populating DHT: {ex.Message}");
                         Console.WriteLine("Resetting to Fresh DHT...");
-                        testNode.DHT = new DHT();
+                        testNode.ContactDHT = new DHT();
                     }
 
                     try
@@ -272,7 +272,7 @@ namespace SPHERE.TestingLib
 
             // Initialize client and DHT
             testNode.Client = client;
-            testNode.DHT = new DHT();
+            testNode.ContactDHT = new DHT();
             List<Peer> fakePeers = GenerateFakePeers(25);
 
             try
@@ -281,7 +281,7 @@ namespace SPHERE.TestingLib
 
 
                 Console.WriteLine("Starting with a fresh state.");
-                testNode.DHT = new DHT(); // Reinitialize
+                testNode.ContactDHT = new DHT(); // Reinitialize
 
             }
             catch (Exception ex)
@@ -364,12 +364,13 @@ namespace SPHERE.TestingLib
                             LastUpdateTime = DateTime.UtcNow,
                             EncryptionAlgorithm = "AES256",
                             KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
-                            PublicSignatureKey = peer.PublicSignatureKey, // Check for null PublicSignatureKey
-                            BlockHash = Guid.NewGuid().ToString() // Generate a unique BlockHash
+                            PublicSignatureKey = peer.PublicSignatureKey,
+                            PublicEncryptionKey = peer.PublicEncryptKey,
                         },
                         EncryptedContact = Convert.ToBase64String(Guid.NewGuid().ToByteArray()),
                         EncryptedLocalSymmetricKey = Guid.NewGuid().ToByteArray()
                     };
+                        block.Header.BlockHash = block.Header.CalculateBlockHash();
 
                     // Add the block to the DHT
                     dht.AddBlock(block);
@@ -786,8 +787,6 @@ namespace SPHERE.TestingLib
             Console.WriteLine(" Test node key pairs verified and stored (with exportable private keys)!");
         }
 
-
-
         public static void DeleteTestKeys()
         {
             Console.WriteLine(" Checking for test keys to delete...");
@@ -915,7 +914,7 @@ namespace SPHERE.TestingLib
             {
 
                
-                Console.WriteLine("Setting test Varable True.");
+                Console.WriteLine("Setting test Variable True.");
                 Environment.SetEnvironmentVariable("SPHERE_TEST_MODE", "true");
                 string testModeEnv = Environment.GetEnvironmentVariable("SPHERE_TEST_MODE");
                 Console.WriteLine($"SPHERE_TEST_MODE= {testModeEnv}.");
@@ -947,7 +946,7 @@ namespace SPHERE.TestingLib
                         {
                             if (totalPeersCountDown > 0)
                             {
-                                Console.WriteLine($"Peer ID: {peer.NodeId}, IP: {peer.NodeIP}, Port: {peer.NodePort}, Trust Score: {peer.TrustScore}");
+                                Console.WriteLine($"Peer ID: {peer.NodeId}, IP: {peer.NodeIP}, Port: {peer.NodePort}, Trust Score: {peer.Reputation}");
                                 totalPeersCountDown--;
                             }
                             else
@@ -957,11 +956,11 @@ namespace SPHERE.TestingLib
                         }
 
                         Console.WriteLine("\n=== DHT Blocks ===");
-                        int totalBlocks = testNode.DHT.GetTotalBlockCount();
+                        int totalBlocks = testNode.ContactDHT.GetTotalBlockCount();
                         Console.WriteLine($"\nDHT Contains {totalBlocks}..");
                         Console.WriteLine($"First 5 Blocks...");
                         int totalBlocksCountDown = 5;
-                        foreach (var block in testNode.DHT.GetCurrentState())
+                        foreach (var block in testNode.ContactDHT.GetCurrentState())
                         {
                             if (totalBlocksCountDown > 0)
                             {
@@ -1003,16 +1002,14 @@ namespace SPHERE.TestingLib
 
                     try
                     {
-
                         //Create a Full Fake Node DHT and RT and assign as HOST
-
                         CreateFakeNodeTest(1);
                         hostNode = GetFirstNode();
                         hostNode.Test_Mode = true;
                         Console.WriteLine($"Starting hostNode Listener at {hostNode.Client.clientIP}:{hostNode.Client.clientListenerPort}");
                         hostNode.Client.StartClientListenerAsync(hostNode, hostNode.Client);
                         Console.WriteLine($"hostNode Created Successfully");
-                        Console.WriteLine($"hostNode DHT size is Now {hostNode.DHT.GetTotalBlockCount()}");
+                        Console.WriteLine($"hostNode DHT size is Now {hostNode.ContactDHT.GetTotalBlockCount()}");
                         Console.WriteLine($"hostNode Routing Table size is Now {hostNode.RoutingTable.GetAllPeers().Count()}");
                     }
                     catch (Exception ex)
@@ -1023,14 +1020,13 @@ namespace SPHERE.TestingLib
                     Node babyNode = new Node();
                     try
                     {
-                        // Create a babyNode with no Rt or DHT. 
-                        
+                        // Create a babyNode with no Rt or DHT.   
                         babyNode = CreateTestNodeWithNoDHTorRoutingTable(NodeType.Full);
                         babyNode.Test_Mode = true;
                         Console.WriteLine($"babyNode Created Successfully");
                         Console.WriteLine($"Starting babyNode Listener at {babyNode.Client.clientIP}:{babyNode.Client.clientListenerPort}");
                         babyNode.Client.StartClientListenerAsync(babyNode, babyNode.Client);
-                        Console.WriteLine($"babyNode DHT size is Now {babyNode.DHT.GetTotalBlockCount()}");
+                        Console.WriteLine($"babyNode DHT size is Now {babyNode.ContactDHT.GetTotalBlockCount()}");
                         Console.WriteLine($"babyNode Routing Table size is Now {babyNode.RoutingTable.GetAllPeers().Count()}");
 
                     }
@@ -1044,18 +1040,16 @@ namespace SPHERE.TestingLib
                         // Send the Boot Strap. 
                         Console.WriteLine($"Attempting to send Bootstrap Request to {hostNode.Client.clientIP.ToString()}:{hostNode.Client.clientListenerPort} with key of {hostNode.Peer.PublicEncryptKey}.");
 
-                        await babyNode.SendBootstrapRequest(hostNode.Client.clientIP.ToString(), hostNode.Client.clientListenerPort, hostNode.Peer.PublicEncryptKey);
+                        await Bootstrap.SendBootstrapRequest(babyNode, hostNode.Client.clientIP.ToString(), hostNode.Client.clientListenerPort, hostNode.Peer.PublicEncryptKey);
 
                     }
                     catch (Exception ex)
                     {
-
-
                         Console.WriteLine($"Error: Failed to send BootStrapRequest");
                     }
 
-                    await Task.Delay(100); // A slight delay to allow async operations to settle (optional)
-                    Console.WriteLine($"Final babyNode DHT size: {babyNode.DHT.GetTotalBlockCount()}");
+                    await Task.Delay(300); // A slight delay to allow async operations to settle (optional)
+                    Console.WriteLine($"Final babyNode DHT size: {babyNode.ContactDHT.GetTotalBlockCount()}");
                     Console.WriteLine($"Final babyNode Routing Table size: {babyNode.RoutingTable.GetAllPeers().Count()}");
 
                 }
@@ -1065,7 +1059,7 @@ namespace SPHERE.TestingLib
 
                     Console.WriteLine($"Failed To TestBootStrap Process: {ex.Message}");
                 }
-
+                Console.ReadLine();
             }
 
             public static async Task TestBrodcastToPeers()
@@ -1148,7 +1142,7 @@ namespace SPHERE.TestingLib
 
                     // Broadcasting network connection
                     Console.WriteLine("Debug-TestBrodcastToPeers: babyNode Broadcasting Connection to Network...");
-                    await babyNode.BrodcastConnectionToNetwork();
+                    await babyNode.NetworkManager.BroadcastConnectionToNetwork(babyNode);
                     Console.WriteLine("Debug-TestBrodcastToPeers: babyNode Broadcast completed.");
 
                     // Print routing table sizes AFTER broadcast
@@ -1170,13 +1164,12 @@ namespace SPHERE.TestingLib
                     Console.WriteLine($"Debug-TestBrodcastToPeers: [ERROR] Stack Trace: {ex.StackTrace}");
                     throw;
                 }
+                Console.ReadLine();
             }
 
             public static void AddNodeToNodes(Node node)
             {
                 Nodes.Add(node);
-
-
             }
 
             public static Node GetTestNodeByID(int id)

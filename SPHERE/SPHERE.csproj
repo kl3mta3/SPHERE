@@ -8,7 +8,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>SPHERE</PackageId>
 
-    <Version>1.9.4</Version>
+    <Version>1.9.6</Version>
     <Authors>Kenneth Lasyone</Authors>
     <Company>MonoBehaviour</Company>
     <Description>SPHERE (Secure Peer-to-Peer Hosted Encryption Record Exchange) is a robust framework designed for secure, decentralized communication and data sharing. The framework prioritizes user privacy, data integrity, and seamless encryption management while allowing for versatile application development.</Description>

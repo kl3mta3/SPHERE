@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 public class RoutingTable
@@ -72,6 +73,49 @@ public class RoutingTable
         }
     }
 
+
+    public void UpdatePeer(Peer updatedPeer)
+    {
+        lock (_lock)
+        {
+            try
+            {
+                Peer existingPeer= null;
+
+                try
+                {
+                    existingPeer = GetPeerByID(updatedPeer.NodeId);    
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error updating peer: {ex.Message}");
+                    return;
+                }
+
+                if (existingPeer != null)
+                {
+                    // Update the existing peer's information
+                    existingPeer.NodeIP = updatedPeer.NodeIP;
+                    existingPeer.NodePort = updatedPeer.NodePort;
+                    existingPeer.PublicSignatureKey = updatedPeer.PublicSignatureKey;
+                    existingPeer.PublicEncryptKey = updatedPeer.PublicEncryptKey;
+                    existingPeer.LastSeen = DateTime.UtcNow;
+                }
+                else
+                {
+                    AddPeer(updatedPeer);
+                    Console.WriteLine($"Peer {updatedPeer.NodeId} was not found, added as new.");
+                }
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating peer: {ex.Message}");
+                throw;
+            }
+        }
+    }
+
     public List<Peer> GetClosestPeers(string targetId, int count)
     {
         lock (_lock)
@@ -121,7 +165,7 @@ public class RoutingTable
         return 255 - (int)Math.Log2((double)distance);
     }
 
-    private static BigInteger CalculateXorDistance(string localNodeId, string nodeId)
+    public static BigInteger CalculateXorDistance(string localNodeId, string nodeId)
     {
         if (string.IsNullOrWhiteSpace(localNodeId) || string.IsNullOrWhiteSpace(nodeId))
         {
@@ -289,27 +333,26 @@ public class RoutingTable
             var existingPeer = Peers.FirstOrDefault(p => p.NodeId == peer.NodeId);
             if (existingPeer != null)
             {
-                // Move the existing peer to the end of the list (LRU logic)
-                Peers.Remove(existingPeer);
-                Peers.Add(peer);
+                // Peer already exists, update its information
+                node.RoutingTable.UpdatePeer(peer);
                 return;
             }
 
             if (Peers.Count >= maxSize)
             {
                 // Identify the peer with the lowest trust score
-                Peer leastTrustedPeer = Peers.OrderBy(p => p.TrustScore).First();
+                Peer leastTrustedPeer = Peers.OrderBy(p => p.Reputation).First();
 
                 // Optionally ping the least trusted peer to confirm it's alive
 
-                bool isAlive = await Node.PingPeerAsync(this.node, peer);
-                if (isAlive)
+                bool isAlive = await NetworkManager.PingPeerAsync(this.node, leastTrustedPeer);
+                if (!isAlive)
                 {
               
                     Peers.Remove(leastTrustedPeer);
                     Console.WriteLine($"Removed least trusted and unresponsive peer: {leastTrustedPeer.NodeId}");
                 }
-                else if (peer.TrustScore > leastTrustedPeer.TrustScore)
+                else if (peer.Reputation > leastTrustedPeer.Reputation)
                 {
                     // Replace the least trusted peer if the new peer has a higher trust score
                     Peers.Remove(leastTrustedPeer);
@@ -327,12 +370,80 @@ public class RoutingTable
 
         public void RemovePeer(string nodeId)
         {
-            Peers.RemoveAll(p => p.NodeId == nodeId);
+            try
+            {                 
+                Peers.RemoveAll(p => p.NodeId == nodeId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in RemovePeer: {ex.Message}");
+                throw;
+            }
+
         }
 
         public Peer GetPeer(string nodeId)
         {
-            return Peers.FirstOrDefault(p => p.NodeId == nodeId);
+            try
+            {
+                Peer peer = Peers.FirstOrDefault(p => p.NodeId == nodeId);
+                if (peer == null)
+                {
+                    Console.WriteLine($"Peer with NodeId '{nodeId}' not found in the bucket.");
+                    return null;
+                }
+                else
+                {
+                    return peer;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GetPeer: {ex.Message}");
+                throw;
+            }
+
+        }
+
+
+
+        public void UpdateRoutingTable(RoutingTable table, IEnumerable<Peer> bootstrapPeers)
+        {
+            lock (table._lock)
+            {
+                foreach (var peer in bootstrapPeers)
+                {
+                   table.AddPeer(peer); 
+                }
+            }
+        }
+
+        public List<Peer> SelectPeersForRoutingTable(IEnumerable<Peer> candidatePeers)
+        {
+            return candidatePeers
+                .OrderBy(peer => peer.CalculateProximity(peer)) // Sort by proximity or a custom metric
+                .Take(10) // Limit the number of peers
+                .ToList();
+        }
+
+        public void RebuildRoutingTable(RoutingTable table)
+        {
+            lock (table._lock)
+            {
+                // Get all peers from the routing table
+                List<Peer> allPeers = table.GetAllPeers();
+
+                // Clear the current routing table
+                table.ClearRoutingTable();
+
+                // Re-add peers to the routing table, sorted by TrustScore and proximity
+                foreach (var peer in allPeers
+                    .OrderByDescending(peer => peer.Reputation)
+                    .ThenBy(peer => peer.CalculateProximity(peer)))
+                {
+                    table.AddPeer(peer);
+                }
+            }
         }
     }
 }

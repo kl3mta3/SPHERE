@@ -53,11 +53,11 @@ namespace SPHERE.Networking
         public Packet.PacketReader packetReader;
 
         public IPAddress clientIP;
-        public int clientListenerPort = 0;                             //Port for listening to incoming messages Should be static and provided to other clinets 
+        public int clientListenerPort = 0;                             
         public int clientCommunicationPort;
 
-
-            public static async Task<bool> SendPacketToPeerAsync(string ip, int port, byte[] encryptedData)
+        //Send a packet to a peer async
+        public static async Task<bool> SendPacketToPeerAsync(string ip, int port, byte[] encryptedData)
         {
             
             
@@ -178,14 +178,15 @@ namespace SPHERE.Networking
                     Console.WriteLine($"Error-SendPacketToPeerAsync: {ex.Message}");
                     return false;
                 }
-         }
+            }
 
-            public async Task RebroadcastToPeerList(Node node, Packet packet)
+        //Broadcast a packet to all peers in the peer list async
+        public async Task BroadcastToPeerList(Node node, Packet packet)
             {
                 try
                 {
 
-                   // string normalizedContent = JsonSerializer.Serialize(JsonSerializer.Deserialize<object>(packet.Content), new JsonSerializerOptions { WriteIndented = false });
+                   
                     string packetHash = ComputeHash(packet.Content); // Hash only the static parts
 
                     if (node.seenPackets.ContainsKey(packetHash))
@@ -250,7 +251,7 @@ namespace SPHERE.Networking
         }
 
 
-            private static async Task SendFullyAsync(NetworkStream stream, byte[] data)
+        private static async Task SendFullyAsync(NetworkStream stream, byte[] data)
             {
                 int totalSent = 0;
                 while (totalSent < data.Length)
@@ -262,19 +263,19 @@ namespace SPHERE.Networking
             }
 
 
-            public static void SetListenerPort(Client client, int port)
+        public static void SetListenerPort(Client client, int port)
             {
                 client.clientListenerPort = port;
 
             }
 
-            public static void SetListenerIP(Client client, IPAddress iPAddress)
+        public static void SetListenerIP(Client client, IPAddress iPAddress)
             {
                 client.clientIP = iPAddress;
 
             }
 
-            public void SetListenerPortWithSTUN(Client client)
+        public void SetListenerPortWithSTUN(Client client)
             {
                 var stun = new STUN();
                 var (PublicIP, PublicPort) = stun.GetPublicEndpoint();
@@ -282,7 +283,7 @@ namespace SPHERE.Networking
                 client.clientListenerPort = PublicPort;
             }
 
-            public static int FindAvailablePort()
+        public static int FindAvailablePort()
             {
                 for (int port = StartPort; port <= EndPort; port++)
                 {
@@ -296,7 +297,7 @@ namespace SPHERE.Networking
                 throw new Exception("No available ports found in the specified range.");
             }
 
-            private static bool IsPortAvailableAsync(int port)
+        private static bool IsPortAvailableAsync(int port)
             {
 
                 try
@@ -315,7 +316,7 @@ namespace SPHERE.Networking
 
             }
 
-            public async Task StartClientListenerAsync(Node node, Client client)
+        public async Task StartClientListenerAsync(Node node, Client client)
             {
                 try
                 {
@@ -350,7 +351,7 @@ namespace SPHERE.Networking
                 }
             }
 
-            public async Task StartClientListenerWithSTUNAsync(Node node, Client client)
+        public async Task StartClientListenerWithSTUNAsync(Node node, Client client)
             {
                 try
                 {
@@ -400,9 +401,8 @@ namespace SPHERE.Networking
                 }
             }
 
-
-            // Synchronous method to start the client listener using STUN
-            public void StartClientListenerWithSTUNSync(Node node, Client client)
+        // Synchronous method to start the client listener using STUN
+        public void StartClientListenerWithSTUNSync(Node node, Client client)
             {
                 try
                 {
@@ -440,8 +440,7 @@ namespace SPHERE.Networking
                 }
             }
 
-
-            private async Task HandleClientAsync(Node node, TcpClient client)
+        private async Task HandleClientAsync(Node node, TcpClient client)
             {
                 try
                 {
@@ -456,14 +455,25 @@ namespace SPHERE.Networking
                             var (encryptedMessage, senderPublicEncryptionKey, signature) = await reader.ReadMessage();
 
                             // Ensure values are valid before processing
-                            if (encryptedMessage == null || senderPublicEncryptionKey == null || signature == null)
+                            if (encryptedMessage == null )
                             {
-                                Console.WriteLine("Error-HandleClientAsync: Received an invalid packet. Closing connection.");
+                                Console.WriteLine("Error-HandleClientAsync: Received an invalid packet. Encrypted Message is null Closing connection.");
                                 break;
+                            }
+                            if(senderPublicEncryptionKey == null)
+                            {
+                                Console.WriteLine("Error-HandleClientAsync: Received an invalid packet. senderPublicEncryptionKey is null Closing connection.");
+                                break;
+
+                            }
+                            if (signature == null)
+                            {
+                                Console.WriteLine("Error-HandleClientAsync: Received an invalid packet. signature is null Closing connection.");
+                                break;
+
                             }
 
                             int receivedPacketSize = senderPublicEncryptionKey.Length + encryptedMessage.Length + 4;
-                           
 
                             // Check for unexpected key length mismatches
                             if (senderPublicEncryptionKey.Length != 72 && senderPublicEncryptionKey.Length != 91)
@@ -472,7 +482,7 @@ namespace SPHERE.Networking
                             }
 
                             // Process message 
-                            ProcessIncomingPacket(node, encryptedMessage, senderPublicEncryptionKey, signature);
+                            await ProcessIncomingPacket(node, encryptedMessage, senderPublicEncryptionKey, signature);
                         }
                         catch (EndOfStreamException eosEx)
                         {
@@ -516,13 +526,13 @@ namespace SPHERE.Networking
                 }
             }
 
-            bool IsBase64String(string input)
+        bool IsBase64String(string input)
             {
                 input = input.Trim();
                 return (input.Length % 4 == 0) && Regex.IsMatch(input, @"^[a-zA-Z0-9\+/]*={0,2}$", RegexOptions.None);
             }
 
-            public static string ComputeHash(string input)
+        public static string ComputeHash(string input)
             {
                 using (SHA256 sha256 = SHA256.Create())
                 {
@@ -531,155 +541,186 @@ namespace SPHERE.Networking
                 }
             }
 
-            public async Task ProcessIncomingPacket(Node node, byte[] packetData, byte[] senderPublicEncryptKey, byte[] signature)
+        public async Task ProcessIncomingPacket(Node node, byte[] packetData, byte[] senderPublicEncryptKey, byte[] signature)
+        {
+            
+            Console.WriteLine($"Debug-ProcessIncomingPacket: Processing Incoming Encrypted.");
+            try
+            {
+                Packet packet = new Packet();
+                packet.Header = new PacketHeader();
+
+                bool isTesting = Environment.GetEnvironmentVariable("SPHERE_TEST_MODE") == "true";
+
+                if (isTesting)
                 {
-                    Console.WriteLine($"Debug-ProcessIncomingPacket: Processing Incoming Encrypted.");
                     try
                     {
-                        Packet packet = new Packet();
-                        packet.Header = new PacketHeader();
-                        bool isTesting = Environment.GetEnvironmentVariable("SPHERE_TEST_MODE") == "true";
-                        if (isTesting)
+
+                        byte[] recipientsPublicKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateTestNodeEncryptionKey);
+
+                        //  Decrypt using both the sender’s public key & recipient’s private key
+                        byte[] decryptedData = Encryption.DecryptPacketWithPrivateKey(packetData, senderPublicEncryptKey);
+
+                        packet = PacketBuilder.DeserializePacket(decryptedData);
+
+                        try
                         {
-                            try
+                            //Store a Hash of the Packet Content to check and prevent processing duplicate packets. 
+                            string normalizedContent = JsonSerializer.Serialize(JsonSerializer.Deserialize<object>(packet.Content), new JsonSerializerOptions { WriteIndented = false });
+                            string packetHash = ComputeHash(normalizedContent); // Hash only the static parts
+
+                            if (node.seenPackets.ContainsKey(packetHash))
                             {
+                                Console.WriteLine("Duplicate packet detected. Dropping...");
+                                return;
+                            }
 
-                                byte[] recipientsPublicKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateTestNodeEncryptionKey);
-
-                                //  Decrypt using both the sender’s public key & recipient’s private key
-                                byte[] decryptedData = Encryption.DecryptPacketWithPrivateKey(packetData, senderPublicEncryptKey);
+                            //  Use TryAdd to prevent overwrites from race conditions
+                            if (node.seenPackets.TryAdd(packetHash, DateTime.UtcNow))
+                            {
+                                Console.WriteLine($"Debug-ProcessIncomingPacket: Storing new packet hash {packetHash}");
+                            }
+                        }
                         
-                               
-                                packet = PacketBuilder.DeserializePacket(decryptedData);
-
-
-                                //Store a Hash of the Packet Content to check and prevent processing duplicate packets. 
-                                string normalizedContent = JsonSerializer.Serialize(JsonSerializer.Deserialize<object>(packet.Content), new JsonSerializerOptions { WriteIndented = false });
-                                string packetHash = ComputeHash(normalizedContent); // Hash only the static parts
-
-                                if (node.seenPackets.ContainsKey(packetHash))
-                                {
-                                    Console.WriteLine("Duplicate packet detected. Dropping...");
-                                    return;
-                                }
-
-                                //  Use TryAdd to prevent overwrites from race conditions
-                                if (node.seenPackets.TryAdd(packetHash, DateTime.UtcNow))
-                                {
-                                    Console.WriteLine($"Debug-RebroadcastToPeerList: Storing new packet hash {packetHash}");
-                                }
-
-
-                                byte[] sendersPublicSignatureKey = packet.Header.PublicSignatureKey;
-
-
-                                byte[] rawSignature = Convert.FromBase64String(packet.Signature);
-
-                                bool isValidSignature = SignatureGenerator.VerifyByteArray(packetData, rawSignature, sendersPublicSignatureKey);
-
-                                if (!isValidSignature)
-                                {
-                                    Console.WriteLine("Error-HandleClientAsync: Invalid Signature! Packet rejected.");
-                                    return;
-                                }
-
-                            }
-                            catch (Exception ex)
-                            {
-                            }
-                        }
-                        else
+                        catch (Exception ex)
                         {
-                            try
-                            {
-                                byte[] recipientsPublicKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeEncryptionKey);
-
-                                //  Decrypt using both the sender’s public key & recipient’s private key
-                                byte[] decryptedData = Encryption.DecryptPacketWithPrivateKey(packetData, senderPublicEncryptKey);
-
-
-                                packet = PacketBuilder.DeserializePacket(decryptedData);
-
-
-                                //Store a Hash of the Packet Content to check and prevent processing duplicate packets. 
-                                string normalizedContent = JsonSerializer.Serialize(JsonSerializer.Deserialize<object>(packet.Content), new JsonSerializerOptions { WriteIndented = false });
-                                string packetHash = ComputeHash(normalizedContent); // Hash only the static parts
-
-                                if (node.seenPackets.ContainsKey(packetHash))
-                                {
-                                    Console.WriteLine("Duplicate packet detected. Dropping...");
-                                    return;
-                                }
-
-                                //  Use TryAdd to prevent overwrites from race conditions
-                                if (node.seenPackets.TryAdd(packetHash, DateTime.UtcNow))
-                                {
-                                    Console.WriteLine($"Debug-RebroadcastToPeerList: Storing new packet hash {packetHash}");
-                                }
-
-
-                                byte[] sendersPublicSignatureKey = packet.Header.PublicSignatureKey;
-
-
-                                byte[] rawSignature = Convert.FromBase64String(packet.Signature);
-
-                                bool isValidSignature = SignatureGenerator.VerifyByteArray(packetData, rawSignature, sendersPublicSignatureKey);
-
-                                if (!isValidSignature)
-                                {
-                                    Console.WriteLine("Error-HandleClientAsync: Invalid Signature! Packet rejected.");
-                                    return;
-                                }
-
+                            Console.WriteLine($"Error-ProcessIncomingPacket: Error processing packet(Preventing Duplicates): {ex.Message}");
                         }
-                            catch (Exception ex)
+
+                        try
+                        {
+                            byte[] sendersPublicSignatureKey = packet.Header.PublicSignatureKey;
+                            Console.WriteLine($"Debug-ProcessIncomingPacket: Sender Public Signature Key: {Convert.ToBase64String(sendersPublicSignatureKey)}.");
+                            Console.WriteLine($"Debug-ProcessIncomingPacket: Raw Signature Before Decoding: {packet.Signature}");
+                            byte[] rawSignature = Convert.FromBase64String(packet.Signature);
+                            Console.WriteLine($"Debug-ProcessIncomingPacket: Raw Signature: {Convert.ToBase64String(rawSignature)}.");
+                            bool isValidSignature = SignatureGenerator.VerifyByteArray(packetData, rawSignature, sendersPublicSignatureKey);
+
+                            if (!isValidSignature)
                             {
+                                Console.WriteLine("Error-ProcessIncomingPacket: Invalid Signature! Packet rejected.");
+                                return;
                             }
                         }
-
-                        PacketBuilder.PacketType type = ParsePacketType(packet.Header.Packet_Type);
-
-                        switch (type)
+                        catch (Exception ex)
                         {
-                            case PacketBuilder.PacketType.BootstrapRequest:
-                                await node.SendBootstrapResponse(packet);
-                                break;
-
-                            case PacketBuilder.PacketType.BootstrapResponse:
-                                await node.ProcessBootstrapResponse(packet);
-                                break;
-
-                            case PacketBuilder.PacketType.Ping:
-                                await node.RespondToPingAsync(packet);
-                                break;
-
-                            case PacketBuilder.PacketType.BrodcastConnection:
-                                await node.PeerListResponse(packet);
-                                break;
-
-                            case PacketBuilder.PacketType.PeerUpdate:
-                                await node.ProcessPeerListResponse(packet);
-                                break;
-
-                    default:
-                                Console.WriteLine($"ProcessIncomingPacket:Unknown packet type: {packet.Header.Packet_Type}");
-                                break;
+                            Console.WriteLine($"Error-ProcessIncomingPacket: Error processing packet(ValidatingSignature): {ex.Message}");
                         }
+                    }
+                    
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error-ProcessIncomingPacket: Error processing packet: {ex.Message}");
+                    }
+                
+                }
+                else
+                {
+                    try
+                    {
+                        byte[] recipientsPublicKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeEncryptionKey);
+
+                        //  Decrypt using both the sender’s public key & recipient’s private key
+                        byte[] decryptedData = Encryption.DecryptPacketWithPrivateKey(packetData, senderPublicEncryptKey);
+
+                        packet = PacketBuilder.DeserializePacket(decryptedData);
+
+                        //Store a Hash of the Packet Content to check and prevent processing duplicate packets. 
+                        string normalizedContent = JsonSerializer.Serialize(JsonSerializer.Deserialize<object>(packet.Content), new JsonSerializerOptions { WriteIndented = false });
+                        string packetHash = ComputeHash(normalizedContent); // Hash only the static parts
+
+                        if (node.seenPackets.ContainsKey(packetHash))
+                        {
+                            Console.WriteLine("Duplicate packet detected. Dropping...");
+                            return;
+                        }
+
+                        //  Use TryAdd to prevent overwrites from race conditions
+                        if (node.seenPackets.TryAdd(packetHash, DateTime.UtcNow))
+                        {
+                            Console.WriteLine($"Debug-ProcessIncomingPacket: Storing new packet hash {packetHash}");
+                        }
+
+                        byte[] sendersPublicSignatureKey = packet.Header.PublicSignatureKey;
+
+                        byte[] rawSignature = Convert.FromBase64String(packet.Signature);
+
+                        bool isValidSignature = SignatureGenerator.VerifyByteArray(packetData, rawSignature, sendersPublicSignatureKey);
+
+                        if (!isValidSignature)
+                        {
+                            Console.WriteLine("Error-ProcessIncomingPacket: Invalid Signature! Packet rejected.");
+                            return;
+                        }
+
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"ProcessIncomingPacket: Error processing packet: {ex.Message}");
+                        Console.WriteLine($"Error-ProcessIncomingPacket: Error processing packet: {ex.Message}");
                     }
                 }
 
+                PacketBuilder.PacketType packetType = ParsePacketType(packet.Header.Packet_Type);
+
+                switch (packetType)
+                {
+                    case PacketBuilder.PacketType.BootstrapRequest:
+                            await Bootstrap.SendBootstrapResponse(node, packet);
+                            break;
+
+                    case PacketBuilder.PacketType.BootstrapResponse:
+                            await Bootstrap.ProcessBootstrapResponse(node, packet);
+                            break;
+
+                    case PacketBuilder.PacketType.Ping:
+                            await node.NetworkManager.RespondToPingAsync(node, packet);
+                            break;
+
+                    case PacketBuilder.PacketType.Pong:
+                            await node.NetworkManager.ProcessPongAsync(node, packet);
+                            break;
+
+                    case PacketBuilder.PacketType.GetRequest:
+                            await node.NetworkManager.RespondToGetRequest(node, packet);
+                            break;
+
+                    case PacketBuilder.PacketType.BrodcastConnection:
+                            await node.NetworkManager.PeerListResponse(node, packet);
+                            break;
+
+                    case PacketBuilder.PacketType.PeerUpdate:
+                            await node.Peer.ProcessPeerListResponse(node, packet);
+                            break;
+
+                    case PacketBuilder.PacketType.SyncDHTRequest:
+                        await DHTManagement.ProcessSyncDHTRequest(node, packet);
+                        break;
+
+                    case PacketBuilder.PacketType.SyncDHTResponse:
+                        await DHTManagement.ProcessSyncDHTResponse(node, packet);
+                        break;
+
+
+                    default:
+                        Console.WriteLine($"ProcessIncomingPacket:Unknown packet type: {packet.Header.Packet_Type}");
+                        break;
+                }
             }
+            catch (Exception ex)
+            {
+               Console.WriteLine($"ProcessIncomingPacket: Error processing packet: {ex.Message}");
+            }
+        }
+
+    }
         /// <summary>
-        /// The STUN server is used to get an IP and port that is open for listening for traffic without needing pinholes or portforwarding. 
-        /// It needs to be ran evertime a listener is started. It reaches out to a list of known STUN servers and then parses the response it gets to get a valid usable IP an port.
+        /// The STUN server is used to get an IP and port that is open for listening for traffic without needing pinholes or port forwarding. 
+        /// It needs to be ran every time a listener is started. It reaches out to a list of known STUN servers and then parses the response it gets to get a valid usable IP an port.
         /// 
-        /// The implimentation here is limited and needs TURN to also be included for somesituations. This as it sits is a basic prototyped temporary implementation.
+        /// The implementation here is limited and needs TURN to also be included for some situations. This as it sits is a basic prototyped temporary implementation.
         /// 
-        /// Futureistlly everynode should have the ability to act as a stun server or atleast full Nodes. The app can use the provided ip and port for bootstraping, to first send a STUN request.
+        /// Futureistlly every node should have the ability to act as a stun server or at least full Nodes. The app can use the provided ip and port for bootstrapping, to first send a STUN request.
         /// It will then get its IP and port back, set up its listener, then send its bootstrap request and wait to get its peers and the Chain or shards.
         /// 
         /// </summary>
