@@ -13,7 +13,7 @@ namespace SPHERE.Configure
         
         private CancellationTokenSource _cts;
         private readonly List<Task> _runningTasks = new();
-
+        internal List<ScheduledTask> _tasks = new();
         public class ScheduledTask
         {
             // The task delegate to execute periodically.
@@ -33,7 +33,7 @@ namespace SPHERE.Configure
                 if (TaskMap.TryGetValue(task, out var taskFunc))
                 {
                     
-                    TimeSpan interval = CleanupTasks.TaskIntervals.TryGetValue(task.ToString(), out TimeSpan taskInterval)
+                    TimeSpan interval = CleanupTasks.TaskIntervals.TryGetValue(task, out TimeSpan taskInterval)
                                           ? taskInterval
                                           : TimeSpan.FromHours(24); // Fall back interval if not found
 
@@ -45,7 +45,7 @@ namespace SPHERE.Configure
                         Interval = interval,
                         TaskFunc = async (ct) =>
                         {
-                            await taskFunc(ct);
+                            await taskFunc(node, ct);
                         }
                     });
                 }

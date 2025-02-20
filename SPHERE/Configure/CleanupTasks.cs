@@ -36,31 +36,56 @@ namespace SPHERE.Configure
         }
 
         // Dictionary mapping each StartupTasks enum value to a function that returns a Task.
-        public static Dictionary<StartupTasks, Func<CancellationToken, Task>> TaskMap { get; } =
-            new Dictionary<StartupTasks, Func<CancellationToken, Task>>
-        {
-        { StartupTasks.AutoCleanupSeenPacketCache, ct => CleanupTasks.AutoCleanupSeenPacketCache(Node) },
-        { StartupTasks.AutoCleanupIssuedTokens, ct => CleanupTasks.AutoCleanupIssuedTokens(Node) },
-        { StartupTasks.AutoCleanupTokensPendingRemoval, ct => CleanupTasks.AutoCleanupTokensPendingRemoval(Node) },
-        { StartupTasks.AutoEarnTokensOverTime, ct => CleanupTasks.AutoEarnTokensOverTime(Node) },
-        { StartupTasks.AutoBroadcastPeerPing, ct => CleanupTasks.AutoBroadcastPeerPing(Node) },
-        { StartupTasks.AutoPeriodicRebalance, ct => CleanupTasks.AutoPeriodicRebalance(Node, ct) },
-        { StartupTasks.AutoCleanUpPingPals, ct => CleanupTasks.AutoCleanUpPingPals(Node, ct) },
-        { StartupTasks.AutoCleanupTokenBalance, ct => CleanupTasks.AutoCleanupTokenBalance(Node, ct) }
-        };
+        public static Dictionary<StartupTasks, Func<Node, CancellationToken, Task>> TaskMap =
+            new Dictionary<StartupTasks, Func<Node, CancellationToken, Task>>
+            {
+                [StartupTasks.AutoCleanupSeenPacketCache] = async (node, ct) =>
+                {
+                    // Pass node into your cleanup method
+                    await CleanupTasks.AutoCleanupSeenPacketCache(node);
+                },
+                [StartupTasks.AutoCleanupIssuedTokens] = async (node, ct) =>
+                {
+                    await CleanupTasks.AutoCleanupIssuedTokens(node);
+                },
+                [StartupTasks.AutoCleanupTokensPendingRemoval] = async (node, ct) =>
+                {
+                    await CleanupTasks.AutoCleanupTokensPendingRemoval(node);
+                },
+                [StartupTasks.AutoEarnTokensOverTime] = async (node, ct) =>
+                {
+                    await CleanupTasks.AutoEarnTokensOverTime(node);
+                },
+                [StartupTasks.AutoBroadcastPeerPing] = async (node, ct) =>
+                {
+                    await CleanupTasks.AutoBroadcastPeerPing(node);
+                },
+                [StartupTasks.AutoPeriodicRebalance] = async (node, ct) =>
+                {
+                    await CleanupTasks.AutoPeriodicRebalance(node, ct);
+                },
+                [StartupTasks.AutoCleanUpPingPals] = async (node, ct) =>
+                {
+                    await CleanupTasks.AutoCleanUpPingPals(node, ct);
+                },
+                [StartupTasks.AutoCleanupTokenBalance] = async (node, ct) =>
+                {
+                    await CleanupTasks.AutoCleanupTokenBalance(node, ct);
+                },
+            };
 
 
         // Dictionary mapping cleanup task names to their intervals.
-        public static Dictionary<string, TimeSpan> TaskIntervals { get; } = new Dictionary<string, TimeSpan>
+        public static Dictionary<StartupTasks, TimeSpan> TaskIntervals { get; } = new Dictionary<StartupTasks, TimeSpan>
         {
-        { "AutoCleanupSeenPacketCache", TimeSpan.FromMinutes(1) },
-        { "AutoCleanupIssuedTokens", TimeSpan.FromHours(12) },
-        { "AutoCleanupTokensPendingRemoval", TimeSpan.FromHours(12) },
-        { "AutoEarnTokensOverTime", TimeSpan.FromHours(24) },
-        { "AutoBroadcastPeerPing", TimeSpan.FromHours(24) },
-        { "AutoPeriodicRebalance", TimeSpan.FromDays(14) },
-        { "AutoCleanUpPingPals", TimeSpan.FromHours(24) },
-        { "AutoCleanupTokenBalance", TimeSpan.FromHours(24) }
+        { StartupTasks.AutoCleanupSeenPacketCache, TimeSpan.FromMinutes(1) },
+        { StartupTasks.AutoCleanupIssuedTokens, TimeSpan.FromHours(12) },
+        { StartupTasks.AutoCleanupTokensPendingRemoval, TimeSpan.FromHours(12) },
+        { StartupTasks.AutoEarnTokensOverTime, TimeSpan.FromHours(24) },
+        { StartupTasks.AutoBroadcastPeerPing, TimeSpan.FromHours(24) },
+        { StartupTasks.AutoPeriodicRebalance, TimeSpan.FromDays(14) },
+        { StartupTasks.AutoCleanUpPingPals, TimeSpan.FromHours(24) },
+        { StartupTasks.AutoCleanupTokenBalance, TimeSpan.FromHours(24) }
         };
 
 
