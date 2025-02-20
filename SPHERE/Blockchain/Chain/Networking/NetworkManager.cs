@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -109,8 +110,52 @@ namespace SPHERE.Networking
 
         }
 
+
+
+        //-----Pings-----\\
+
+        //Ping a single peer. Returns True or false based on successful ping. 
+        public async Task<bool> PingPeerAsync(Node node, Peer peer)
+        {
+            try
+            {
+                // Send a small ping packet to the peer
+                Packet pingPacket = new Packet
+                {
+                    Header = new Packet.PacketHeader
+                    {
+                        NodeId = node.Peer.NodeId,
+                        IPAddress = node.Peer.NodeIP,
+                        Port = node.Peer.NodePort.ToString(),
+                        PublicSignatureKey = node.Peer.PublicSignatureKey,
+                        PublicEncryptKey = node.Peer.PublicEncryptKey,
+                        Packet_Type = "Ping",
+                        TTL = "1"
+                    },
+                    Content = Convert.ToBase64String(Encoding.UTF8.GetBytes("PingRequest")),
+                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Encoding.UTF8.GetBytes("PingRequest")))
+                };
+
+                // Send the ping and wait for a response
+                bool success = await Client.SendPacketToPeerAsync(
+                    peer.NodeIP,
+                    peer.NodePort,
+                    Encoding.UTF8.GetBytes(pingPacket.Content)
+
+
+                );
+
+                return success; // Return true if the ping was successful
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error pinging peer {peer.NodeId}: {ex.Message}");
+                return false; // Return false if there was an error
+            }
+        }
+
         // Send response to a Ping request.
-        public async Task RespondToPingAsync(Node node, Packet packet)
+        public async Task PongPeerAsync(Node node, Packet packet)
         {
 
             try
@@ -239,47 +284,157 @@ namespace SPHERE.Networking
         }
 
 
-        //-----Pings-----\\
 
-        //Ping a single peer. Returns True or false based on successful ping. 
-        public static async Task<bool> PingPeerAsync(Node node, Peer peer)
+        //Send PingPal Request.
+        public async Task<bool> PingPalAsync(Node node, Peer peer)
         {
             try
             {
-                // Send a small ping packet to the peer
-                Packet pingPacket = new Packet
+
+                Packet responsePacket = new Packet
                 {
                     Header = new Packet.PacketHeader
                     {
                         NodeId = node.Peer.NodeId,
-                        IPAddress = node.Peer.NodeIP,
-                        Port = node.Peer.NodePort.ToString(),
-                        PublicSignatureKey = node.Peer.PublicSignatureKey,
-                        PublicEncryptKey = node.Peer.PublicEncryptKey,
-                        Packet_Type = "Ping",
+                        IPAddress = node.Client.clientIP.ToString(),
+                        Port = node.Client.clientListenerPort.ToString(),
+                        PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
+                        PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
+                        Packet_Type = Packet.PacketBuilder.PacketType.PingPal.ToString(),
                         TTL = "1"
                     },
-                    Content = Convert.ToBase64String(Encoding.UTF8.GetBytes("PingRequest")),
-                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Encoding.UTF8.GetBytes("PingRequest")))
+                    Content = Convert.ToBase64String(Encoding.UTF8.GetBytes("PingPal")),
+                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Encoding.UTF8.GetBytes("PingPal")))
                 };
+
+                byte[] data = Packet.PacketBuilder.SerializePacket(responsePacket);
+
+                byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(data, peer.PublicEncryptKey);
 
                 // Send the ping and wait for a response
                 bool success = await Client.SendPacketToPeerAsync(
                     peer.NodeIP,
                     peer.NodePort,
-                    Encoding.UTF8.GetBytes(pingPacket.Content)
-
-
+                    encryptedData
                 );
 
-                return success; // Return true if the ping was successful
+                if (!success)
+                {
+                    Console.WriteLine($"Failed to send PingPal to {peer.NodeId}");
+                    return false;
+                }
+                else
+                {
+                    Console.WriteLine($"Successfully sent PingPal to {peer.NodeId}");
+                    return success;
+                }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error pinging peer {peer.NodeId}: {ex.Message}");
-                return false; // Return false if there was an error
+                return false; 
             }
         }
+
+        //Send PongPal Response.
+        public async Task RespondToPingPalAsync(Node node, Packet packet)
+        {
+
+            try
+            {
+                Peer senderPeer= Peer.CreatePeerFromPacket(packet);
+
+                // Validate the incoming packet
+                if (packet == null || packet.Header == null || senderPeer == null)
+                {
+                    Console.WriteLine("Invalid pong pal request packet.");
+                    return;
+                }
+
+                string senderIPAddress = packet.Header.IPAddress;
+                int senderPort = int.Parse(packet.Header.Port);
+                byte[] senderPublicSignatureKey = packet.Header.PublicSignatureKey;
+                byte[] senderPublicEncryptKey = packet.Header.PublicEncryptKey;
+
+                if (string.IsNullOrWhiteSpace(senderIPAddress) || string.IsNullOrWhiteSpace(Convert.ToBase64String(senderPublicSignatureKey)))
+                {
+                    Console.WriteLine("Invalid ping request header details.");
+                    return;
+                }
+
+                // Validate and potentially add the sender to the routing table
+                lock (node.RoutingTable)
+                { 
+
+                    // Add the peer to the RoutingTable (handles duplicates and updates)
+                    node.RoutingTable.AddPeer(senderPeer);
+                    Console.WriteLine($"Added or updated peer {senderPeer.NodeId} in the routing table.");
+                }
+
+                // Build the ping response packet
+                Packet responsePacket = new Packet
+                {
+                    Header = new Packet.PacketHeader
+                    {
+                        NodeId = node.Peer.NodeId,
+                        IPAddress = node.Client.clientIP.ToString(),
+                        Port = node.Client.clientListenerPort.ToString(),
+                        PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
+                        PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
+                        Packet_Type = Packet.PacketBuilder.PacketType.PongPal.ToString(),
+                        TTL = "1"
+                    },
+                    Content = Convert.ToBase64String(Encoding.UTF8.GetBytes("PongPal")),
+                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Encoding.UTF8.GetBytes("Pong")))
+                };
+
+                // Serialize and send the response packet
+                byte[] encryptedResponseData = Encryption.EncryptPacketWithPublicKey(
+                    Encoding.UTF8.GetBytes("PongPal"),
+                    node.Peer.PublicEncryptKey
+
+                );
+
+                if (!node.TokenManager.pingPals.ContainsKey(senderPeer))
+                {
+                    node.TokenManager.pingPals.Add(senderPeer, DateTime.UtcNow);
+
+                    bool success = await Client.SendPacketToPeerAsync(senderIPAddress, senderPort, encryptedResponseData);
+
+                    if (success)
+                    {
+                        Console.WriteLine($"Successfully sent PingResponse to {senderIPAddress}:{senderPort}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Failed to send PingResponse to {senderIPAddress}:{senderPort}");
+                    }
+                }
+                else
+                {
+                    DateTime lastPing = node.TokenManager.pingPals[senderPeer];
+                    if (DateTime.UtcNow - lastPing > TimeSpan.FromHours(24))
+                    {
+                        node.TokenManager.pingPals.Remove(senderPeer);
+                        node.TokenManager.CreatePushToken(node.Peer.NodeId, senderPeer.NodeId);
+                    }
+
+                }
+               
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error responding to ping: {ex.Message}");
+            }
+        }
+
+        //Process PongPal Response.
+        public async Task PongPalProcess(Node node, Peer peer)
+        {
+            node.TokenManager.pingPal = peer;
+
+        }
+
 
         //Send a Push Token Extend Ping to the receiver.
         public async Task SendPushTokenExtendPing(Node node, string tokenId, string receiverId)

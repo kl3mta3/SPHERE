@@ -57,7 +57,7 @@ namespace SPHERE.Networking
         public int clientCommunicationPort;
 
         //Send a packet to a peer async
-        public static async Task<bool> SendPacketToPeerAsync(string ip, int port, byte[] encryptedData)
+        public static async Task<bool> SendPacketToPeerAsync(string ip, int port, byte[] encryptedPacket)
         {
             
             
@@ -75,7 +75,7 @@ namespace SPHERE.Networking
                         // Prepare the signature parts
                         byte[] keyLengthPrefix = BitConverter.GetBytes(sendersKey.Length);
                         // Generate signature as byte array from the signature generator.
-                        byte[] signatureBytes = SignatureGenerator.SignByteArray(encryptedData);
+                        byte[] signatureBytes = SignatureGenerator.SignByteArray(encryptedPacket);
                         // Convert the signature bytes to a Base64 string.
                         string signature = Convert.ToBase64String(signatureBytes);
                         // Now encode the signature string into bytes.
@@ -85,7 +85,7 @@ namespace SPHERE.Networking
 
 
                         // Total packet length includes the 4-byte length prefix itself.
-                        int payloadLength = keyLengthPrefix.Length + sendersKey.Length + signatureLengthPrefix.Length + signatureEncoded.Length + encryptedData.Length;
+                        int payloadLength = keyLengthPrefix.Length + sendersKey.Length + signatureLengthPrefix.Length + signatureEncoded.Length + encryptedPacket.Length;
 
                         int totalPacketLength = payloadLength + 4;  // Including the length prefix itself.
                         byte[] lengthPrefix = BitConverter.GetBytes(totalPacketLength);
@@ -109,7 +109,7 @@ namespace SPHERE.Networking
                         Buffer.BlockCopy(signatureEncoded, 0, finalPacket, offset, signature.Length);
                         offset += signature.Length;
                         // Copy encrypted data
-                        Buffer.BlockCopy(encryptedData, 0, finalPacket, offset, encryptedData.Length);
+                        Buffer.BlockCopy(encryptedPacket, 0, finalPacket, offset, encryptedPacket.Length);
 
                        // Send the final packet
                         await stream.WriteAsync(finalPacket, 0, finalPacket.Length);
@@ -128,7 +128,7 @@ namespace SPHERE.Networking
                     // Prepare the signature parts
                     byte[] keyLengthPrefix = BitConverter.GetBytes(sendersKey.Length);
                     // Generate signature as byte array from the signature generator.
-                    byte[] signatureBytes = SignatureGenerator.SignByteArray(encryptedData);
+                    byte[] signatureBytes = SignatureGenerator.SignByteArray(encryptedPacket);
                     // Convert the signature bytes to a Base64 string.
                     string signature = Convert.ToBase64String(signatureBytes);
                     // Now encode the signature string into bytes.
@@ -138,7 +138,7 @@ namespace SPHERE.Networking
 
 
                     // Total packet length includes the 4-byte length prefix itself.
-                    int payloadLength = keyLengthPrefix.Length + sendersKey.Length + signatureLengthPrefix.Length + signatureEncoded.Length + encryptedData.Length;
+                    int payloadLength = keyLengthPrefix.Length + sendersKey.Length + signatureLengthPrefix.Length + signatureEncoded.Length + encryptedPacket.Length;
 
                     int totalPacketLength = payloadLength + 4;  // Including the length prefix itself.
                     byte[] lengthPrefix = BitConverter.GetBytes(totalPacketLength);
@@ -162,7 +162,7 @@ namespace SPHERE.Networking
                     Buffer.BlockCopy(signatureEncoded, 0, finalPacket, offset, signature.Length);
                     offset += signature.Length;
                     // Copy encrypted data
-                    Buffer.BlockCopy(encryptedData, 0, finalPacket, offset, encryptedData.Length);
+                    Buffer.BlockCopy(encryptedPacket, 0, finalPacket, offset, encryptedPacket.Length);
 
                     // Send the final packet
                     await stream.WriteAsync(finalPacket, 0, finalPacket.Length);
@@ -674,7 +674,7 @@ namespace SPHERE.Networking
                             break;
 
                     case PacketBuilder.PacketType.Ping:
-                            await node.NetworkManager.RespondToPingAsync(node, packet);
+                            await node.NetworkManager.PongPeerAsync(node, packet);
                             break;
 
                     case PacketBuilder.PacketType.Pong:

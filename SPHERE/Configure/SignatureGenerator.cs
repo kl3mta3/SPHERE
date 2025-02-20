@@ -1,7 +1,9 @@
 ﻿using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using SPHERE.Blockchain;
 using SPHERE.Security;
+using static SPHERE.Configure.TokenManager;
 
 namespace SPHERE.Configure
 {
@@ -100,6 +102,7 @@ namespace SPHERE.Configure
             }
         }
 
+        // Sign a byte array using the private key
         public static byte[] SignByteArray(byte[] data)
 
         {
@@ -153,7 +156,7 @@ namespace SPHERE.Configure
             }
         }
 
-
+        // Verify a byte array using the public key
         public static bool VerifyByteArray(byte[] data, byte[] signature, byte[] publicKey)
         {
             try
@@ -181,9 +184,76 @@ namespace SPHERE.Configure
                 return false;
             }
         }
-    
 
-    public static bool VerifyBlockSignature(string blockId, string base64Signature, byte[] publicSignatureKey)
+        // Sign a PushTokens using the private key
+        public static string SignPushToken(PushToken token)
+        {
+
+            bool isTesting = Environment.GetEnvironmentVariable("SPHERE_TEST_MODE") == "true";
+            if (isTesting)
+            {
+                string data = $"{token.IssuerId}|{token.ReceiverId}|{token.Timestamp:o}";
+
+                using (var ecdsa = ECDsa.Create())
+                {
+                    ecdsa.ImportPkcs8PrivateKey(ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateTestNodeSignatureKey), out _);
+                    byte[] signatureBytes = ecdsa.SignData(Encoding.UTF8.GetBytes(data), HashAlgorithmName.SHA256);
+                    return Convert.ToBase64String(signatureBytes);
+                }
+            }
+            else
+            {
+                string data = $"{token.IssuerId}|{token.ReceiverId}|{token.Timestamp:o}";
+
+                using (var ecdsa = ECDsa.Create())
+                {
+                    ecdsa.ImportPkcs8PrivateKey(ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeSignatureKey), out _);
+                    byte[] signatureBytes = ecdsa.SignData(Encoding.UTF8.GetBytes(data), HashAlgorithmName.SHA256);
+                    return Convert.ToBase64String(signatureBytes);
+                }
+
+
+            }
+        }
+
+        // Verify a received PushToken using the public key
+        public static bool VerifyReceivedPushToken(Node node, PushToken token, byte[] publicKey)
+        {
+            if (node.Peer.NodeId == token.ReceiverId || node.Peer.NodeId != token.IssuerId)
+            {
+                return false;
+            }
+
+            string data = $"{token.IssuerId}|{token.ReceiverId}|{token.Timestamp:o}";
+
+            using (var ecdsa = ECDsa.Create())
+            {
+                ecdsa.ImportSubjectPublicKeyInfo(publicKey, out _);
+                byte[] signatureBytes = Convert.FromBase64String(token.Signature);
+                return ecdsa.VerifyData(Encoding.UTF8.GetBytes(data), signatureBytes, HashAlgorithmName.SHA256);
+            }
+        }
+
+        // Verify an Issued PushToken using the public key
+        public static bool VerifyIssuedPushToken(Node node, PushToken token, byte[] publicKey)
+        {
+            if (node.Peer.NodeId != token.ReceiverId || node.Peer.NodeId == token.IssuerId)
+            {
+                return false;
+            }
+
+            string data = $"{token.IssuerId}|{token.ReceiverId}|{token.Timestamp:o}";
+
+            using (var ecdsa = ECDsa.Create())
+            {
+                ecdsa.ImportSubjectPublicKeyInfo(publicKey, out _);
+                byte[] signatureBytes = Convert.FromBase64String(token.Signature);
+                return ecdsa.VerifyData(Encoding.UTF8.GetBytes(data), signatureBytes, HashAlgorithmName.SHA256);
+            }
+        }
+
+
+        public static bool VerifyBlockSignature(string blockId, string base64Signature, byte[] publicSignatureKey)
         {
             // Convert the block ID to bytes
             byte[] blockBytes = Encoding.UTF8.GetBytes(blockId);

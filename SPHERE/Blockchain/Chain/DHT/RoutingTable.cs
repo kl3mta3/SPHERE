@@ -128,6 +128,18 @@ public class RoutingTable
         }
     }
 
+    public List<Peer> GetBestReputationPeers(string targetId, int count)
+    {
+        lock (_lock)
+        {
+            return _buckets
+                .SelectMany(bucket => bucket.Peers)
+                .OrderBy(peer => peer.Reputation)
+                .Take(count)
+                .ToList();
+        }
+    }
+
     public static bool IsHexString(string input)
     {
         if (string.IsNullOrWhiteSpace(input))
@@ -345,7 +357,7 @@ public class RoutingTable
 
                 // Optionally ping the least trusted peer to confirm it's alive
 
-                bool isAlive = await NetworkManager.PingPeerAsync(this.node, leastTrustedPeer);
+                bool isAlive = await node.NetworkManager.PingPeerAsync(this.node, leastTrustedPeer);
                 if (!isAlive)
                 {
               

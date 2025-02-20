@@ -67,7 +67,8 @@ namespace SPHERE.Blockchain
         internal ConcurrentDictionary<string, DateTime> issuedTokens = new();
         internal TokenManager TokenManager = new TokenManager();
         internal NetworkManager NetworkManager = new NetworkManager();
-        internal readonly TimeSpan cacheLifetime = TimeSpan.FromMinutes(5);
+        internal ScheduledTaskManager ScheduledTasks = new ScheduledTaskManager();
+        public TimeSpan cacheLifetime { get; internal set; } = TimeSpan.FromMinutes(5);
         public bool isBootstrapped { get; internal set; } = false;
         public Peer Peer { get; set;} = new();
         public Client Client { get; set;} = new();
@@ -77,26 +78,17 @@ namespace SPHERE.Blockchain
         internal readonly int MaxPeers = 75;
         public bool Test_Mode = false;
 
-        internal AutomaticFunctions AutomaticFunctions = new();
+        internal CleanupTasks AutomaticFunctions = new();
 
         public Node()
         {
             // Start background cleanup & maintenance tasks automatically
-
-            var cts = new CancellationTokenSource();
-
-            Task.Run(() => AutomaticFunctions.AutoCleanupIssuedTokens(this, cts.Token));
-            Task.Run (() => AutomaticFunctions.StartSeenPacketCacheCleanup(this, cts.Token));
-            Task.Run(() => AutomaticFunctions.AutoCleanupTokensPendingRemoval(this, cts.Token));
-            Task.Run(() => AutomaticFunctions.AutoBroadcastPeerPing(this, cts.Token));
+            ScheduledTasks.AutoStartCleanUpTasks(this);
 
             Console.WriteLine("Node initialized - background tasks started.");
         }
 
-
-        //--Node Functions--\\
-
-        //This is used to Create the Node or Load one if it exists. 
+        //This is used to Create the Node or Load one if it exists.
         public static Node CreateNode(Client client, NodeType nodeType)
         {
 
@@ -193,7 +185,7 @@ namespace SPHERE.Blockchain
             return node;
         }
 
-        //This is used to Create the Node or Load one if it exists. 
+        //This is used to Create the Node and Listener or Load one if it exists. 
         public static Node CreateNodeWithClientListenerUsingSTUN(NodeType nodeType)
         {
 
@@ -296,7 +288,6 @@ namespace SPHERE.Blockchain
         }
 
     }
-
 
     // This is used to manage the BootStrap Payloads.
     public class BootstrapResponsePayload
