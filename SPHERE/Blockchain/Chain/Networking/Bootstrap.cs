@@ -105,7 +105,7 @@ namespace SPHERE.Networking
         }
 
         //Process Bootstrap Response
-        internal static async Task ProcessBootstrapResponse(Node node, Packet packet)
+        internal static  Task ProcessBootstrapResponse(Node node, Packet packet)
         {
 
             int trustScoreUpdate = 0;
@@ -128,7 +128,7 @@ namespace SPHERE.Networking
                 if (node.isBootstrapped)
                 {
                     SystemLogger.Log("Debug-ProcessBootstrapResponse: Node is already bootstrapped. Ignoring the response.");
-                    return;
+                    return Task.CompletedTask;
                 }
 
                 // Validate the packet and extract the header details
@@ -137,7 +137,7 @@ namespace SPHERE.Networking
                     SystemLogger.Log("Debug-ProcessBootstrapResponse: Invalid packet or missing header.");
 
                     //node.NetworkManager.BroadcastReputationUpdate(node, senderPeer, Blockchain.Reputation.ReputationReason.GetContactFailed)
-                    return;
+                    return Task.CompletedTask;
                 }
 
                 SystemLogger.Log($"Debug-ProcessBootstrapResponse: Processing packet from Node ID: {packet.Header.NodeId}, IP: {packet.Header.IPAddress}, Port: {packet.Header.Port}");
@@ -149,7 +149,7 @@ namespace SPHERE.Networking
                 if (responsePayload == null)
                 {
                     SystemLogger.Log("Debug-ProcessBootstrapResponse: Failed to deserialize bootstrap response payload.");
-                    return;
+                    return Task.CompletedTask;
                 }
                 SystemLogger.Log("Debug-ProcessBootstrapResponse: Bootstrap response payload deserialized successfully.");
 
@@ -260,7 +260,7 @@ namespace SPHERE.Networking
                 SystemLogger.Log($"Error-ProcessBootstrapResponse: {ex.Message}");
                 SystemLogger.Log($"ProcessBootstrapResponse: Debug Trace: {ex.StackTrace}");
             }
-
+            return Task.CompletedTask;
         }
 
         // Sends a response to a request to Bootstrap.  Sends a peer list and copy of DHT (Or shards at some point)
@@ -449,11 +449,6 @@ namespace SPHERE.Networking
             node.isBootstrapped = false;
 
         }
-
-
-
-
-
 
     }
 }

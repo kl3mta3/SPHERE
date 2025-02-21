@@ -15,18 +15,18 @@ namespace SPHERE.Configure
     internal class ScheduledTaskManager
     {
         
-        private CancellationTokenSource _cts;
+        private CancellationTokenSource _cts =new();
         private readonly List<Task> _runningTasks = new();
         internal List<ScheduledTask> _tasks = new();
 
         public class ScheduledTask
         {
             // The task delegate to execute periodically.
-            public Func<CancellationToken, Task> TaskFunc { get; set; }
+            public required Func<CancellationToken, Task> TaskFunc { get; set; }
             // The interval at which to run the task.
             public TimeSpan Interval { get; set; }
             // Optionally, a name for logging/debugging.
-            public string Name { get; set; }
+            public string Name { get; set; } = "";
         }
 
         // AutoStartCleanUpTasks is a method that starts all the cleanup tasks on startup

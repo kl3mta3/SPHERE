@@ -244,7 +244,7 @@ namespace SPHERE.Networking
         }
 
         //Process Pong Response.
-        public async Task ProcessPongAsync(Node node, Packet packet)
+        public  Task ProcessPongAsync(Node node, Packet packet)
         {
 
             try
@@ -272,20 +272,20 @@ namespace SPHERE.Networking
                     if (!Peer.ValidatePeer(peer))
                     {
                         SystemLogger.Log($"Error: Invalid peer received in Pong request.");
-                        return;
+                        return Task.CompletedTask;
                     }
                 }
 
 
                 node.RoutingTable.UpdatePeer(peer);
-                node.NetworkManager.BroadcastReputationUpdate(node, peer, Blockchain.Reputation.ReputationReason.GetContactFailed);
+               NetworkManager.BroadcastReputationUpdate(node, peer, Blockchain.Reputation.ReputationReason.GetContactFailed);
 
             }
             catch (Exception ex)
             {
                 SystemLogger.Log($"Error: Failure processing Pong Request:{ex.Message}");
             }
-
+            return Task.CompletedTask;
         }
 
         //Send PingPal Request.
@@ -446,15 +446,15 @@ namespace SPHERE.Networking
         }
 
         //Process PongPal Response.
-        public async Task PongPalProcess(Node node, Packet packet)
+        public static Task PongPalProcess(Node node, Packet packet)
         {
             Peer peer = Peer.CreatePeerFromPacket(packet);
             node.TokenManager.pingPal = peer;
-
+            return Task.CompletedTask;
         }
 
         //Send a Push Token Extend Ping to the receiver.
-        public async Task SendPushTokenExtendPing(Node node, string tokenId, string receiverId)
+        public static  Task SendPushTokenExtendPing(Node node, string tokenId, string receiverId)
         {
 
             //look up the receiver in the routing table.
@@ -462,10 +462,11 @@ namespace SPHERE.Networking
             if (receiver == null)
             {
                 SystemLogger.Log("Receiver not found in routing table.");
-                return;
+                return Task.CompletedTask;
             }
             //we will send a push token extend ping to the receiver.
             //They will then send a push token extend pong to us that includes the original Token as proof or a Failed pong if they can not.
+            return Task.CompletedTask;
         }
         
 
@@ -605,7 +606,7 @@ namespace SPHERE.Networking
                         var peer = node.RoutingTable.GetPeerByIPAddress(recipientIPAddress);
                         if (peer != null)
                         {
-                            node.NetworkManager.BroadcastReputationUpdate(node, peer, Blockchain.Reputation.ReputationReason.GetContactFailed);
+                            NetworkManager.BroadcastReputationUpdate(node, peer, Blockchain.Reputation.ReputationReason.GetContactFailed);
                             SystemLogger.Log($"Debug-PeerListResponse: Trust score updated for peer {peer.NodeId}. New Trust Score: {peer.Reputation}");
                         }
                         else
@@ -670,14 +671,14 @@ namespace SPHERE.Networking
         }
 
         //Process a Push Token Issued packet.
-        internal async Task ProcessIssuedToken(Node node, Packet packet)
+        internal static Task ProcessIssuedToken(Node node, Packet packet)
         {
             try
             {
                 if (packet == null || packet.Header == null || packet.Content == null)
                 {
                     SystemLogger.Log("Received an invalid PushTokenIssued packet.");
-                    return;
+                    return Task.CompletedTask;
                 }
 
                 Peer senderPeer = Peer.CreatePeerFromPacket(packet);
@@ -685,7 +686,7 @@ namespace SPHERE.Networking
                 if (senderPeer == null)
                 {
                     SystemLogger.Log("Received an invalid PushTokenIssued packet.");
-                    return;
+                    return Task.CompletedTask;
                 }
 
                 // Deserialize the payload
@@ -694,7 +695,7 @@ namespace SPHERE.Networking
                 if (token == null || string.IsNullOrWhiteSpace(token.TokenId))
                 {
                     SystemLogger.Log("Received an empty or invalid PushTokenIssued payload.");
-                    return;
+                    return Task.CompletedTask;
                 }
 
                 // Add the token to the Issued Tokens
@@ -706,6 +707,7 @@ namespace SPHERE.Networking
             {
                 SystemLogger.Log($"Error processing PushTokenIssued: {ex.Message}");
             }
+            return Task.CompletedTask;
         }
 
 
@@ -998,7 +1000,7 @@ namespace SPHERE.Networking
                     await node.NetworkManager.SendTokenToPeer(node, senderPeer, token);
                     node.TokenManager.AddIssuedPushToken(token);
 
-                    node.NetworkManager.BroadcastReputationUpdate(node, senderPeer, Blockchain.Reputation.ReputationReason.GetContactFailed);
+                    BroadcastReputationUpdate(node, senderPeer, Blockchain.Reputation.ReputationReason.GetContactFailed);
                 }
             }
             catch (Exception ex)
@@ -1007,11 +1009,10 @@ namespace SPHERE.Networking
             }
         }
 
-
         //-----Reputation Management-----\\
 
         //Send a Reputation Update to network
-        public async Task BroadcastReputationUpdate(Node node, Peer peer, Reputation.ReputationReason reason)
+        public static Task BroadcastReputationUpdate(Node node, Peer peer, Reputation.ReputationReason reason)
         {
 
             if (node !=null && Peer.ValidatePeer(peer) )
@@ -1052,10 +1053,11 @@ namespace SPHERE.Networking
                     SystemLogger.Log($"Error sending ReputationUpdate: {ex.Message}");
                 }
             }
+            return Task.CompletedTask;
         }
 
         //Process a Reputation Update.
-        public async Task ProcessReputationUpdate(Node node, Packet packet)
+        public static async Task ProcessReputationUpdate(Node node, Packet packet)
         {
             try
             {
@@ -1152,7 +1154,7 @@ namespace SPHERE.Networking
         }
 
         //Request a peer's reputation.
-        public async Task RequestPeerReputation(Node node, string nodeIdToGet)
+        public Task RequestPeerReputation(Node node, string nodeIdToGet)
         {
             if (node == null)
             {
@@ -1191,7 +1193,7 @@ namespace SPHERE.Networking
                 SystemLogger.Log($"Error sending ReputationRequest: {ex.Message}");
             }
 
-
+            return Task.CompletedTask;
         }
 
         //Process a Reputation Request.
@@ -1266,7 +1268,7 @@ namespace SPHERE.Networking
         }
 
         //Process a Reputation Response.
-        public async Task ProcessReputationResponse(Node node, Packet packet)
+        public static Task ProcessReputationResponse(Node node, Packet packet)
         {
             try
             {
@@ -1277,7 +1279,7 @@ namespace SPHERE.Networking
                 if (packet == null || packet.Header == null || packet.Content == null)
                 {
                     SystemLogger.Log("Received an invalid ReputationResponse packet.");
-                    return;
+                    return Task.CompletedTask;
                 }
 
                 // Deserialize the payload
@@ -1286,7 +1288,7 @@ namespace SPHERE.Networking
                 if (block == null || string.IsNullOrWhiteSpace(block.Header.BlockId))
                 {
                     SystemLogger.Log("Received an empty or invalid ReputationResponse payload.");
-                    return;
+                    return Task.CompletedTask;
                 }
 
                 // Add the block to the Reputation DHT
@@ -1298,8 +1300,8 @@ namespace SPHERE.Networking
             {
                 SystemLogger.Log($"Error processing ReputationResponse: {ex.Message}");
             }
+            return Task.CompletedTask;
         }
-
 
         //-----Configuration Calls-----\\
 

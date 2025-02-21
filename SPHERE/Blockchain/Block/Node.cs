@@ -1,4 +1,6 @@
-﻿using System.Net.Mail;
+﻿// Ignore Spelling: DHT
+
+using System.Net.Mail;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
@@ -330,19 +332,19 @@ namespace SPHERE.Blockchain
     public class BootstrapResponsePayload
     {
         [JsonPropertyName("Peers")]
-        public List<Peer> Peers { get; set; }
+        public required List<Peer> Peers { get; set; }
 
         [JsonPropertyName("DHT")]
-        public List<Block> DHT { get; set; } 
+        public required List<Block> DHT { get; set; } 
     }
 
     public class BlockResponsePayload
     {
         [JsonPropertyName("Type")]
-        public string Type { get; set; }
+        public required string Type { get; set; }
 
         [JsonPropertyName("Blocks")]
-        public List<Block> Blocks { get; set; }
+        public required List<Block> Blocks { get; set; }
     }
 
    
