@@ -24,7 +24,7 @@ namespace SPHERE.Blockchain
     /// <summary>
     /// A Node is the heart and soul of a decenteralized network.
     /// A Node is responsible for mantaining either a whole copy of the blockchain or its shard. 
-    /// ( in the begining the whole thing as its going to be small and even a single node online can re populate the network.)
+    /// ( in the beginning the whole thing as its going to be small and even a single node online can re populate the network.)
     /// 
     /// --Node responsibilities-- 
     /// (Again: The node is the back end of the application.)  
