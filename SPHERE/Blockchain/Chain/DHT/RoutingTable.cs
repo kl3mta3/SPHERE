@@ -1,5 +1,6 @@
 ﻿using SPHERE.Blockchain;
 using SPHERE.Networking;
+using SPHERE.Configure.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -32,7 +33,7 @@ public class RoutingTable
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in AddPeer: {ex.Message}");
+                SystemLogger.Log($"Error in AddPeer: {ex.Message}");
                 throw;
             }
         }
@@ -88,7 +89,7 @@ public class RoutingTable
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error updating peer: {ex.Message}");
+                    SystemLogger.Log($"Error updating peer: {ex.Message}");
                     return;
                 }
 
@@ -104,13 +105,13 @@ public class RoutingTable
                 else
                 {
                     AddPeer(updatedPeer);
-                    Console.WriteLine($"Peer {updatedPeer.NodeId} was not found, added as new.");
+                    SystemLogger.Log($"Peer {updatedPeer.NodeId} was not found, added as new.");
                 }
 
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error updating peer: {ex.Message}");
+                SystemLogger.Log($"Error updating peer: {ex.Message}");
                 throw;
             }
         }
@@ -220,13 +221,13 @@ public class RoutingTable
     {
         lock (_lock)
         {
-            Console.WriteLine("Routing Table:");
+            SystemLogger.Log("Routing Table:");
             for (int i = 0; i < _buckets.Count; i++)
             {
-                Console.WriteLine($"Bucket {i}:");
+                SystemLogger.Log($"Bucket {i}:");
                 foreach (var peer in _buckets[i].Peers)
                 {
-                    Console.WriteLine($"- {peer.NodeId}: {peer.NodeIP}:{peer.NodePort}");
+                    SystemLogger.Log($"- {peer.NodeId}: {peer.NodeIP}:{peer.NodePort}");
                 }
             }
         }
@@ -255,15 +256,15 @@ public class RoutingTable
                     writer.Write(json);
                 }
 
-                Console.WriteLine("RoutingTable state saved successfully.");
+                SystemLogger.Log("RoutingTable state saved successfully.");
             }
             catch (IOException ioEx)
             {
-                Console.WriteLine($"I/O error while saving RoutingTable state: {ioEx.Message}");
+                SystemLogger.Log($"I/O error while saving RoutingTable state: {ioEx.Message}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to save RoutingTable state: {ex.Message}");
+                SystemLogger.Log($"Failed to save RoutingTable state: {ex.Message}");
             }
         }
     }
@@ -289,7 +290,7 @@ public class RoutingTable
 
                 if (!File.Exists(filePath))
                 {
-                    Console.WriteLine("RoutingTable state file not found. Starting with an empty table.");
+                    SystemLogger.Log("RoutingTable state file not found. Starting with an empty table.");
                     return;
                 }
 
@@ -308,25 +309,25 @@ public class RoutingTable
                             _buckets.Add(bucket);
                         }
 
-                        Console.WriteLine("RoutingTable state loaded successfully.");
+                        SystemLogger.Log("RoutingTable state loaded successfully.");
                     }
                     else
                     {
-                        Console.WriteLine("No data found in the RoutingTable state file. Starting with an empty table.");
+                        SystemLogger.Log("No data found in the RoutingTable state file. Starting with an empty table.");
                     }
                 }
             }
             catch (IOException ioEx)
             {
-                Console.WriteLine($"I/O error while loading RoutingTable state: {ioEx.Message}");
+                SystemLogger.Log($"I/O error while loading RoutingTable state: {ioEx.Message}");
             }
             catch (JsonException jsonEx)
             {
-                Console.WriteLine($"JSON error while loading RoutingTable state: {jsonEx.Message}");
+                SystemLogger.Log($"JSON error while loading RoutingTable state: {jsonEx.Message}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to load RoutingTable state: {ex.Message}");
+                SystemLogger.Log($"Failed to load RoutingTable state: {ex.Message}");
             }
         }
     }
@@ -362,17 +363,17 @@ public class RoutingTable
                 {
               
                     Peers.Remove(leastTrustedPeer);
-                    Console.WriteLine($"Removed least trusted and unresponsive peer: {leastTrustedPeer.NodeId}");
+                    SystemLogger.Log($"Removed least trusted and unresponsive peer: {leastTrustedPeer.NodeId}");
                 }
                 else if (peer.Reputation > leastTrustedPeer.Reputation)
                 {
                     // Replace the least trusted peer if the new peer has a higher trust score
                     Peers.Remove(leastTrustedPeer);
-                    Console.WriteLine($"Removed least trusted peer: {leastTrustedPeer.NodeId} to add {peer.NodeId}");
+                    SystemLogger.Log($"Removed least trusted peer: {leastTrustedPeer.NodeId} to add {peer.NodeId}");
                 }
                 else
                 {
-                    Console.WriteLine($"Peer {peer.NodeId} was not added due to lower trust score.");
+                    SystemLogger.Log($"Peer {peer.NodeId} was not added due to lower trust score.");
                     return;
                 }
             }
@@ -388,7 +389,7 @@ public class RoutingTable
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in RemovePeer: {ex.Message}");
+                SystemLogger.Log($"Error in RemovePeer: {ex.Message}");
                 throw;
             }
 
@@ -401,7 +402,7 @@ public class RoutingTable
                 Peer peer = Peers.FirstOrDefault(p => p.NodeId == nodeId);
                 if (peer == null)
                 {
-                    Console.WriteLine($"Peer with NodeId '{nodeId}' not found in the bucket.");
+                    SystemLogger.Log($"Peer with NodeId '{nodeId}' not found in the bucket.");
                     return null;
                 }
                 else
@@ -411,7 +412,7 @@ public class RoutingTable
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in GetPeer: {ex.Message}");
+                SystemLogger.Log($"Error in GetPeer: {ex.Message}");
                 throw;
             }
 

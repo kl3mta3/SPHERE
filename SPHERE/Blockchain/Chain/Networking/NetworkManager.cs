@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
+using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -10,6 +11,7 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using SPHERE.Blockchain;
 using SPHERE.Configure;
+using SPHERE.Configure.Logging;
 using SPHERE.PacketLib;
 using SPHERE.Security;
 
@@ -27,13 +29,13 @@ namespace SPHERE.Networking
 
             try
             {
-                Console.WriteLine("Debug-BrodcastConnectionToNetwork: Starting Broadcast Network Connection...");
+                SystemLogger.Log("Debug-BrodcastConnectionToNetwork: Starting Broadcast Network Connection...");
 
 
                 // Use RetryAsync to retry the operation on failure
                 await node.NetworkManager.RetryAsync<bool>(async () =>
                 {
-                    Console.WriteLine("Debug-BrodcastConnectionToNetwork: Broadcast  Network Connection packet...");
+                    SystemLogger.Log("Debug-BrodcastConnectionToNetwork: Broadcast  Network Connection packet...");
                     Packet.PacketHeader header = Packet.PacketBuilder.BuildPacketHeader(
                         Packet.PacketBuilder.PacketType.BrodcastConnection,
                         node.Peer.NodeId,
@@ -46,12 +48,12 @@ namespace SPHERE.Networking
                     );
 
                     Packet packet = Packet.PacketBuilder.BuildPacket(header, Packet.PacketBuilder.PacketType.BrodcastConnection.ToString());
-                    Console.WriteLine($"Debug-BrodcastConnectionToNetwork: Packet built with NodeId: {node.Peer.NodeId}, IP: {node.Client.clientIP}, Port: {node.Client.clientListenerPort}");
+                    SystemLogger.Log($"Debug-BrodcastConnectionToNetwork: Packet built with NodeId: {node.Peer.NodeId}, IP: {node.Client.clientIP}, Port: {node.Client.clientListenerPort}");
 
                     // Serialize the packet into a byte array
-                    Console.WriteLine("Debug-BrodcastConnectionToNetwork: Serializing packet...");
+                    SystemLogger.Log("Debug-BrodcastConnectionToNetwork: Serializing packet...");
                     byte[] data = Packet.PacketBuilder.SerializePacket(packet);
-                    Console.WriteLine($"Debug-BrodcastConnectionToNetwork: Packet serialized. Data Length: {data.Length} bytes");
+                    SystemLogger.Log($"Debug-BrodcastConnectionToNetwork: Packet serialized. Data Length: {data.Length} bytes");
 
                     bool allSuccessful = true;
 
@@ -59,31 +61,31 @@ namespace SPHERE.Networking
 
                     var tasks = peers.Select(async peer =>
                     {
-                        Console.WriteLine("Debug-BrodcastConnectionToNetwork: Encrypting packet...");
+                        SystemLogger.Log("Debug-BrodcastConnectionToNetwork: Encrypting packet...");
 
                         try
                         {
                             // Encrypt the packet using the recipient's public communication key
                             byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(data, peer.PublicEncryptKey);
-                            Console.WriteLine($"Debug-BrodcastConnectionToNetwork: Packet encrypted. Encrypted Data Length: {encryptedData.Length} bytes");
+                            SystemLogger.Log($"Debug-BrodcastConnectionToNetwork: Packet encrypted. Encrypted Data Length: {encryptedData.Length} bytes");
 
                             // Send the encrypted data and signature to the recipient
-                            Console.WriteLine($"Debug-BrodcastConnectionToNetwork: Sending packet to NODE: {peer.NodeId.Substring(0, 6)} at {peer.NodeIP}:{peer.NodePort}...");
+                            SystemLogger.Log($"Debug-BrodcastConnectionToNetwork: Sending packet to NODE: {peer.NodeId.Substring(0, 6)} at {peer.NodeIP}:{peer.NodePort}...");
                             bool success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedData);
 
                             if (!success)
                             {
-                                Console.WriteLine($"Debug-BrodcastConnectionToNetwork: Failed to send broadcast to {peer.NodeIP}:{peer.NodePort}");
+                                SystemLogger.Log($"Debug-BrodcastConnectionToNetwork: Failed to send broadcast to {peer.NodeIP}:{peer.NodePort}");
                                 allSuccessful = false;
                             }
                             else
                             {
-                                Console.WriteLine($"Debug-BrodcastConnectionToNetwork: Broadcast successfully sent to {peer.NodeIP}:{peer.NodePort}");
+                                SystemLogger.Log($"Debug-BrodcastConnectionToNetwork: Broadcast successfully sent to {peer.NodeIP}:{peer.NodePort}");
                             }
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"Error broadcasting to {peer.NodeIP}:{peer.NodePort}: {ex.Message}");
+                            SystemLogger.Log($"Error broadcasting to {peer.NodeIP}:{peer.NodePort}: {ex.Message}");
                             allSuccessful = false;
                         }
                     });
@@ -99,15 +101,15 @@ namespace SPHERE.Networking
 
                     // Log successful bootstrap request
 
-                    Console.WriteLine("Debug-BrodcastConnectionToNetwork: Bootstrap Request process completed.");
+                    SystemLogger.Log("Debug-BrodcastConnectionToNetwork: Bootstrap Request process completed.");
                     return allSuccessful;
                 });
 
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error-BrodcastConnectionToNetwork: {ex.Message}");
-                Console.WriteLine($"BrodcastConnectionToNetwork: Debug Trace: {ex.StackTrace}");
+                SystemLogger.Log($"Error-BrodcastConnectionToNetwork: {ex.Message}");
+                SystemLogger.Log($"BrodcastConnectionToNetwork: Debug Trace: {ex.StackTrace}");
                 throw;
             }
 
@@ -152,7 +154,7 @@ namespace SPHERE.Networking
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error pinging peer {peer.NodeId}: {ex.Message}");
+                SystemLogger.Log($"Error pinging peer {peer.NodeId}: {ex.Message}");
                 return false; // Return false if there was an error
             }
         }
@@ -166,7 +168,7 @@ namespace SPHERE.Networking
                 // Validate the incoming packet
                 if (packet == null || packet.Header == null)
                 {
-                    Console.WriteLine("Invalid ping request packet.");
+                    SystemLogger.Log("Invalid ping request packet.");
                     return;
                 }
 
@@ -177,7 +179,7 @@ namespace SPHERE.Networking
 
                 if (string.IsNullOrWhiteSpace(senderIPAddress) || string.IsNullOrWhiteSpace(Convert.ToBase64String(senderPublicSignatureKey)))
                 {
-                    Console.WriteLine("Invalid ping request header details.");
+                    SystemLogger.Log("Invalid ping request header details.");
                     return;
                 }
 
@@ -197,7 +199,7 @@ namespace SPHERE.Networking
 
                     // Add the peer to the RoutingTable (handles duplicates and updates)
                     node.RoutingTable.AddPeer(newPeer);
-                    Console.WriteLine($"Added or updated peer {newPeer.NodeId} in the routing table.");
+                    SystemLogger.Log($"Added or updated peer {newPeer.NodeId} in the routing table.");
                 }
 
                 // Build the ping response packet
@@ -228,16 +230,16 @@ namespace SPHERE.Networking
 
                 if (success)
                 {
-                    Console.WriteLine($"Successfully sent PingResponse to {senderIPAddress}:{senderPort}");
+                    SystemLogger.Log($"Successfully sent PingResponse to {senderIPAddress}:{senderPort}");
                 }
                 else
                 {
-                    Console.WriteLine($"Failed to send PingResponse to {senderIPAddress}:{senderPort}");
+                    SystemLogger.Log($"Failed to send PingResponse to {senderIPAddress}:{senderPort}");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error responding to ping: {ex.Message}");
+                SystemLogger.Log($"Error responding to ping: {ex.Message}");
             }
         }
 
@@ -269,7 +271,7 @@ namespace SPHERE.Networking
 
                     if (!Peer.ValidatePeer(peer))
                     {
-                        Console.WriteLine($"Error: Invalid peer received in Pong request.");
+                        SystemLogger.Log($"Error: Invalid peer received in Pong request.");
                         return;
                     }
                 }
@@ -281,7 +283,7 @@ namespace SPHERE.Networking
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error: Failure processing Pong Request:{ex.Message}");
+                SystemLogger.Log($"Error: Failure processing Pong Request:{ex.Message}");
             }
 
         }
@@ -321,18 +323,18 @@ namespace SPHERE.Networking
 
                 if (!success)
                 {
-                    Console.WriteLine($"Failed to send PingPal to {peer.NodeId}");
+                    SystemLogger.Log($"Failed to send PingPal to {peer.NodeId}");
                     return false;
                 }
                 else
                 {
-                    Console.WriteLine($"Successfully sent PingPal to {peer.NodeId}");
+                    SystemLogger.Log($"Successfully sent PingPal to {peer.NodeId}");
                     return success;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error pinging peer {peer.NodeId}: {ex.Message}");
+                SystemLogger.Log($"Error pinging peer {peer.NodeId}: {ex.Message}");
                 return false; 
             }
         }
@@ -348,7 +350,7 @@ namespace SPHERE.Networking
                 // Validate the incoming packet
                 if (packet == null || packet.Header == null || senderPeer == null)
                 {
-                    Console.WriteLine("Invalid pong pal request packet.");
+                    SystemLogger.Log("Invalid pong pal request packet.");
                     return;
                 }
 
@@ -359,7 +361,7 @@ namespace SPHERE.Networking
 
                 if (string.IsNullOrWhiteSpace(senderIPAddress) || string.IsNullOrWhiteSpace(Convert.ToBase64String(senderPublicSignatureKey)))
                 {
-                    Console.WriteLine("Invalid ping request header details.");
+                    SystemLogger.Log("Invalid ping request header details.");
                     return;
                 }
 
@@ -369,7 +371,7 @@ namespace SPHERE.Networking
 
                     // Add the peer to the RoutingTable (handles duplicates and updates)
                     node.RoutingTable.AddPeer(senderPeer);
-                    Console.WriteLine($"Added or updated peer {senderPeer.NodeId} in the routing table.");
+                    SystemLogger.Log($"Added or updated peer {senderPeer.NodeId} in the routing table.");
                 }
 
               
@@ -408,12 +410,12 @@ namespace SPHERE.Networking
 
                         if (success)
                         {
-                            Console.WriteLine($"Successfully sent PingResponse to {senderIPAddress}:{senderPort}");
+                            SystemLogger.Log($"Successfully sent PingResponse to {senderIPAddress}:{senderPort}");
                             return success; 
                         }
                         else
                         {
-                            Console.WriteLine($"Failed to send PingResponse to {senderIPAddress}:{senderPort}");
+                            SystemLogger.Log($"Failed to send PingResponse to {senderIPAddress}:{senderPort}");
                             return success;
                         }
                     });
@@ -439,7 +441,7 @@ namespace SPHERE.Networking
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error responding to ping: {ex.Message}");
+                SystemLogger.Log($"Error responding to ping: {ex.Message}");
             }
         }
 
@@ -459,7 +461,7 @@ namespace SPHERE.Networking
             Peer receiver = node.RoutingTable.GetPeerByID(receiverId);
             if (receiver == null)
             {
-                Console.WriteLine("Receiver not found in routing table.");
+                SystemLogger.Log("Receiver not found in routing table.");
                 return;
             }
             //we will send a push token extend ping to the receiver.
@@ -475,7 +477,7 @@ namespace SPHERE.Networking
 
             try
             {
-                Console.WriteLine("Debug-PeerListResponse: Starting to send bootstrap response...");
+                SystemLogger.Log("Debug-PeerListResponse: Starting to send bootstrap response...");
                 Peer peer = Peer.CreatePeer(
                     Enum.Parse<NodeType>(packet.Header.Node_Type),
                     packet.Header.NodeId,
@@ -496,45 +498,45 @@ namespace SPHERE.Networking
                 int recipientPort = int.Parse(packet.Header.Port);
                 byte[] recipientPublicEncryptKey = packet.Header.PublicEncryptKey;
 
-                Console.WriteLine($"Debug-PeerListResponse: Recipient details - NodeId: {recipientsID}, IP: {recipientIPAddress}, Port: {recipientPort}, PublicComKey: {recipientPublicEncryptKey}");
+                SystemLogger.Log($"Debug-PeerListResponse: Recipient details - NodeId: {recipientsID}, IP: {recipientIPAddress}, Port: {recipientPort}, PublicComKey: {recipientPublicEncryptKey}");
 
                 // Validate inputs
                 if (packet == null)
                 {
-                    Console.WriteLine("Debug-PeerListResponse: Packet is null.");
+                    SystemLogger.Log("Debug-PeerListResponse: Packet is null.");
                     throw new ArgumentNullException(nameof(packet), "Packet cannot be null.");
                 }
 
                 if (node == null)
                 {
-                    Console.WriteLine("Debug-PeerListResponse: Node is null.");
+                    SystemLogger.Log("Debug-PeerListResponse: Node is null.");
                     throw new ArgumentNullException(nameof(node), "The Node cannot be null.");
                 }
 
                 if (string.IsNullOrWhiteSpace(recipientIPAddress))
                 {
-                    Console.WriteLine("Debug-PeerListResponse: Recipient IP address is invalid.");
+                    SystemLogger.Log("Debug-PeerListResponse: Recipient IP address is invalid.");
                     throw new ArgumentException("Packet's IP address cannot be null or empty.", nameof(recipientIPAddress));
                 }
 
                 if (recipientPort <= 0 || recipientPort > 65535)
                 {
-                    Console.WriteLine($"Debug-PeerListResponse: Invalid recipient port: {recipientPort}");
+                    SystemLogger.Log($"Debug-PeerListResponse: Invalid recipient port: {recipientPort}");
                     throw new ArgumentOutOfRangeException(nameof(recipientPort), "Packet port must be a valid number between 1 and 65535.");
                 }
 
                 if (string.IsNullOrWhiteSpace(Convert.ToBase64String(recipientPublicEncryptKey)))
                 {
-                    Console.WriteLine("Debug-PeerListResponse: Recipient's public encryption key is invalid.");
+                    SystemLogger.Log("Debug-PeerListResponse: Recipient's public encryption key is invalid.");
                     throw new ArgumentException("Recipient's public encryption key cannot be null or empty.", nameof(recipientPublicEncryptKey));
                 }
 
-                Console.WriteLine("Debug-PeerListResponse: Inputs validated successfully.");
+                SystemLogger.Log("Debug-PeerListResponse: Inputs validated successfully.");
 
                 // Use RetryAsync to ensure the response is sent
                 await node.NetworkManager.RetryAsync<bool>(async () =>
                 {
-                    Console.WriteLine("Debug-PeerListResponse: Preparing peer list for response...");
+                    SystemLogger.Log("Debug-PeerListResponse: Preparing peer list for response...");
                     List<Peer> peerList;
 
                     lock (node.RoutingTable)
@@ -542,16 +544,16 @@ namespace SPHERE.Networking
                         if (!string.IsNullOrWhiteSpace(recipientsID))
                         {
                             peerList = node.RoutingTable.GetClosestPeers(recipientsID, 20); // Adjust '20' as needed
-                            Console.WriteLine($"Debug-PeerListResponse: Retrieved {peerList.Count} closest peers for NodeId {recipientsID}.");
+                            SystemLogger.Log($"Debug-PeerListResponse: Retrieved {peerList.Count} closest peers for NodeId {recipientsID}.");
                         }
                         else
                         {
                             peerList = node.RoutingTable.GetAllPeers();
-                            Console.WriteLine($"Debug-PeerListResponse: Retrieved all peers. Total: {peerList.Count}");
+                            SystemLogger.Log($"Debug-PeerListResponse: Retrieved all peers. Total: {peerList.Count}");
                         }
                     }
 
-                    Console.WriteLine($"Debug-PeerListResponse: Peer list prepared. Count: {peerList.Count}");
+                    SystemLogger.Log($"Debug-PeerListResponse: Peer list prepared. Count: {peerList.Count}");
 
 
                     //build packet header
@@ -571,20 +573,20 @@ namespace SPHERE.Networking
 
                     Packet responsePacket = Packet.PacketBuilder.BuildPacket(header, JsonSerializer.Serialize(peerList));
 
-                    Console.WriteLine("Debug-PeerListResponse: Serializing response payload...");
+                    SystemLogger.Log("Debug-PeerListResponse: Serializing response payload...");
                     byte[] responseData = Packet.PacketBuilder.SerializePacket(responsePacket);
-                    Console.WriteLine($"Debug-PeerListResponse: Serialized response payload. Size: {responseData.Length} bytes");
+                    SystemLogger.Log($"Debug-PeerListResponse: Serialized response payload. Size: {responseData.Length} bytes");
                     bool success = new bool();
 
                     // Encrypt the response data using the recipient's public communication key
-                    Console.WriteLine("Debug-PeerListResponse: Encrypting response data...");
+                    SystemLogger.Log("Debug-PeerListResponse: Encrypting response data...");
 
 
 
                     byte[] encryptedResponseData = Encryption.EncryptPacketWithPublicKey(responseData, recipientPublicEncryptKey);
 
                     // Send the encrypted response data and signature to the recipient
-                    Console.WriteLine($"Debug-PeerListResponse: Sending response to {recipientIPAddress}:{recipientPort}...");
+                    SystemLogger.Log($"Debug-PeerListResponse: Sending response to {recipientIPAddress}:{recipientPort}...");
                     success = await Client.SendPacketToPeerAsync(recipientIPAddress, recipientPort, encryptedResponseData);
 
 
@@ -592,40 +594,40 @@ namespace SPHERE.Networking
                     // If the send operation fails, throw an exception to trigger a retry
                     if (!success)
                     {
-                        Console.WriteLine($"Debug-PeerListResponse: Failed to send Peer List Response to {recipientIPAddress}:{recipientPort}");
+                        SystemLogger.Log($"Debug-PeerListResponse: Failed to send Peer List Response to {recipientIPAddress}:{recipientPort}");
                         throw new Exception($"PeerListResponse: Failed to send Peer List Response to {recipientIPAddress}:{recipientPort}.");
                     }
 
                     // Reward the recipient with a trust score for a valid request
-                    Console.WriteLine("Debug-PeerListResponse: Updating trust score for recipient...");
+                    SystemLogger.Log("Debug-PeerListResponse: Updating trust score for recipient...");
                     lock (node.RoutingTable)
                     {
                         var peer = node.RoutingTable.GetPeerByIPAddress(recipientIPAddress);
                         if (peer != null)
                         {
                             node.NetworkManager.BroadcastReputationUpdate(node, peer, Blockchain.Reputation.ReputationReason.GetContactFailed);
-                            Console.WriteLine($"Debug-PeerListResponse: Trust score updated for peer {peer.NodeId}. New Trust Score: {peer.Reputation}");
+                            SystemLogger.Log($"Debug-PeerListResponse: Trust score updated for peer {peer.NodeId}. New Trust Score: {peer.Reputation}");
                         }
                         else
                         {
-                            Console.WriteLine("Debug-PeerListResponse: Recipient peer not found in the routing table.");
+                            SystemLogger.Log("Debug-PeerListResponse: Recipient peer not found in the routing table.");
                         }
                     }
 
                     // Log successful bootstrap response
-                    Console.WriteLine($"Debug-PeerListResponse: Peer List Response successfully sent to {recipientIPAddress}:{recipientPort}.");
+                    SystemLogger.Log($"Debug-PeerListResponse: Peer List Response successfully sent to {recipientIPAddress}:{recipientPort}.");
 
                     await node.Client.BroadcastToPeerList(node, packet);
                     return success; // Explicitly return success
 
                 });
 
-                Console.WriteLine("Debug-PeerListResponse: Peer List Response process completed successfully.");
+                SystemLogger.Log("Debug-PeerListResponse: Peer List Response process completed successfully.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error-PeerListResponse: {ex.Message}");
-                Console.WriteLine($"PeerListResponse: Debug Trace: {ex.StackTrace}");
+                SystemLogger.Log($"Error-PeerListResponse: {ex.Message}");
+                SystemLogger.Log($"PeerListResponse: Debug Trace: {ex.StackTrace}");
                 throw;
             }
 
@@ -659,9 +661,9 @@ namespace SPHERE.Networking
                 bool success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedResponse);
 
                 if (success)
-                    Console.WriteLine($"Successfully sent PushToken to {peer.NodeIP}:{peer.NodePort}");
+                    SystemLogger.Log($"Successfully sent PushToken to {peer.NodeIP}:{peer.NodePort}");
                 else
-                    Console.WriteLine($"Failed to send PushToken to {peer.NodeIP}:{peer.NodePort}");
+                    SystemLogger.Log($"Failed to send PushToken to {peer.NodeIP}:{peer.NodePort}");
 
                 return success;
             });
@@ -674,7 +676,7 @@ namespace SPHERE.Networking
             {
                 if (packet == null || packet.Header == null || packet.Content == null)
                 {
-                    Console.WriteLine("Received an invalid PushTokenIssued packet.");
+                    SystemLogger.Log("Received an invalid PushTokenIssued packet.");
                     return;
                 }
 
@@ -682,7 +684,7 @@ namespace SPHERE.Networking
 
                 if (senderPeer == null)
                 {
-                    Console.WriteLine("Received an invalid PushTokenIssued packet.");
+                    SystemLogger.Log("Received an invalid PushTokenIssued packet.");
                     return;
                 }
 
@@ -691,7 +693,7 @@ namespace SPHERE.Networking
 
                 if (token == null || string.IsNullOrWhiteSpace(token.TokenId))
                 {
-                    Console.WriteLine("Received an empty or invalid PushTokenIssued payload.");
+                    SystemLogger.Log("Received an empty or invalid PushTokenIssued payload.");
                     return;
                 }
 
@@ -702,7 +704,7 @@ namespace SPHERE.Networking
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error processing PushTokenIssued: {ex.Message}");
+                SystemLogger.Log($"Error processing PushTokenIssued: {ex.Message}");
             }
         }
 
@@ -727,7 +729,7 @@ namespace SPHERE.Networking
                 var existingBlock = node.ContactDHT.GetBlock(blockId);
                 if (existingBlock != null)
                 {
-                    Console.WriteLine("Block already exists locally.");
+                    SystemLogger.Log("Block already exists locally.");
                     return;
 
                 }
@@ -735,7 +737,7 @@ namespace SPHERE.Networking
                 //We add it to requested blocks.  So we can only add GetResponses in requestedBlocks.
                 if (!node.requestedBlocks.TryAdd(blockId, DateTime.UtcNow))
                 {
-                    Console.WriteLine($"Block {blockId} is already requested. Skipping redundant request.");
+                    SystemLogger.Log($"Block {blockId} is already requested. Skipping redundant request.");
                     return;
                 }
 
@@ -743,7 +745,7 @@ namespace SPHERE.Networking
                 List<Peer> closestPeers = node.RoutingTable.GetClosestPeers(blockId, 5);
                 if (closestPeers.Count == 0)
                 {
-                    Console.WriteLine("No peers available to request the block from.");
+                    SystemLogger.Log("No peers available to request the block from.");
                     return;
 
                 }
@@ -768,7 +770,7 @@ namespace SPHERE.Networking
                 // Iterate through the closest peers and send the request
                 var tasks = closestPeers.Select(async peer =>
                 {
-                    Console.WriteLine($"Sending block request to peer: {peer.NodeIP}:{peer.NodePort}");
+                    SystemLogger.Log($"Sending block request to peer: {peer.NodeIP}:{peer.NodePort}");
 
                     try
                     {
@@ -780,13 +782,13 @@ namespace SPHERE.Networking
 
                         if (!success)
                         {
-                            Console.WriteLine($"Failed to request block {blockId} from {peer.NodeIP}:{peer.NodePort}");
+                            SystemLogger.Log($"Failed to request block {blockId} from {peer.NodeIP}:{peer.NodePort}");
 
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error sending request to {peer.NodeIP}:{peer.NodePort}: {ex.Message}");
+                        SystemLogger.Log($"Error sending request to {peer.NodeIP}:{peer.NodePort}: {ex.Message}");
                     }
                 });
 
@@ -796,7 +798,7 @@ namespace SPHERE.Networking
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error requesting block: {ex.Message}");
+                SystemLogger.Log($"Error requesting block: {ex.Message}");
 
             }
 
@@ -811,13 +813,13 @@ namespace SPHERE.Networking
 
                 if (packet == null || packet.Header == null)
                 {
-                    Console.WriteLine("Received an invalid GetRequest packet.");
+                    SystemLogger.Log("Received an invalid GetRequest packet.");
                     return;
                 }
 
                 if (!int.TryParse(packet.Header.TTL, out int ttlValue) || ttlValue <= 0)
                 {
-                    Console.WriteLine("Invalid or expired TTL. Dropping request.");
+                    SystemLogger.Log("Invalid or expired TTL. Dropping request.");
                     return;
                 }
 
@@ -825,7 +827,7 @@ namespace SPHERE.Networking
 
                 var requestedBlockIds = JsonSerializer.Deserialize<List<string>>(packet.Content);
 
-                Console.WriteLine($"Received GetRequest for Block ID: {requestedBlockIds}");
+                SystemLogger.Log($"Received GetRequest for Block ID: {requestedBlockIds}");
 
 
                 List<Block> requestedBlocks = new List<Block>();
@@ -839,12 +841,12 @@ namespace SPHERE.Networking
 
                     if (block != null)
                     {
-                        Console.WriteLine($"Block {blockId} found locally. Adding to response list.");
+                        SystemLogger.Log($"Block {blockId} found locally. Adding to response list.");
                         requestedBlocks.Add(block);
                     }
                     else
                     {
-                        Console.WriteLine($"Block {blockId} not found locally. Adding to not found list.");
+                        SystemLogger.Log($"Block {blockId} not found locally. Adding to not found list.");
                         notFoundBlocks.Add(blockId);
                     }
                 }
@@ -854,7 +856,7 @@ namespace SPHERE.Networking
                 {
                     await node.NetworkManager.RetryAsync<bool>(async () =>
                     {
-                        Console.WriteLine($"Block {requestedBlockIds.Count} found locally. Sending GetResponse to requester...");
+                        SystemLogger.Log($"Block {requestedBlockIds.Count} found locally. Sending GetResponse to requester...");
 
                         BlockResponsePayload payload = new BlockResponsePayload
                         {
@@ -886,15 +888,15 @@ namespace SPHERE.Networking
                         // Send the response to the requester
                         bool success = await Client.SendPacketToPeerAsync(packet.Header.IPAddress, int.Parse(packet.Header.Port), encryptedResponse);
                         if (success)
-                            Console.WriteLine($"Successfully sent GetResponse for {requestedBlockIds.Count} Blocks to {packet.Header.IPAddress}:{packet.Header.Port}");
+                            SystemLogger.Log($"Successfully sent GetResponse for {requestedBlockIds.Count} Blocks to {packet.Header.IPAddress}:{packet.Header.Port}");
                         else
-                            Console.WriteLine($"Failed to send GetResponse for {requestedBlockIds} Blocks to {packet.Header.IPAddress}:{packet.Header.Port}");
+                            SystemLogger.Log($"Failed to send GetResponse for {requestedBlockIds} Blocks to {packet.Header.IPAddress}:{packet.Header.Port}");
 
                         return success;
                     });
                  }
                     // Block not found, rebroadcast the request to the closest peers
-                    Console.WriteLine($"Blocks not found locally. Rebroadcasting request to peers...");
+                    SystemLogger.Log($"Blocks not found locally. Rebroadcasting request to peers...");
 
                 bool success = false;
                 await node.NetworkManager.RetryAsync<bool>(async () =>
@@ -906,7 +908,7 @@ namespace SPHERE.Networking
                         List<Peer> closestPeers = node.RoutingTable.GetClosestPeers(Ids, 5);
                         if (closestPeers.Count == 0)
                         {
-                            Console.WriteLine("No peers available to forward the request.");
+                            SystemLogger.Log("No peers available to forward the request.");
                             continue;
                         }
 
@@ -916,7 +918,7 @@ namespace SPHERE.Networking
 
                         var tasks = closestPeers.Select(async peer =>
                         {
-                            Console.WriteLine($"Forwarding GetRequest for Block {Ids} to {peer.NodeIP}:{peer.NodePort}");
+                            SystemLogger.Log($"Forwarding GetRequest for Block {Ids} to {peer.NodeIP}:{peer.NodePort}");
 
                             try
                             {
@@ -925,7 +927,7 @@ namespace SPHERE.Networking
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"Error forwarding GetRequest to {peer.NodeIP}:{peer.NodePort}: {ex.Message}");
+                                SystemLogger.Log($"Error forwarding GetRequest to {peer.NodeIP}:{peer.NodePort}: {ex.Message}");
                             }
                         });
                         await Task.WhenAll(tasks); 
@@ -935,7 +937,7 @@ namespace SPHERE.Networking
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error processing GetRequest: {ex.Message}");
+                SystemLogger.Log($"Error processing GetRequest: {ex.Message}");
             }
 
         }
@@ -949,7 +951,7 @@ namespace SPHERE.Networking
             {
                 if (packet == null || packet.Header == null || packet.Content == null)
                 {
-                    Console.WriteLine("Received an invalid GetResponse packet.");
+                    SystemLogger.Log("Received an invalid GetResponse packet.");
                     return;
                 }
 
@@ -958,7 +960,7 @@ namespace SPHERE.Networking
 
                 if (payload == null || payload.Blocks == null || payload.Blocks.Count == 0)
                 {
-                    Console.WriteLine("Received an empty or invalid GetResponse payload.");
+                    SystemLogger.Log("Received an empty or invalid GetResponse payload.");
                     return;
                 }
 
@@ -967,14 +969,14 @@ namespace SPHERE.Networking
                 {
                     if (block == null || string.IsNullOrWhiteSpace(block.Header.BlockId))
                     {
-                        Console.WriteLine("Received an invalid block in GetResponse.");
+                        SystemLogger.Log("Received an invalid block in GetResponse.");
                         continue;
                     }
 
                     // Check if the block is already requested
                     if (!node.requestedBlocks.ContainsKey(block.Header.BlockId))
                     {
-                        Console.WriteLine($"Block {block.Header.BlockId} was not requested. Ignoring.");
+                        SystemLogger.Log($"Block {block.Header.BlockId} was not requested. Ignoring.");
                         continue;
                     }
 
@@ -984,7 +986,7 @@ namespace SPHERE.Networking
                     // Remove the block from the requested list
                     node.requestedBlocks.TryRemove(block.Header.BlockId, out _);
 
-                    Console.WriteLine($"Successfully added block {block.Header.BlockId} to the DHT.");
+                    SystemLogger.Log($"Successfully added block {block.Header.BlockId} to the DHT.");
                 }
 
                 //Reward the sender with a Reputation Score and a Token
@@ -1001,7 +1003,7 @@ namespace SPHERE.Networking
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error processing GetResponse: {ex.Message}");
+                SystemLogger.Log($"Error processing GetResponse: {ex.Message}");
             }
         }
 
@@ -1011,39 +1013,44 @@ namespace SPHERE.Networking
         //Send a Reputation Update to network
         public async Task BroadcastReputationUpdate(Node node, Peer peer, Reputation.ReputationReason reason)
         {
-            try
+
+            if (node !=null && Peer.ValidatePeer(peer) )
             {
-                Reputation reputation = new();
-                reputation.CreateReputation(node.Peer.NodeId, peer.NodeId, reason);
-
-                string content = JsonSerializer.Serialize(reputation);
-
-                // Build the ReputationUpdate packet
-                Packet responsePacket = new Packet
-                {
-                    Header = new Packet.PacketHeader
-                    {
-                        NodeId = node.Peer.NodeId,
-                        IPAddress = node.Client.clientIP.ToString(),
-                        Port = node.Client.clientListenerPort.ToString(),
-                        PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
-                        PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
-                        Packet_Type = Packet.PacketBuilder.PacketType.ReputationUpdate.ToString(),
-                        TTL = "1"
-                    },
-                    Content = content,
-                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Convert.FromBase64String(content))),
-                };
-
-                // Send the response to the requester
-                 node.Client.BroadcastToPeerList(node, responsePacket);
-
                
-                    Console.WriteLine($"Successfully sent ReputationUpdate to {peer.NodeIP}:{peer.NodePort}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error sending ReputationUpdate: {ex.Message}");
+                try
+                {
+                    Reputation reputation = new();
+                    reputation.CreateReputation(node.Peer.NodeId, peer.NodeId, reason);
+
+                    string content = JsonSerializer.Serialize(reputation);
+
+                    // Build the ReputationUpdate packet
+                    Packet responsePacket = new Packet
+                    {
+                        Header = new Packet.PacketHeader
+                        {
+                            NodeId = node.Peer.NodeId,
+                            IPAddress = node.Client.clientIP.ToString(),
+                            Port = node.Client.clientListenerPort.ToString(),
+                            PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
+                            PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
+                            Packet_Type = Packet.PacketBuilder.PacketType.ReputationUpdate.ToString(),
+                            TTL = "1"
+                        },
+                        Content = content,
+                        Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Convert.FromBase64String(content))),
+                    };
+
+                    // Send the response to the requester
+                    node.Client.BroadcastToPeerList(node, responsePacket);
+
+
+                    SystemLogger.Log($"Successfully sent ReputationUpdate to {peer.NodeIP}:{peer.NodePort}");
+                }
+                catch (Exception ex)
+                {
+                    SystemLogger.Log($"Error sending ReputationUpdate: {ex.Message}");
+                }
             }
         }
 
@@ -1054,14 +1061,14 @@ namespace SPHERE.Networking
             {
                 if (packet == null || packet.Header == null || packet.Content == null)
                 {
-                    Console.WriteLine("Received an invalid ReputationUpdate packet.");
+                    SystemLogger.Log("Received an invalid ReputationUpdate packet.");
                     return;
                 }
                 Peer senderPeer = Peer.CreatePeerFromPacket(packet);
 
                 if(senderPeer == null)
                 {
-                    Console.WriteLine("Received an invalid ReputationUpdate packet.");
+                    SystemLogger.Log("Received an invalid ReputationUpdate packet.");
                     return;
                 }
 
@@ -1071,7 +1078,7 @@ namespace SPHERE.Networking
 
                 if (reputation == null || string.IsNullOrWhiteSpace(reputation.UpdateIssuedByNodeId) || string.IsNullOrWhiteSpace(reputation.NodeId))
                 {
-                    Console.WriteLine("Received an empty or invalid ReputationUpdate payload.");
+                    SystemLogger.Log("Received an empty or invalid ReputationUpdate payload.");
                     return;
                 }
 
@@ -1081,7 +1088,7 @@ namespace SPHERE.Networking
 
                 if (!SignatureGenerator.VerifyByteArray(content, signature, senderPeer.PublicSignatureKey))
                 {
-                    Console.WriteLine("Invalid signature on ReputationUpdate packet.");
+                    SystemLogger.Log("Invalid signature on ReputationUpdate packet.");
                     return;
                 }
 
@@ -1098,7 +1105,7 @@ namespace SPHERE.Networking
                 else
                 {
 
-                    Console.WriteLine("Reputation Block not found in the Reputation DHT.");
+                    SystemLogger.Log("Reputation Block not found in the Reputation DHT.");
                    // Add the reputation to the Reputation DHT
                     if (node.ReputationDHT.ShouldStoreBlock(node, reputation.NodeId, node.RoutingTable.replicationFactor))
                     { 
@@ -1131,29 +1138,168 @@ namespace SPHERE.Networking
                 if (receiver != null)
                 {
                     receiver.Reputation += reputation.ReputationChange;
-                    Console.WriteLine($"Reputation updated for {receiver.NodeId}. New score: {receiver.Reputation}");
+                    SystemLogger.Log($"Reputation updated for {receiver.NodeId}. New score: {receiver.Reputation}");
                 }
                 else
                 {
-                    Console.WriteLine($"Peer {reputation.NodeId} not found in the routing table.");
+                    SystemLogger.Log($"Peer {reputation.NodeId} not found in the routing table.");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error processing ReputationUpdate: {ex.Message}");
+                SystemLogger.Log($"Error processing ReputationUpdate: {ex.Message}");
             }
         }
 
-        // We are missing Reputation Block Request.
-
-        public async Task RequestPeerReputation()
+        //Request a peer's reputation.
+        public async Task RequestPeerReputation(Node node, string nodeIdToGet)
         {
+            if (node == null)
+            {
+                SystemLogger.Log($"Error-RequestPeerReputation: Node cannot be null.");
+            }
+            if (string.IsNullOrWhiteSpace(nodeIdToGet))
+            {
+                SystemLogger.Log($"Error-RequestPeerReputation: nodeIdToGet cannot be null.");
+            }
+
+            try
+            {
 
 
+                Packet responsePacket = new Packet
+                {
+                    Header = new Packet.PacketHeader
+                    {
+                        NodeId = node.Peer.NodeId,
+                        IPAddress = node.Client.clientIP.ToString(),
+                        Port = node.Client.clientListenerPort.ToString(),
+                        PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
+                        PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
+                        Packet_Type = Packet.PacketBuilder.PacketType.ReputationRequest.ToString(),
+                        TTL = "1"
+                    },
+                    Content = nodeIdToGet,
+                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Convert.FromBase64String(nodeIdToGet))),
+                };
+
+                // Send the response to the requester
+                node.Client.BroadcastToPeerList(node, responsePacket);
+            }
+            catch (Exception ex)
+            {
+                SystemLogger.Log($"Error sending ReputationRequest: {ex.Message}");
+            }
 
 
         }
-       // Fix^;
+
+        //Process a Reputation Request.
+        public async Task ReturnRequestedReputation(Node node, Packet packet)
+        {
+            try
+            {
+                if (packet == null || packet.Header == null || packet.Content == null)
+                {
+                    SystemLogger.Log("Received an invalid ReputationRequest packet.");
+                    return;
+                }
+
+                // Deserialize the payload
+                string requestedNodeId = packet.Content;
+
+                if (string.IsNullOrWhiteSpace(requestedNodeId))
+                {
+                    SystemLogger.Log("Received an empty or invalid ReputationRequest payload.");
+                    return;
+                }
+
+                // Check if we have the requested reputation
+                Block block = node.ReputationDHT.GetBlock(requestedNodeId);
+
+                if (block == null)
+                {
+                    SystemLogger.Log($"Reputation Block {requestedNodeId} not found in the Reputation DHT.");
+                    return;
+                }
+
+                // Build the ReputationResponse packet
+                var responseHeader = Packet.PacketBuilder.BuildPacketHeader(
+                    Packet.PacketBuilder.PacketType.ReputationResponse,
+                    node.Peer.NodeId,
+                    node.Peer.Node_Type.ToString(),
+                    node.Peer.PublicSignatureKey,
+                    node.Peer.PublicEncryptKey,
+                    node.Client.clientListenerPort,
+                    node.Client.clientIP.ToString(),
+                    5 // TTL value for response
+                );
+
+                var serializedBlock = JsonSerializer.Serialize(block);
+
+                Packet responsePacket = Packet.PacketBuilder.BuildPacket(responseHeader, serializedBlock);
+                byte[] serializedResponse = Packet.PacketBuilder.SerializePacket(responsePacket);
+
+                // Encrypt with the requester's public key
+                byte[] encryptedResponse = Encryption.EncryptPacketWithPublicKey(serializedResponse, packet.Header.PublicEncryptKey);
+
+                // Send the response to the requester
+                await node.NetworkManager.RetryAsync<bool>(async () =>
+                {
+                    bool success = await Client.SendPacketToPeerAsync(packet.Header.IPAddress, int.Parse(packet.Header.Port), encryptedResponse);
+                    if (success)
+                    {
+                        SystemLogger.Log($"Successfully sent ReputationResponse for {requestedNodeId} to {packet.Header.IPAddress}:{packet.Header.Port}");
+                    }
+                    else
+                    {
+                        SystemLogger.Log($"Failed to send ReputationResponse for {requestedNodeId} to {packet.Header.IPAddress}:{packet.Header.Port}");
+                    }
+
+                    return success;
+                });
+            }
+            catch (Exception ex)
+            {
+                SystemLogger.Log($"Error processing ReputationRequest: {ex.Message}");
+            }
+        }
+
+        //Process a Reputation Response.
+        public async Task ProcessReputationResponse(Node node, Packet packet)
+        {
+            try
+            {
+                if (node == null)
+                {
+                    SystemLogger.Log("Error-ProcessReputationResponse: Node cannot be null.");
+                }
+                if (packet == null || packet.Header == null || packet.Content == null)
+                {
+                    SystemLogger.Log("Received an invalid ReputationResponse packet.");
+                    return;
+                }
+
+                // Deserialize the payload
+                var block = JsonSerializer.Deserialize<Block>(packet.Content);
+
+                if (block == null || string.IsNullOrWhiteSpace(block.Header.BlockId))
+                {
+                    SystemLogger.Log("Received an empty or invalid ReputationResponse payload.");
+                    return;
+                }
+
+                // Add the block to the Reputation DHT
+                node.ReputationDHT.AddBlock(block);
+
+                SystemLogger.Log($"Successfully added Reputation Block {block.Header.BlockId} to the Reputation DHT.");
+            }
+            catch (Exception ex)
+            {
+                SystemLogger.Log($"Error processing ReputationResponse: {ex.Message}");
+            }
+        }
+
 
         //-----Configuration Calls-----\\
 
@@ -1168,7 +1314,7 @@ namespace SPHERE.Networking
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Attempt {i + 1} failed: {ex.Message}");
+                    SystemLogger.Log($"Attempt {i + 1} failed: {ex.Message}");
                     if (i == maxRetries - 1)
                         throw; // Re-throw on final attempt
 
@@ -1188,7 +1334,7 @@ namespace SPHERE.Networking
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Task error: {ex.Message}");
+                SystemLogger.Log($"Task error: {ex.Message}");
             }
         }
 

@@ -1,5 +1,6 @@
 ﻿using SPHERE.Blockchain;
 using SPHERE.Networking;
+using SPHERE.Configure.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -127,13 +128,13 @@ namespace SPHERE.Configure
                         {
                             node.TokenManager.TokensPendingRemoval.TryAdd(now, token);
                             node.NetworkManager.SendPushTokenExtendPing(node, token.TokenId, token.ReceiverId);
-                            Console.WriteLine($"Expired token {key} removed.");
+                            SystemLogger.Log($"Expired token {key} removed.");
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error in token cleanup: {ex.Message}");
+                    SystemLogger.Log($"Error in token cleanup: {ex.Message}");
                 }
 
                 await Task.CompletedTask;
@@ -157,13 +158,13 @@ namespace SPHERE.Configure
                     {
                         if (node.TokenManager.TokensPendingRemoval.TryRemove(key, out _))
                         {
-                            Console.WriteLine($"Expired token {key} removed.");
+                            SystemLogger.Log($"Expired token {key} removed.");
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error in token cleanup: {ex.Message}");
+                    SystemLogger.Log($"Error in token cleanup: {ex.Message}");
                 }
 
                 await Task.CompletedTask;
@@ -197,7 +198,7 @@ namespace SPHERE.Configure
 
                         if (success)
                         {
-                            Console.WriteLine("Successfully pinged peer for token. Selecting new PingPal");
+                            SystemLogger.Log("Successfully pinged peer for token. Selecting new PingPal");
 
 
                             Peer peer = new Peer();
@@ -209,7 +210,7 @@ namespace SPHERE.Configure
                         }
                         else
                         {
-                            Console.WriteLine("Failed to ping peer for token.");
+                            SystemLogger.Log("Failed to ping peer for token.");
                         }
 
                         await Task.CompletedTask;
@@ -218,7 +219,7 @@ namespace SPHERE.Configure
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error: There was an error earning the token over time {ex.Message}");
+                    SystemLogger.Log($"Error: There was an error earning the token over time {ex.Message}");
                 }
                 await Task.CompletedTask;
             
@@ -230,7 +231,7 @@ namespace SPHERE.Configure
             
                 try
                 {
-                    Console.WriteLine("Broadcasting peer ping to all known peers...");
+                    SystemLogger.Log("Broadcasting peer ping to all known peers...");
 
                     List<Peer> peers = node.RoutingTable.GetAllPeers();
 
@@ -241,7 +242,7 @@ namespace SPHERE.Configure
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error in AutoBroadcastPeerPing: {ex.Message}");
+                    SystemLogger.Log($"Error in AutoBroadcastPeerPing: {ex.Message}");
                 }
 
                
@@ -261,7 +262,7 @@ namespace SPHERE.Configure
                 {
                     if (!node.isBootstrapped)
                     {
-                        Console.WriteLine("⚠️ Node is not bootstrapped. Skipping re-balance.");
+                        SystemLogger.Log("⚠️ Node is not bootstrapped. Skipping re-balance.");
                         await Task.Delay(defaultRebalanceInterval, cancellationToken);
                        
                     }
@@ -269,7 +270,7 @@ namespace SPHERE.Configure
                     bool hasPeers = node.RoutingTable.GetAllPeers().Count > 0;
                     if (!hasPeers)
                     {
-                        Console.WriteLine("⚠️ No peers in routing table. Skipping re-balance.");
+                        SystemLogger.Log("⚠️ No peers in routing table. Skipping re-balance.");
                         await Task.Delay(defaultRebalanceInterval, cancellationToken);
                         
                     }
@@ -292,21 +293,21 @@ namespace SPHERE.Configure
 
                     if (shouldRebalanceContact && hasContactBlocks)
                     {
-                        Console.WriteLine("🔄 Running ContactDHT re-balance...");
+                        SystemLogger.Log("🔄 Running ContactDHT re-balance...");
                         DHTManagement.ReassignBlocks(node, node.ContactDHT);
                         DHTManagement.FetchMissingContactBlocks(node);
                     }
 
                     if (shouldRebalanceReputation && hasReputationBlocks)
                     {
-                        Console.WriteLine("🔄 Running ReputationDHT re-balance...");
+                        SystemLogger.Log("🔄 Running ReputationDHT re-balance...");
                         DHTManagement.ReassignBlocks(node, node.ReputationDHT);
                         DHTManagement.FetchMissingReputationBlocks(node);
                     }
 
                     if (shouldRebalanceTransaction && hasTransactionBlocks)
                     {
-                        Console.WriteLine("🔄 Running TransactionDHT re-balance...");
+                        SystemLogger.Log("🔄 Running TransactionDHT re-balance...");
                         DHTManagement.ReassignBlocks(node, node.TransactionDHT);
                         DHTManagement.FetchMissingTransactionBlocks(node);
                     }
@@ -315,7 +316,7 @@ namespace SPHERE.Configure
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"❌ Error in PeriodicRebalance: {ex.Message}");
+                    SystemLogger.Log($"❌ Error in PeriodicRebalance: {ex.Message}");
                 }
                 await Task.CompletedTask;
             
@@ -337,7 +338,7 @@ namespace SPHERE.Configure
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error: There was an error cleaning up the pingPal {ex.Message}");
+                    SystemLogger.Log($"Error: There was an error cleaning up the pingPal {ex.Message}");
                 }
                 await Task.CompletedTask;
             
@@ -369,7 +370,7 @@ namespace SPHERE.Configure
                             if (DateTime.UtcNow - token.Timestamp >= node.TokenManager._staleThreshold)
                             {
                                 node.TokenManager.PushTokenBalance.TryRemove(token.TokenId, out _);
-                                Console.WriteLine($"Removed stale token {token.TokenId} issued at {token.Timestamp}");
+                                SystemLogger.Log($"Removed stale token {token.TokenId} issued at {token.Timestamp}");
                                 if (node.TokenManager.PushTokenBalance.Count <= maxAllowed)
                                     break;
                             }
@@ -380,7 +381,7 @@ namespace SPHERE.Configure
 
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"AutoCleanupTokenBalance error: {ex.Message}");
+                    SystemLogger.Log($"AutoCleanupTokenBalance error: {ex.Message}");
                 }
             await Task.CompletedTask;
         }

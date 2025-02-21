@@ -28,7 +28,7 @@ namespace SPHERE.Configure
     //        string packetDllPath = possiblePaths.FirstOrDefault(File.Exists)
     //            ?? throw new FileNotFoundException("Packet.dll not found in expected locations.");
 
-    //        Console.WriteLine($"[INFO] Dynamically loading Packet.dll from: {packetDllPath}");
+    //        SystemLogger.Log($"[INFO] Dynamically loading Packet.dll from: {packetDllPath}");
 
     //        // 🔥 Load with LoadFrom() to properly register the assembly
     //        Assembly packetAssembly = Assembly.LoadFrom(packetDllPath);
@@ -37,7 +37,7 @@ namespace SPHERE.Configure
     //        if (packetAssembly == null)
     //            throw new InvalidOperationException("Failed to load Packet.dll into AppDomain.");
 
-    //        Console.WriteLine("[INFO] Packet.dll loaded successfully.");
+    //        SystemLogger.Log("[INFO] Packet.dll loaded successfully.");
     //    }
 
     }

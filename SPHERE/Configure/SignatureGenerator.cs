@@ -4,6 +4,7 @@ using System.Text;
 using SPHERE.Blockchain;
 using SPHERE.Security;
 using static SPHERE.Configure.TokenManager;
+using SPHERE.Configure.Logging;
 
 namespace SPHERE.Configure
 {
@@ -126,7 +127,7 @@ namespace SPHERE.Configure
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(ex.Message);
+                    SystemLogger.Log(ex.Message);
                     return null;
                 }
             }
@@ -148,7 +149,7 @@ namespace SPHERE.Configure
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(ex.Message);
+                    SystemLogger.Log(ex.Message);
                     return null;
                 }
 
@@ -180,7 +181,7 @@ namespace SPHERE.Configure
             catch (Exception ex)
             {
                 // Log or handle exceptions (optional)
-                Console.WriteLine($"Error verifying signature: {ex.Message}");
+                SystemLogger.Log($"Error verifying signature: {ex.Message}");
                 return false;
             }
         }

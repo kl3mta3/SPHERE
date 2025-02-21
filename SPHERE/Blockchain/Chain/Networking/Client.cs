@@ -6,6 +6,7 @@ using SPHERE.PacketLib;
 using SPHERE.Blockchain;
 using static SPHERE.PacketLib.Packet;
 using SPHERE.Configure;
+using SPHERE.Configure.Logging;
 using SPHERE.Security;
 using System.Collections;
 using System.Text.RegularExpressions;
@@ -19,7 +20,7 @@ namespace SPHERE.Networking
 {
     /// <summary>
     /// The client is a standard TCP/IP listener. 
-    /// We use STUN (Session Traversal Utilities for NAT) to get a port and Ip for the listener to allow the client to connect and listen to the outside world without portfowarding.
+    /// We use STUN (Session Traversal Utilities for NAT) to get a port and Ip for the listener to allow the client to connect and listen to the outside world without port-forwarding.
     /// 
     /// Sent Packets are sent dynamically so no other work is needed,
     /// 
@@ -31,7 +32,7 @@ namespace SPHERE.Networking
     /// await Client.StartClientListenerWithSTUNAsync(client)
     /// This will create a new client and listener.  
     /// 
-    /// If you need to start a listener for a client already on a node it would be the same thing just dont start a new client feed in node.client.
+    /// If you need to start a listener for a client already on a node it would be the same thing just don't start a new client feed in node.client.
     /// 
     /// A Node needs to have a client and listener started up before it can Bootstrap or talk to other Nodes.  
     /// A client can send out comms from any port dynamically but can only listen on the IP and port discovered with STUN
@@ -175,7 +176,7 @@ namespace SPHERE.Networking
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error-SendPacketToPeerAsync: {ex.Message}");
+                    SystemLogger.Log($"Error-SendPacketToPeerAsync: {ex.Message}");
                     return false;
                 }
             }
@@ -191,14 +192,14 @@ namespace SPHERE.Networking
 
                     if (node.seenPackets.ContainsKey(packetHash))
                     {
-                        Console.WriteLine("Duplicate packet detected. Dropping...");
+                        SystemLogger.Log("Duplicate packet detected. Dropping...");
                         return;
                     }
 
                     //  Use TryAdd to prevent overwrites from race conditions
                     if (node.seenPackets.TryAdd(packetHash, DateTime.UtcNow))
                     {
-                        Console.WriteLine($"Debug-RebroadcastToPeerList: Storing new packet hash {packetHash}");
+                        SystemLogger.Log($"Debug-RebroadcastToPeerList: Storing new packet hash {packetHash}");
                     }
 
 
@@ -206,7 +207,7 @@ namespace SPHERE.Networking
                     int newTTL = int.Parse(packet.Header.TTL) - 1;
                     if (newTTL <= 0)
                     {
-                        Console.WriteLine("Debug-RebroadcastToPeerList: TTL expired, not forwarding.");
+                        SystemLogger.Log("Debug-RebroadcastToPeerList: TTL expired, not forwarding.");
                         return;
                     }
 
@@ -221,7 +222,7 @@ namespace SPHERE.Networking
 
                     if (peersToSend.Count == 0)
                     {
-                        Console.WriteLine("Debug-RebroadcastToPeerList: No peers to forward to.");
+                        SystemLogger.Log("Debug-RebroadcastToPeerList: No peers to forward to.");
                         return;
                     }
 
@@ -231,22 +232,27 @@ namespace SPHERE.Networking
                     // Send the packet to each peer
                     foreach (var peer in peersToSend)
                     {
-                        byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(data, peer.PublicEncryptKey);
-                        bool success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedData);
+                        await node.NetworkManager.RetryAsync<bool>(async () =>
+                        { 
+                            byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(data, peer.PublicEncryptKey);
+                            bool success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedData);
 
-                        if (!success)
-                        {
-                            Console.WriteLine($"Debug-RebroadcastToPeerList: Failed to rebroadcast to {peer.NodeIP}:{peer.NodePort}");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Debug-RebroadcastToPeerList: Forwarded to {peer.NodeIP}:{peer.NodePort}");
-                        }
+                            if (!success)
+                            {
+                                SystemLogger.Log($"Debug-RebroadcastToPeerList: Failed to rebroadcast to {peer.NodeIP}:{peer.NodePort}");
+                                return success;
+                            }
+                            else
+                            {
+                                SystemLogger.Log($"Debug-RebroadcastToPeerList: Forwarded to {peer.NodeIP}:{peer.NodePort}");
+                                return success;
+                            }
+                        });
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error-RebroadcastToPeerList: {ex.Message}");
+                SystemLogger.Log($"Error-RebroadcastToPeerList: {ex.Message}");
             }
         }
 
@@ -327,26 +333,26 @@ namespace SPHERE.Networking
                     }
                     client.Listener = new TcpListener(client.clientIP, client.clientListenerPort);
                     client.Listener.Start();
-                    Console.WriteLine($"Async server is listening on port {client.clientListenerPort}");
+                    SystemLogger.Log($"Async server is listening on port {client.clientListenerPort}");
 
                     while (true)
                     {
                         try
                         {
                             client.client = await client.Listener.AcceptTcpClientAsync();
-                            Console.WriteLine($"Connection established with {client.client.Client.RemoteEndPoint}");
+                            SystemLogger.Log($"Connection established with {client.client.Client.RemoteEndPoint}");
 
                             _ = HandleClientAsync(node, client.client);
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"Server error: {ex.Message}");
+                            SystemLogger.Log($"Server error: {ex.Message}");
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error starting listener: {ex.Message}");
+                    SystemLogger.Log($"Error starting listener: {ex.Message}");
                     return;
                 }
             }
@@ -361,11 +367,11 @@ namespace SPHERE.Networking
 
                     if (PublicIP == null || PublicPort == 0)
                     {
-                        Console.WriteLine("StartClientListenerWithSTUNAsync: Failed to retrieve public endpoint. Trying once more.");
+                        SystemLogger.Log("StartClientListenerWithSTUNAsync: Failed to retrieve public endpoint. Trying once more.");
                         var (PublicIP1, PublicPort1) = stun.GetPublicEndpoint();
                         if (PublicIP1 == null || PublicPort1 == 0)
                         {
-                            Console.WriteLine("StartClientListenerWithSTUNAsync: Failed to retrieve public endpoint again. Exiting.");
+                            SystemLogger.Log("StartClientListenerWithSTUNAsync: Failed to retrieve public endpoint again. Exiting.");
                             return;
                         }
 
@@ -375,7 +381,7 @@ namespace SPHERE.Networking
                     client.clientIP = PublicIP;
                     client.Listener = new TcpListener(client.clientIP, client.clientListenerPort);
                     client.Listener.Start();
-                    Console.WriteLine($"StartClientListenerWithSTUNAsync: Async server is listening on port {client.clientListenerPort}");
+                    SystemLogger.Log($"StartClientListenerWithSTUNAsync: Async server is listening on port {client.clientListenerPort}");
 
 
                     while (true)
@@ -383,20 +389,20 @@ namespace SPHERE.Networking
                         try
                         {
                             client.client = await client.Listener.AcceptTcpClientAsync();
-                            Console.WriteLine($"StartClientListenerWithSTUNAsync: Connection established with {client.client.Client.RemoteEndPoint}");
+                            SystemLogger.Log($"StartClientListenerWithSTUNAsync: Connection established with {client.client.Client.RemoteEndPoint}");
 
                             _ = HandleClientAsync(node, client.client);
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"StartClientListenerWithSTUNAsync: Server error: {ex.Message}");
+                            SystemLogger.Log($"StartClientListenerWithSTUNAsync: Server error: {ex.Message}");
                         }
                     }
 
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"StartClientListenerWithSTUNAsync: Error starting listener: {ex.Message}");
+                    SystemLogger.Log($"StartClientListenerWithSTUNAsync: Error starting listener: {ex.Message}");
                     return;
                 }
             }
@@ -412,7 +418,7 @@ namespace SPHERE.Networking
 
                     if (PublicIP == null || PublicPort == 0)
                     {
-                        Console.WriteLine("Failed to retrieve public endpoint. Exiting.");
+                        SystemLogger.Log("Failed to retrieve public endpoint. Exiting.");
                         throw new Exception("STUN failed to retrieve public endpoint.");
                     }
 
@@ -422,13 +428,13 @@ namespace SPHERE.Networking
 
                     // Step 2: Start the listener
                     client.Listener.Start();
-                    Console.WriteLine($"Server is listening on {client.clientIP}:{client.clientListenerPort}");
+                    SystemLogger.Log($"Server is listening on {client.clientIP}:{client.clientListenerPort}");
 
                     while (true)
                     {
                         // Step 3: Accept a new client connection
                         TcpClient incomingClient = client.Listener.AcceptTcpClient();
-                        Console.WriteLine($"New client connected from {((IPEndPoint)incomingClient.Client.RemoteEndPoint).Address}");
+                        SystemLogger.Log($"New client connected from {((IPEndPoint)incomingClient.Client.RemoteEndPoint).Address}");
 
                         // Step 4: Handle the client in a separate task
                         _ = Task.Run(() => HandleClientAsync(node, incomingClient));
@@ -436,7 +442,7 @@ namespace SPHERE.Networking
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error starting client listener: {ex.Message}");
+                    SystemLogger.Log($"Error starting client listener: {ex.Message}");
                 }
             }
 
@@ -457,18 +463,18 @@ namespace SPHERE.Networking
                             // Ensure values are valid before processing
                             if (encryptedMessage == null )
                             {
-                                Console.WriteLine("Error-HandleClientAsync: Received an invalid packet. Encrypted Message is null Closing connection.");
+                                SystemLogger.Log("Error-HandleClientAsync: Received an invalid packet. Encrypted Message is null Closing connection.");
                                 break;
                             }
                             if(senderPublicEncryptionKey == null)
                             {
-                                Console.WriteLine("Error-HandleClientAsync: Received an invalid packet. senderPublicEncryptionKey is null Closing connection.");
+                                SystemLogger.Log("Error-HandleClientAsync: Received an invalid packet. senderPublicEncryptionKey is null Closing connection.");
                                 break;
 
                             }
                             if (signature == null)
                             {
-                                Console.WriteLine("Error-HandleClientAsync: Received an invalid packet. signature is null Closing connection.");
+                                SystemLogger.Log("Error-HandleClientAsync: Received an invalid packet. signature is null Closing connection.");
                                 break;
 
                             }
@@ -478,7 +484,7 @@ namespace SPHERE.Networking
                             // Check for unexpected key length mismatches
                             if (senderPublicEncryptionKey.Length != 72 && senderPublicEncryptionKey.Length != 91)
                             {
-                                Console.WriteLine($"Error-HandleClientAsync: Unexpected sender public key length! Expected 72 or 91, got {senderPublicEncryptionKey.Length}");
+                                SystemLogger.Log($"Error-HandleClientAsync: Unexpected sender public key length! Expected 72 or 91, got {senderPublicEncryptionKey.Length}");
                             }
 
                             // Process message 
@@ -487,17 +493,17 @@ namespace SPHERE.Networking
                         catch (EndOfStreamException eosEx)
                         {
 
-                            Console.WriteLine($"Info-HandleClientAsync: Stream ended normally: {eosEx.Message}");
+                            SystemLogger.Log($"Info-HandleClientAsync: Stream ended normally: {eosEx.Message}");
                             break;
                         }
                         catch (IOException ioEx)
                         {
-                            Console.WriteLine($"Info-HandleClientAsync: Connection closed by peer: {ioEx.Message}");
+                            SystemLogger.Log($"Info-HandleClientAsync: Connection closed by peer: {ioEx.Message}");
                             break;
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"Error-HandleClientAsync: Unexpected error processing packet: {ex.Message}");
+                            SystemLogger.Log($"Error-HandleClientAsync: Unexpected error processing packet: {ex.Message}");
                             break;
                         }
 
@@ -506,18 +512,18 @@ namespace SPHERE.Networking
                 catch (EndOfStreamException eosEx)
                 {
 
-                    Console.WriteLine($"Info-HandleClientAsync: Stream ended normally: {eosEx.Message}");
+                    SystemLogger.Log($"Info-HandleClientAsync: Stream ended normally: {eosEx.Message}");
 
                 }
                 catch (IOException ioEx)
                 {
 
-                    Console.WriteLine($"Info-HandleClientAsync: Connection closed by peer: {ioEx.Message}");
+                    SystemLogger.Log($"Info-HandleClientAsync: Connection closed by peer: {ioEx.Message}");
 
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error-HandleClientAsync: Unexpected error processing packet: {ex.Message}");
+                    SystemLogger.Log($"Error-HandleClientAsync: Unexpected error processing packet: {ex.Message}");
 
                 }
                 finally
@@ -544,7 +550,7 @@ namespace SPHERE.Networking
         public async Task ProcessIncomingPacket(Node node, byte[] packetData, byte[] senderPublicEncryptKey, byte[] signature)
         {
             
-            Console.WriteLine($"Debug-ProcessIncomingPacket: Processing Incoming Encrypted.");
+            SystemLogger.Log($"Debug-ProcessIncomingPacket: Processing Incoming Encrypted.");
             try
             {
                 Packet packet = new Packet();
@@ -572,46 +578,46 @@ namespace SPHERE.Networking
 
                             if (node.seenPackets.ContainsKey(packetHash))
                             {
-                                Console.WriteLine("Duplicate packet detected. Dropping...");
+                                SystemLogger.Log("Duplicate packet detected. Dropping...");
                                 return;
                             }
 
                             //  Use TryAdd to prevent overwrites from race conditions
                             if (node.seenPackets.TryAdd(packetHash, DateTime.UtcNow))
                             {
-                                Console.WriteLine($"Debug-ProcessIncomingPacket: Storing new packet hash {packetHash}");
+                                SystemLogger.Log($"Debug-ProcessIncomingPacket: Storing new packet hash {packetHash}");
                             }
                         }
                         
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"Error-ProcessIncomingPacket: Error processing packet(Preventing Duplicates): {ex.Message}");
+                            SystemLogger.Log($"Error-ProcessIncomingPacket: Error processing packet(Preventing Duplicates): {ex.Message}");
                         }
 
                         try
                         {
                             byte[] sendersPublicSignatureKey = packet.Header.PublicSignatureKey;
-                            Console.WriteLine($"Debug-ProcessIncomingPacket: Sender Public Signature Key: {Convert.ToBase64String(sendersPublicSignatureKey)}.");
-                            Console.WriteLine($"Debug-ProcessIncomingPacket: Raw Signature Before Decoding: {packet.Signature}");
+                            SystemLogger.Log($"Debug-ProcessIncomingPacket: Sender Public Signature Key: {Convert.ToBase64String(sendersPublicSignatureKey)}.");
+                            SystemLogger.Log($"Debug-ProcessIncomingPacket: Raw Signature Before Decoding: {packet.Signature}");
                             byte[] rawSignature = Convert.FromBase64String(packet.Signature);
-                            Console.WriteLine($"Debug-ProcessIncomingPacket: Raw Signature: {Convert.ToBase64String(rawSignature)}.");
+                            SystemLogger.Log($"Debug-ProcessIncomingPacket: Raw Signature: {Convert.ToBase64String(rawSignature)}.");
                             bool isValidSignature = SignatureGenerator.VerifyByteArray(packetData, rawSignature, sendersPublicSignatureKey);
 
                             if (!isValidSignature)
                             {
-                                Console.WriteLine("Error-ProcessIncomingPacket: Invalid Signature! Packet rejected.");
+                                SystemLogger.Log("Error-ProcessIncomingPacket: Invalid Signature! Packet rejected.");
                                 return;
                             }
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"Error-ProcessIncomingPacket: Error processing packet(ValidatingSignature): {ex.Message}");
+                            SystemLogger.Log($"Error-ProcessIncomingPacket: Error processing packet(ValidatingSignature): {ex.Message}");
                         }
                     }
                     
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error-ProcessIncomingPacket: Error processing packet: {ex.Message}");
+                        SystemLogger.Log($"Error-ProcessIncomingPacket: Error processing packet: {ex.Message}");
                     }
                 
                 }
@@ -632,14 +638,14 @@ namespace SPHERE.Networking
 
                         if (node.seenPackets.ContainsKey(packetHash))
                         {
-                            Console.WriteLine("Duplicate packet detected. Dropping...");
+                            SystemLogger.Log("Duplicate packet detected. Dropping...");
                             return;
                         }
 
                         //  Use TryAdd to prevent overwrites from race conditions
                         if (node.seenPackets.TryAdd(packetHash, DateTime.UtcNow))
                         {
-                            Console.WriteLine($"Debug-ProcessIncomingPacket: Storing new packet hash {packetHash}");
+                            SystemLogger.Log($"Debug-ProcessIncomingPacket: Storing new packet hash {packetHash}");
                         }
 
                         byte[] sendersPublicSignatureKey = packet.Header.PublicSignatureKey;
@@ -650,14 +656,14 @@ namespace SPHERE.Networking
 
                         if (!isValidSignature)
                         {
-                            Console.WriteLine("Error-ProcessIncomingPacket: Invalid Signature! Packet rejected.");
+                            SystemLogger.Log("Error-ProcessIncomingPacket: Invalid Signature! Packet rejected.");
                             return;
                         }
 
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error-ProcessIncomingPacket: Error processing packet: {ex.Message}");
+                        SystemLogger.Log($"Error-ProcessIncomingPacket: Error processing packet: {ex.Message}");
                     }
                 }
 
@@ -713,15 +719,26 @@ namespace SPHERE.Networking
                         await node.NetworkManager.PongPalProcess(node, packet);
                         break;
 
+                    case PacketBuilder.PacketType.ReputationUpdate:
+                        await node.NetworkManager.ProcessReputationUpdate(node, packet);
+                        break;
+
+                    case PacketBuilder.PacketType.ReputationRequest:
+                        await node.NetworkManager.ReturnRequestedReputation(node, packet);
+                        break;
+
+                    case PacketBuilder.PacketType.ReputationResponse:
+                        await node.NetworkManager.ProcessReputationResponse(node, packet);
+                        break;
 
                     default:
-                        Console.WriteLine($"ProcessIncomingPacket:Unknown packet type: {packet.Header.Packet_Type}");
+                        SystemLogger.Log($"ProcessIncomingPacket:Unknown packet type: {packet.Header.Packet_Type}");
                         break;
                 }
             }
             catch (Exception ex)
             {
-               Console.WriteLine($"ProcessIncomingPacket: Error processing packet: {ex.Message}");
+               SystemLogger.Log($"ProcessIncomingPacket: Error processing packet: {ex.Message}");
             }
         }
 
@@ -763,22 +780,22 @@ namespace SPHERE.Networking
                 {
                     try
                     {
-                        Console.WriteLine($"Trying STUN server: {server.Key}:{server.Value}");
+                        SystemLogger.Log($"Trying STUN server: {server.Key}:{server.Value}");
                         var result = QueryStunServer(server.Key, server.Value);
                         if (result.PublicIP != null)
                         {
-                            Console.WriteLine($"Success with {server.Key}:{server.Value}");
+                            SystemLogger.Log($"Success with {server.Key}:{server.Value}");
                             return result;
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"STUN server {server.Key}:{server.Value} failed: {ex.Message}");
+                        SystemLogger.Log($"STUN server {server.Key}:{server.Value} failed: {ex.Message}");
                     }
                 }
 
                 // If none succeed
-                Console.WriteLine("All STUN servers failed.");
+                SystemLogger.Log("All STUN servers failed.");
                 return (null, 0);
             }
 
@@ -846,7 +863,7 @@ namespace SPHERE.Networking
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error querying STUN server {stunServer}:{stunPort} - {ex.Message}");
+                    SystemLogger.Log($"Error querying STUN server {stunServer}:{stunPort} - {ex.Message}");
                     throw;
                 }
             }

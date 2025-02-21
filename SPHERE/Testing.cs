@@ -1,6 +1,6 @@
 ﻿using SPHERE.Security;
 using SPHERE.PacketLib;
-using SPHERE.Configure;
+using SPHERE.Configure.Logging;
 using SPHERE.Blockchain;
 using static SPHERE.PacketLib.Packet;
 using SPHERE.Networking;
@@ -58,33 +58,33 @@ namespace SPHERE.TestingLib
 
             try
             {
-                Console.WriteLine($"Debug: Starting Create Client ");
+                SystemLogger.Log($"Debug: Starting Create Client ");
                 Client client = new Client();
                 client.clientListenerPort = testClientListenerPort;
                 client.clientIP = IPAddress.Parse(testClientIP);
-                Console.WriteLine($"Debug: Starting Create TestNode ");
+                SystemLogger.Log($"Debug: Starting Create TestNode ");
 
                 try
                 {
-                    Console.WriteLine("Checking if CNG Keys Exist...");
+                    SystemLogger.Log("Checking if CNG Keys Exist...");
                     if (!DoesCngKeyExist(KeyGenerator.KeyType.PrivateTestNodeEncryptionKey) ||
                         !DoesCngKeyExist(KeyGenerator.KeyType.PublicTestNodeEncryptionKey) ||
                         !DoesCngKeyExist(KeyGenerator.KeyType.PrivateTestNodeSignatureKey) ||
                         !DoesCngKeyExist(KeyGenerator.KeyType.PublicTestNodeSignatureKey))
                     {
-                        Console.WriteLine("CNG Keys Missing. Generating Test Keys...");
+                        SystemLogger.Log("CNG Keys Missing. Generating Test Keys...");
                         GenerateTestNodeKeyPairs();
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error Checking or Generating CNG Keys: {ex.Message}");
+                    SystemLogger.Log($"Error Checking or Generating CNG Keys: {ex.Message}");
                     throw;
                 }
 
                 try
                 {
-                    Console.WriteLine("Retrieving Keys from Storage...");
+                    SystemLogger.Log("Retrieving Keys from Storage...");
                     byte[] publicSigKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicTestNodeSignatureKey);
                     byte[] privateSigKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateTestNodeSignatureKey);
                     byte[] publicEncKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicTestNodeEncryptionKey);
@@ -94,37 +94,37 @@ namespace SPHERE.TestingLib
                     string encKeyBase64 = Convert.ToBase64String(publicEncKey);
 
 
-                    Console.WriteLine($"Signature Public Key: {sigKeyBase64}");
+                    SystemLogger.Log($"Signature Public Key: {sigKeyBase64}");
 
-                    Console.WriteLine($"Encryption Public Key: {encKeyBase64}");
+                    SystemLogger.Log($"Encryption Public Key: {encKeyBase64}");
 
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error Retrieving Keys: {ex.Message}");
+                    SystemLogger.Log($"Error Retrieving Keys: {ex.Message}");
                     throw;
                 }
 
                 try
                 {
-                    Console.WriteLine("Generating Random Node Port...");
+                    SystemLogger.Log("Generating Random Node Port...");
                     Random random = new Random();
                     int nodePort = random.Next(5000, 6000);
                     if (nodePort < 5000 || nodePort > 6000)
                     {
-                        Console.WriteLine($"Warning: Generated NodePort {nodePort} is outside expected range.");
+                        SystemLogger.Log($"Warning: Generated NodePort {nodePort} is outside expected range.");
                     }
                     client.clientListenerPort = nodePort;
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error Generating NodePort: {ex.Message}");
+                    SystemLogger.Log($"Error Generating NodePort: {ex.Message}");
                     throw;
                 }
 
                 try
                 {
-                    Console.WriteLine("Initializing Peer Header...");
+                    SystemLogger.Log("Initializing Peer Header...");
                     Peer peer = new Peer
                     {
                         Node_Type = nodeType,
@@ -139,13 +139,13 @@ namespace SPHERE.TestingLib
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error Creating Peer Header: {ex.Message}");
+                    SystemLogger.Log($"Error Creating Peer Header: {ex.Message}");
                     throw;
                 }
 
                 try
                 {
-                    Console.WriteLine("Initializing DHT and Routing Table...");
+                    SystemLogger.Log("Initializing DHT and Routing Table...");
                     testNode.Client = client;
                     List<Peer> fakePeers = GenerateFakePeers(25);
                     testNode.ContactDHT = new DHT();
@@ -156,8 +156,8 @@ namespace SPHERE.TestingLib
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error Populating DHT: {ex.Message}");
-                        Console.WriteLine("Resetting to Fresh DHT...");
+                        SystemLogger.Log($"Error Populating DHT: {ex.Message}");
+                        SystemLogger.Log("Resetting to Fresh DHT...");
                         testNode.ContactDHT = new DHT();
                     }
 
@@ -167,35 +167,35 @@ namespace SPHERE.TestingLib
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error Loading RoutingTable: {ex.Message}");
-                        Console.WriteLine("Resetting to Fresh RoutingTable...");
+                        SystemLogger.Log($"Error Loading RoutingTable: {ex.Message}");
+                        SystemLogger.Log("Resetting to Fresh RoutingTable...");
                         testNode.RoutingTable = new RoutingTable();
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error Initializing DHT or Routing Table: {ex.Message}");
+                    SystemLogger.Log($"Error Initializing DHT or Routing Table: {ex.Message}");
                     throw;
                 }
 
                 try
                 {
-                    Console.WriteLine("Assigning Node ID and Storing in NodeManager...");
+                    SystemLogger.Log("Assigning Node ID and Storing in NodeManager...");
 
                     NodeManager.AddNodeToNodes(testNode);
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error Assigning Node ID: {ex.Message}");
+                    SystemLogger.Log($"Error Assigning Node ID: {ex.Message}");
                     throw;
                 }
 
-                Console.WriteLine("Node Created Successfully!");
+                SystemLogger.Log("Node Created Successfully!");
                 return testNode;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Fatal Error Creating Test Node: {ex.Message}");
+                SystemLogger.Log($"Fatal Error Creating Test Node: {ex.Message}");
                 throw;
             }
         }
@@ -210,7 +210,7 @@ namespace SPHERE.TestingLib
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error checking CNG key existence: {ex.Message}");
+                SystemLogger.Log($"Error checking CNG key existence: {ex.Message}");
                 return false;
             }
         }
@@ -243,7 +243,7 @@ namespace SPHERE.TestingLib
             int nodePort = random.Next(5000, 6000);
             if (nodePort < 5000 || nodePort > 6000)
             {
-                Console.WriteLine($"Error: Generating NodePort {nodePort}. ");
+                SystemLogger.Log($"Error: Generating NodePort {nodePort}. ");
             }
             client.clientListenerPort = nodePort;
             try
@@ -266,7 +266,7 @@ namespace SPHERE.TestingLib
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error retrieving or creating keys: {ex.Message}");
+                SystemLogger.Log($"Error retrieving or creating keys: {ex.Message}");
                 throw;
             }
 
@@ -280,19 +280,19 @@ namespace SPHERE.TestingLib
 
 
 
-                Console.WriteLine("Starting with a fresh state.");
+                SystemLogger.Log("Starting with a fresh state.");
                 testNode.ContactDHT = new DHT(); // Reinitialize
 
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error Starting Fresh DHT: {ex.Message}");
+                SystemLogger.Log($"Error Starting Fresh DHT: {ex.Message}");
             }
 
             try
             {
 
-                Console.WriteLine("Starting with a fresh state.");
+                SystemLogger.Log("Starting with a fresh state.");
                 testNode.RoutingTable = new RoutingTable(); // Reinitialize
 
 
@@ -300,7 +300,7 @@ namespace SPHERE.TestingLib
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error Starting RoutingTable: {ex.Message}");
+                SystemLogger.Log($"Error Starting RoutingTable: {ex.Message}");
             }
 
 
@@ -314,28 +314,28 @@ namespace SPHERE.TestingLib
             // Check if the DHT object is null
             if (dht == null)
             {
-                Console.WriteLine("Error: The DHT object is null.");
+                SystemLogger.Log("Error: The DHT object is null.");
                 throw new ArgumentNullException(nameof(dht), "DHT cannot be null.");
             }
 
             // Check if the Peer list is null
             if (peerList == null)
             {
-                Console.WriteLine("Error: The Peer list is null.");
+                SystemLogger.Log("Error: The Peer list is null.");
                 throw new ArgumentNullException(nameof(peerList), "Peer list cannot be null.");
             }
 
             // Check if the Peer list is empty
             if (peerList.Count == 0)
             {
-                Console.WriteLine("Error: The Peer list is empty.");
+                SystemLogger.Log("Error: The Peer list is empty.");
                 throw new ArgumentException("Peer list cannot be empty.", nameof(peerList));
             }
 
             // Check if the number of blocks is valid
             if (numberOfBlocks <= 0)
             {
-                Console.WriteLine("Error: Number of blocks must be greater than 0.");
+                SystemLogger.Log("Error: Number of blocks must be greater than 0.");
                 throw new ArgumentOutOfRangeException(nameof(numberOfBlocks), "Number of blocks must be greater than 0.");
             }
 
@@ -345,7 +345,7 @@ namespace SPHERE.TestingLib
             {
                 if (peer == null)
                 {
-                    Console.WriteLine("Warning: A null peer was found in the Peer list. Skipping this peer.");
+                    SystemLogger.Log("Warning: A null peer was found in the Peer list. Skipping this peer.");
                     continue;
                 }
 
@@ -374,17 +374,17 @@ namespace SPHERE.TestingLib
 
                     // Add the block to the DHT
                     dht.AddBlock(block);
-                    //Console.WriteLine($"Block added: {block.Header.BlockId}");
+                    //SystemLogger.Log($"Block added: {block.Header.BlockId}");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error while creating or adding a block for peer {peer.NodeId ?? "UnknownPeer"}: {ex.Message}");
+                    SystemLogger.Log($"Error while creating or adding a block for peer {peer.NodeId ?? "UnknownPeer"}: {ex.Message}");
                 }
 
                 numberOfBlocks--;
             }
 
-            Console.WriteLine("DHT populated with fake blocks.");
+            SystemLogger.Log("DHT populated with fake blocks.");
         }
 
         // Method to generate a list of fake peers for RoutingTable population
@@ -393,14 +393,14 @@ namespace SPHERE.TestingLib
             // Check if the input is valid
             if (numberOfPeers <= 0)
             {
-                Console.WriteLine("Warning: Number of peers must be greater than 0.");
+                SystemLogger.Log("Warning: Number of peers must be greater than 0.");
                 return new List<Peer>();
             }
 
             List<Peer> peerList = new List<Peer>();
             Random random = new Random();
 
-            Console.WriteLine($"Generating {numberOfPeers} fake peers...");
+            SystemLogger.Log($"Generating {numberOfPeers} fake peers...");
 
             for (int i = 1; i <= numberOfPeers; i++)
             {
@@ -410,21 +410,21 @@ namespace SPHERE.TestingLib
                     string nodeId = ServiceAccountManager.GenerateKademliaId();
                     if (string.IsNullOrWhiteSpace(nodeId))
                     {
-                        Console.WriteLine($"Warning: Generated NodeId is null or empty for peer {i}.");
+                        SystemLogger.Log($"Warning: Generated NodeId is null or empty for peer {i}.");
                     }
 
                     // Generate NodeIP
                     string nodeIP = $"127.0.0.{i}";
                     if (string.IsNullOrWhiteSpace(nodeIP))
                     {
-                        Console.WriteLine($"Warning: Generated NodeIP is null or empty for peer {i}.");
+                        SystemLogger.Log($"Warning: Generated NodeIP is null or empty for peer {i}.");
                     }
 
                     // Generate NodePort
                     int nodePort = random.Next(5000, 6000);
                     if (nodePort < 5000 || nodePort > 6000)
                     {
-                        Console.WriteLine($"Warning: Generated NodePort {nodePort} is out of expected range for peer {i}.");
+                        SystemLogger.Log($"Warning: Generated NodePort {nodePort} is out of expected range for peer {i}.");
                     }
 
                     // Create a new Peer
@@ -442,22 +442,22 @@ namespace SPHERE.TestingLib
                     // Validate the created Peer
                     if (fakePeer == null)
                     {
-                        Console.WriteLine($"Error: Failed to create Peer {i}.");
+                        SystemLogger.Log($"Error: Failed to create Peer {i}.");
                         continue; // Skip adding this peer
                     }
 
                     // Add the peer to the list
                     peerList.Add(fakePeer);
-                    //Console.WriteLine($"Peer {i} created: NodeId={nodeId}, NodeIP={nodeIP}, NodePort={nodePort}");
+                    //SystemLogger.Log($"Peer {i} created: NodeId={nodeId}, NodeIP={nodeIP}, NodePort={nodePort}");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error while creating peer {i}: {ex.Message}");
+                    SystemLogger.Log($"Error while creating peer {i}: {ex.Message}");
                 }
             }
 
             // Final confirmation of peer generation
-            Console.WriteLine($"Generated {peerList.Count}/{numberOfPeers} fake peers successfully.");
+            SystemLogger.Log($"Generated {peerList.Count}/{numberOfPeers} fake peers successfully.");
 
             return peerList;
         }
@@ -468,20 +468,20 @@ namespace SPHERE.TestingLib
             // Check if the Peer list is null
             if (peerList == null)
             {
-                Console.WriteLine("Error: The Peer list is null. Cannot populate the routing table.");
+                SystemLogger.Log("Error: The Peer list is null. Cannot populate the routing table.");
                 throw new ArgumentNullException(nameof(peerList), "Peer list cannot be null.");
             }
 
             // Check if the Peer list is empty
             if (peerList.Count == 0)
             {
-                Console.WriteLine("Warning: The Peer list is empty. The routing table will remain empty.");
+                SystemLogger.Log("Warning: The Peer list is empty. The routing table will remain empty.");
                 return new RoutingTable();
             }
 
             RoutingTable routingTable = new RoutingTable();
 
-            Console.WriteLine("Populating the routing table with peers...");
+            SystemLogger.Log("Populating the routing table with peers...");
 
             foreach (var peer in peerList)
             {
@@ -490,7 +490,7 @@ namespace SPHERE.TestingLib
                     // Check if the current peer is null
                     if (peer == null)
                     {
-                        Console.WriteLine("Warning: A null peer was found in the Peer list. Skipping this peer.");
+                        SystemLogger.Log("Warning: A null peer was found in the Peer list. Skipping this peer.");
                         continue;
                     }
 
@@ -500,33 +500,33 @@ namespace SPHERE.TestingLib
                     {
                         if (peer == null)
                         {
-                            Console.WriteLine("Warning: A null peer was found in the Peer list. Skipping this peer.");
+                            SystemLogger.Log("Warning: A null peer was found in the Peer list. Skipping this peer.");
                             continue;
                         }
 
                         // Validate NodeId for hexadecimal format
                         if (!RoutingTable.IsHexString(peer.NodeId))
                         {
-                            Console.WriteLine($"Error: Peer.NodeId '{peer.NodeId}' is not a valid hexadecimal string. Skipping this peer.");
+                            SystemLogger.Log($"Error: Peer.NodeId '{peer.NodeId}' is not a valid hexadecimal string. Skipping this peer.");
                             continue;
                         }
 
-                        //Console.WriteLine($"Adding Peer: NodeId={peer.NodeId}, NodeIP={peer.NodeIP}, NodePort={peer.NodePort}");
+                        //SystemLogger.Log($"Adding Peer: NodeId={peer.NodeId}, NodeIP={peer.NodeIP}, NodePort={peer.NodePort}");
                         routingTable.AddPeer(peer);
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error while adding peer to routing table: {ex.Message}");
+                        SystemLogger.Log($"Error while adding peer to routing table: {ex.Message}");
                     }
                 }
                 catch (Exception ex)
                 {
                     // Log any errors that occur while adding a peer
-                    Console.WriteLine($"Error while adding peer to routing table: {ex.Message}");
+                    SystemLogger.Log($"Error while adding peer to routing table: {ex.Message}");
                 }
             }
 
-            Console.WriteLine($"Successfully populated the routing table with {peerList.Count} peers.");
+            SystemLogger.Log($"Successfully populated the routing table with {peerList.Count} peers.");
             return routingTable;
         }
 
@@ -539,7 +539,7 @@ namespace SPHERE.TestingLib
 
                 if (CngKey.Exists(keyName, provider))
                 {
-                    Console.WriteLine($"Private signature key '{keyName}' already exists. Skipping storage.");
+                    SystemLogger.Log($"Private signature key '{keyName}' already exists. Skipping storage.");
                     return;
                 }
 
@@ -554,11 +554,11 @@ namespace SPHERE.TestingLib
                 using var newCngKey = CngKey.Create(CngAlgorithm.ECDsaP256, keyName, creationParams);
                 newCngKey.SetProperty(new CngProperty("Length", BitConverter.GetBytes(256), CngPropertyOptions.None));
 
-                Console.WriteLine($"Private signature key '{keyName}' stored permanently in CNG.");
+                SystemLogger.Log($"Private signature key '{keyName}' stored permanently in CNG.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error storing private signature key: {ex.Message}");
+                SystemLogger.Log($"Error storing private signature key: {ex.Message}");
             }
         }
 
@@ -571,7 +571,7 @@ namespace SPHERE.TestingLib
 
                 if (CngKey.Exists(keyName, provider))
                 {
-                    Console.WriteLine($"Public signature key '{keyName}' already exists. Skipping storage.");
+                    SystemLogger.Log($"Public signature key '{keyName}' already exists. Skipping storage.");
                     return;
                 }
 
@@ -585,11 +585,11 @@ namespace SPHERE.TestingLib
                 using var newCngKey = CngKey.Create(CngAlgorithm.ECDsaP256, keyName, creationParams);
                 newCngKey.SetProperty(new CngProperty("Length", BitConverter.GetBytes(256), CngPropertyOptions.None));
 
-                Console.WriteLine($"Public signature key '{keyName}' stored permanently in CNG.");
+                SystemLogger.Log($"Public signature key '{keyName}' stored permanently in CNG.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error storing public signature key: {ex.Message}");
+                SystemLogger.Log($"Error storing public signature key: {ex.Message}");
             }
         }
 
@@ -602,7 +602,7 @@ namespace SPHERE.TestingLib
 
                 if (CngKey.Exists(keyName, provider))
                 {
-                    Console.WriteLine($"Private encryption key '{keyName}' already exists. Skipping storage.");
+                    SystemLogger.Log($"Private encryption key '{keyName}' already exists. Skipping storage.");
                     return;
                 }
 
@@ -617,11 +617,11 @@ namespace SPHERE.TestingLib
                 using var newCngKey = CngKey.Create(CngAlgorithm.ECDiffieHellmanP256, keyName, creationParams);
                 newCngKey.SetProperty(new CngProperty("Length", BitConverter.GetBytes(256), CngPropertyOptions.None));
 
-                Console.WriteLine($"Private encryption key '{keyName}' stored permanently in CNG.");
+                SystemLogger.Log($"Private encryption key '{keyName}' stored permanently in CNG.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error storing private encryption key: {ex.Message}");
+                SystemLogger.Log($"Error storing private encryption key: {ex.Message}");
             }
         }
 
@@ -637,7 +637,7 @@ namespace SPHERE.TestingLib
 
                 if (CngKey.Exists(keyName, provider))
                 {
-                    Console.WriteLine($"Public encryption key '{keyName}' already exists. Skipping storage.");
+                    SystemLogger.Log($"Public encryption key '{keyName}' already exists. Skipping storage.");
                     return;
                 }
 
@@ -651,17 +651,17 @@ namespace SPHERE.TestingLib
                 using var newCngKey = CngKey.Create(CngAlgorithm.ECDiffieHellmanP256, keyName, creationParams);
                 newCngKey.SetProperty(new CngProperty("Length", BitConverter.GetBytes(256), CngPropertyOptions.None));
 
-                Console.WriteLine($"Public encryption key '{keyName}' stored permanently in CNG.");
+                SystemLogger.Log($"Public encryption key '{keyName}' stored permanently in CNG.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error storing public encryption key: {ex.Message}");
+                SystemLogger.Log($"Error storing public encryption key: {ex.Message}");
             }
         }
 
         public static void GenerateTestNodeKeyPairs()
         {
-            Console.WriteLine(" Starting key pair generation...");
+            SystemLogger.Log(" Starting key pair generation...");
 
             // ----- Signature Keys (ECDSA) -----
             string sigPrivateKeyName = KeyGenerator.KeyType.PrivateTestNodeSignatureKey.ToString();
@@ -672,14 +672,14 @@ namespace SPHERE.TestingLib
 
             if (CngKey.Exists(sigPrivateKeyName))
             {
-                Console.WriteLine($" Using existing signature key: {sigPrivateKeyName}");
+                SystemLogger.Log($" Using existing signature key: {sigPrivateKeyName}");
                 using var sigKey = CngKey.Open(sigPrivateKeyName);
                 privateSigKeyBlob = sigKey.Export(CngKeyBlobFormat.Pkcs8PrivateBlob);
                 //publicSigKeyBlob = sigKey.Export(CngKeyBlobFormat.EccPublicBlob);
             }
             else
             {
-                Console.WriteLine($" Creating new exportable signature key: {sigPrivateKeyName}");
+                SystemLogger.Log($" Creating new exportable signature key: {sigPrivateKeyName}");
                 var sigCreationParams = new CngKeyCreationParameters
                 {
                     Provider = CngProvider.MicrosoftSoftwareKeyStorageProvider,
@@ -698,14 +698,14 @@ namespace SPHERE.TestingLib
 
             if (CngKey.Exists(sigPublicKeyName))
             {
-                Console.WriteLine($" Using existing signature key: {sigPublicKeyName}");
+                SystemLogger.Log($" Using existing signature key: {sigPublicKeyName}");
                 using var sigKey = CngKey.Open(sigPublicKeyName);
                 //privateSigKeyBlob = sigKey.Export(CngKeyBlobFormat.Pkcs8PrivateBlob);
                 publicSigKeyBlob = sigKey.Export(CngKeyBlobFormat.EccPublicBlob);
             }
             else
             {
-                Console.WriteLine($" Creating new exportable signature key: {sigPrivateKeyName}");
+                SystemLogger.Log($" Creating new exportable signature key: {sigPrivateKeyName}");
                 var sigCreationParams = new CngKeyCreationParameters
                 {
                     Provider = CngProvider.MicrosoftSoftwareKeyStorageProvider,
@@ -731,14 +731,14 @@ namespace SPHERE.TestingLib
 
             if (CngKey.Exists(encPrivateKeyName))
             {
-                Console.WriteLine($"🔑 Using existing encryption key: {encPrivateKeyName}");
+                SystemLogger.Log($"🔑 Using existing encryption key: {encPrivateKeyName}");
                 using var encKey = CngKey.Open(encPrivateKeyName);
                 privateEncKeyBlob = encKey.Export(CngKeyBlobFormat.Pkcs8PrivateBlob);
                // publicEncKeyBlob = encKey.Export(CngKeyBlobFormat.EccPublicBlob);
             }
             else
             {
-                Console.WriteLine($"🔑 Creating new exportable encryption key: {encPrivateKeyName}");
+                SystemLogger.Log($"🔑 Creating new exportable encryption key: {encPrivateKeyName}");
                 var encCreationParams = new CngKeyCreationParameters
                 {
                     Provider = CngProvider.MicrosoftSoftwareKeyStorageProvider,
@@ -754,14 +754,14 @@ namespace SPHERE.TestingLib
 
             if (CngKey.Exists(encPublicKeyName))
             {
-                Console.WriteLine($"🔑 Using existing encryption key: {encPublicKeyName}");
+                SystemLogger.Log($"🔑 Using existing encryption key: {encPublicKeyName}");
                 using var encKey = CngKey.Open(encPublicKeyName);
                // privateEncKeyBlob = encKey.Export(CngKeyBlobFormat.Pkcs8PrivateBlob);
                 publicEncKeyBlob = encKey.Export(CngKeyBlobFormat.EccPublicBlob);
             }
             else
             {
-                Console.WriteLine($"🔑 Creating new exportable encryption key: {encPublicKeyName}");
+                SystemLogger.Log($"🔑 Creating new exportable encryption key: {encPublicKeyName}");
                 var encCreationParams = new CngKeyCreationParameters
                 {
                     Provider = CngProvider.MicrosoftSoftwareKeyStorageProvider,
@@ -778,18 +778,18 @@ namespace SPHERE.TestingLib
 
 
             // ----- Store the Keys -----
-            Console.WriteLine(" Storing the keys...");
+            SystemLogger.Log(" Storing the keys...");
             StoreTestSignaturePrivateKey(privateSigKeyBlob);
             StoreTestSignaturePublicKey( publicSigKeyBlob);
             StoreEncryptionPrivateKey( privateEncKeyBlob);
             StoreEncryptionPublicKey(publicEncKeyBlob);
 
-            Console.WriteLine(" Test node key pairs verified and stored (with exportable private keys)!");
+            SystemLogger.Log(" Test node key pairs verified and stored (with exportable private keys)!");
         }
 
         public static void DeleteTestKeys()
         {
-            Console.WriteLine(" Checking for test keys to delete...");
+            SystemLogger.Log(" Checking for test keys to delete...");
 
             foreach (KeyGenerator.KeyType keyType in Enum.GetValues(typeof(KeyGenerator.KeyType)))
             {
@@ -801,7 +801,7 @@ namespace SPHERE.TestingLib
                     {
                         if (CngKey.Exists(keyName, CngProvider.MicrosoftSoftwareKeyStorageProvider))
                         {
-                            Console.WriteLine($" Deleting test key: {keyName}");
+                            SystemLogger.Log($" Deleting test key: {keyName}");
                             using (var key = CngKey.Open(keyName, CngProvider.MicrosoftSoftwareKeyStorageProvider))
                             {
                                 key.Delete();
@@ -810,27 +810,27 @@ namespace SPHERE.TestingLib
                             if (!CngKey.Exists(keyName, CngProvider.MicrosoftSoftwareKeyStorageProvider))
                             {
 
-                                Console.WriteLine($" Test key '{keyName}' deleted successfully.");
+                                SystemLogger.Log($" Test key '{keyName}' deleted successfully.");
                             }
                             else
                             {
 
-                                Console.WriteLine($" Test key '{keyName}' deletion failed it still exists.");
+                                SystemLogger.Log($" Test key '{keyName}' deletion failed it still exists.");
                             }
                         }
                         else
                         {
-                            Console.WriteLine($" Test key '{keyName}' does not exist, skipping...");
+                            SystemLogger.Log($" Test key '{keyName}' does not exist, skipping...");
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($" Error deleting test key '{keyName}': {ex.Message}");
+                        SystemLogger.Log($" Error deleting test key '{keyName}': {ex.Message}");
                     }
                 }
             }
 
-            Console.WriteLine(" Finished deleting test keys.");
+            SystemLogger.Log(" Finished deleting test keys.");
         }
 
         // This is used to allow for retries on sending out messages to other nodes.
@@ -844,7 +844,7 @@ namespace SPHERE.TestingLib
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Attempt {i + 1} failed: {ex.Message}");
+                    SystemLogger.Log($"Attempt {i + 1} failed: {ex.Message}");
                     if (i == maxRetries - 1)
                         throw; // Re-throw on final attempt
 
@@ -914,39 +914,39 @@ namespace SPHERE.TestingLib
             {
 
                
-                Console.WriteLine("Setting test Variable True.");
+                SystemLogger.Log("Setting test Variable True.");
                 Environment.SetEnvironmentVariable("SPHERE_TEST_MODE", "true");
                 string testModeEnv = Environment.GetEnvironmentVariable("SPHERE_TEST_MODE");
-                Console.WriteLine($"SPHERE_TEST_MODE= {testModeEnv}.");
+                SystemLogger.Log($"SPHERE_TEST_MODE= {testModeEnv}.");
                 for (int i = 0; i < nodeToMake; i++)
                 {
                     try
                     {
-                        Console.WriteLine("Creating a test node with a fake STUN...");
+                        SystemLogger.Log("Creating a test node with a fake STUN...");
 
                         // Create a test node
-                        Console.WriteLine("Starting testing.CreateTestNodeWithFakeSTUNAsync.");
+                        SystemLogger.Log("Starting testing.CreateTestNodeWithFakeSTUNAsync.");
                         Node testNode = CreateTestNodeWithFakeSTUNAsync(NodeType.Full);
 
-                        Console.WriteLine("\n=== Node Created ===");
-                        Console.WriteLine($"Node ID: {testNode.Peer.NodeId}");
-                        Console.WriteLine($"Node IP: {testNode.Peer.NodeIP}");
-                        Console.WriteLine($"Node Port: {testNode.Peer.NodePort}");
-                        Console.WriteLine($"Node Type: {testNode.Peer.Node_Type}");
-                        Console.WriteLine($"Public Signature Key: {testNode.Peer.PublicSignatureKey}");
-                        Console.WriteLine($"Public Encryption Key: {testNode.Peer.PublicEncryptKey}");
+                        SystemLogger.Log("\n=== Node Created ===");
+                        SystemLogger.Log($"Node ID: {testNode.Peer.NodeId}");
+                        SystemLogger.Log($"Node IP: {testNode.Peer.NodeIP}");
+                        SystemLogger.Log($"Node Port: {testNode.Peer.NodePort}");
+                        SystemLogger.Log($"Node Type: {testNode.Peer.Node_Type}");
+                        SystemLogger.Log($"Public Signature Key: {testNode.Peer.PublicSignatureKey}");
+                        SystemLogger.Log($"Public Encryption Key: {testNode.Peer.PublicEncryptKey}");
 
-                        Console.WriteLine("\n=== Routing Table ===");
+                        SystemLogger.Log("\n=== Routing Table ===");
 
                         int totalPeers = testNode.RoutingTable.GetAllPeers().Count();
-                        Console.WriteLine($"\nRouting Table Contains {totalPeers}..");
-                        Console.WriteLine($"First 5 Peers...");
+                        SystemLogger.Log($"\nRouting Table Contains {totalPeers}..");
+                        SystemLogger.Log($"First 5 Peers...");
                         int totalPeersCountDown = 5;
                         foreach (var peer in testNode.RoutingTable.GetAllPeers())
                         {
                             if (totalPeersCountDown > 0)
                             {
-                                Console.WriteLine($"Peer ID: {peer.NodeId}, IP: {peer.NodeIP}, Port: {peer.NodePort}, Trust Score: {peer.Reputation}");
+                                SystemLogger.Log($"Peer ID: {peer.NodeId}, IP: {peer.NodeIP}, Port: {peer.NodePort}, Trust Score: {peer.Reputation}");
                                 totalPeersCountDown--;
                             }
                             else
@@ -955,16 +955,16 @@ namespace SPHERE.TestingLib
                             }
                         }
 
-                        Console.WriteLine("\n=== DHT Blocks ===");
+                        SystemLogger.Log("\n=== DHT Blocks ===");
                         int totalBlocks = testNode.ContactDHT.GetTotalBlockCount();
-                        Console.WriteLine($"\nDHT Contains {totalBlocks}..");
-                        Console.WriteLine($"First 5 Blocks...");
+                        SystemLogger.Log($"\nDHT Contains {totalBlocks}..");
+                        SystemLogger.Log($"First 5 Blocks...");
                         int totalBlocksCountDown = 5;
                         foreach (var block in testNode.ContactDHT.GetCurrentState())
                         {
                             if (totalBlocksCountDown > 0)
                             {
-                                Console.WriteLine($"Block ID: {block.Header.BlockId}, Created: {block.Header.BlockCreationTime}, Updated: {block.Header.LastUpdateTime}");
+                                SystemLogger.Log($"Block ID: {block.Header.BlockId}, Created: {block.Header.BlockCreationTime}, Updated: {block.Header.LastUpdateTime}");
                                 totalBlocksCountDown--;
                             }
                             else
@@ -973,16 +973,16 @@ namespace SPHERE.TestingLib
                             }
                         }
 
-                        Console.WriteLine("\nTest node creation completed successfully.");
+                        SystemLogger.Log("\nTest node creation completed successfully.");
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error: {ex.Message}");
+                        SystemLogger.Log($"Error: {ex.Message}");
 
                         if (ex.InnerException != null)
                         {
-                            Console.WriteLine($"Inner Exception: {ex.InnerException.Message}");
-                            Console.WriteLine(ex.InnerException.StackTrace);
+                            SystemLogger.Log($"Inner Exception: {ex.InnerException.Message}");
+                            SystemLogger.Log(ex.InnerException.StackTrace);
                         }
                     }
 
@@ -998,22 +998,22 @@ namespace SPHERE.TestingLib
                 {
                     Environment.SetEnvironmentVariable("SPHERE_TEST_MODE", "true");
                     string testModeEnv = Environment.GetEnvironmentVariable("SPHERE_TEST_MODE");
-                    Console.WriteLine($"SPHERE_TEST_MODE= {testModeEnv}.");
+                    SystemLogger.Log($"SPHERE_TEST_MODE= {testModeEnv}.");
 
                     try
                     {
                         //Create a Full Fake Node DHT and RT and assign as HOST
                         CreateFakeNodeTest(1);
                         hostNode = GetFirstNode();
-                        Console.WriteLine($"Starting hostNode Listener at {hostNode.Client.clientIP}:{hostNode.Client.clientListenerPort}");
+                        SystemLogger.Log($"Starting hostNode Listener at {hostNode.Client.clientIP}:{hostNode.Client.clientListenerPort}");
                         hostNode.Client.StartClientListenerAsync(hostNode, hostNode.Client);
-                        Console.WriteLine($"hostNode Created Successfully");
-                        Console.WriteLine($"hostNode DHT size is Now {hostNode.ContactDHT.GetTotalBlockCount()}");
-                        Console.WriteLine($"hostNode Routing Table size is Now {hostNode.RoutingTable.GetAllPeers().Count()}");
+                        SystemLogger.Log($"hostNode Created Successfully");
+                        SystemLogger.Log($"hostNode DHT size is Now {hostNode.ContactDHT.GetTotalBlockCount()}");
+                        SystemLogger.Log($"hostNode Routing Table size is Now {hostNode.RoutingTable.GetAllPeers().Count()}");
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error: Creating hostNode. {ex.Message}");
+                        SystemLogger.Log($"Error: Creating hostNode. {ex.Message}");
                         throw new Exception();
                     }
                     Node babyNode = new Node();
@@ -1021,41 +1021,41 @@ namespace SPHERE.TestingLib
                     {
                         // Create a babyNode with no Rt or DHT.   
                         babyNode = CreateTestNodeWithNoDHTorRoutingTable(NodeType.Full);
-                        Console.WriteLine($"babyNode Created Successfully");
-                        Console.WriteLine($"Starting babyNode Listener at {babyNode.Client.clientIP}:{babyNode.Client.clientListenerPort}");
+                        SystemLogger.Log($"babyNode Created Successfully");
+                        SystemLogger.Log($"Starting babyNode Listener at {babyNode.Client.clientIP}:{babyNode.Client.clientListenerPort}");
                         babyNode.Client.StartClientListenerAsync(babyNode, babyNode.Client);
-                        Console.WriteLine($"babyNode DHT size is Now {babyNode.ContactDHT.GetTotalBlockCount()}");
-                        Console.WriteLine($"babyNode Routing Table size is Now {babyNode.RoutingTable.GetAllPeers().Count()}");
+                        SystemLogger.Log($"babyNode DHT size is Now {babyNode.ContactDHT.GetTotalBlockCount()}");
+                        SystemLogger.Log($"babyNode Routing Table size is Now {babyNode.RoutingTable.GetAllPeers().Count()}");
 
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error: Creating babyNode. {ex.Message}");
+                        SystemLogger.Log($"Error: Creating babyNode. {ex.Message}");
                         throw new Exception();
                     }
                     try
                     {
                         // Send the Boot Strap. 
-                        Console.WriteLine($"Attempting to send Bootstrap Request to {hostNode.Client.clientIP.ToString()}:{hostNode.Client.clientListenerPort} with key of {hostNode.Peer.PublicEncryptKey}.");
+                        SystemLogger.Log($"Attempting to send Bootstrap Request to {hostNode.Client.clientIP.ToString()}:{hostNode.Client.clientListenerPort} with key of {hostNode.Peer.PublicEncryptKey}.");
 
                         await Bootstrap.SendBootstrapRequest(babyNode, hostNode.Client.clientIP.ToString(), hostNode.Client.clientListenerPort, hostNode.Peer.PublicEncryptKey);
 
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error: Failed to send BootStrapRequest");
+                        SystemLogger.Log($"Error: Failed to send BootStrapRequest");
                     }
 
                     await Task.Delay(300); // A slight delay to allow async operations to settle (optional)
-                    Console.WriteLine($"Final babyNode DHT size: {babyNode.ContactDHT.GetTotalBlockCount()}");
-                    Console.WriteLine($"Final babyNode Routing Table size: {babyNode.RoutingTable.GetAllPeers().Count()}");
+                    SystemLogger.Log($"Final babyNode DHT size: {babyNode.ContactDHT.GetTotalBlockCount()}");
+                    SystemLogger.Log($"Final babyNode Routing Table size: {babyNode.RoutingTable.GetAllPeers().Count()}");
 
                 }
                 catch (Exception ex)
                 {
 
 
-                    Console.WriteLine($"Failed To TestBootStrap Process: {ex.Message}");
+                    SystemLogger.Log($"Failed To TestBootStrap Process: {ex.Message}");
                 }
                 Console.ReadLine();
             }
@@ -1064,7 +1064,7 @@ namespace SPHERE.TestingLib
             {
                 Environment.SetEnvironmentVariable("SPHERE_TEST_MODE", "true");
                 string testModeEnv = Environment.GetEnvironmentVariable("SPHERE_TEST_MODE");
-                Console.WriteLine($"Debug-TestBrodcastToPeers: SPHERE_TEST_MODE = {testModeEnv}");
+                SystemLogger.Log($"Debug-TestBrodcastToPeers: SPHERE_TEST_MODE = {testModeEnv}");
 
                 List<Node> hostNodes = new List<Node>();
 
@@ -1076,7 +1076,7 @@ namespace SPHERE.TestingLib
 
                 try
                 {
-                    Console.WriteLine("Debug-TestBrodcastToPeers: Initializing test environment...");
+                    SystemLogger.Log("Debug-TestBrodcastToPeers: Initializing test environment...");
 
                     // Reset and create test nodes
                     Nodes.Clear();
@@ -1091,45 +1091,45 @@ namespace SPHERE.TestingLib
                     hostNode4 = Nodes[3];
                     hostNodes.Add(hostNode4);
 
-                    Console.WriteLine("Debug-TestBrodcastToPeers: Nodes created successfully!");
+                    SystemLogger.Log("Debug-TestBrodcastToPeers: Nodes created successfully!");
 
                     // Clearing routing tables to prevent stale data
-                    Console.WriteLine("Debug-TestBrodcastToPeers: Clearing routing tables...");
+                    SystemLogger.Log("Debug-TestBrodcastToPeers: Clearing routing tables...");
                     hostNode1.RoutingTable.ClearRoutingTable();
                     hostNode2.RoutingTable.ClearRoutingTable();
                     hostNode3.RoutingTable.ClearRoutingTable();
                     hostNode4.RoutingTable.ClearRoutingTable();
-                    Console.WriteLine("Debug-TestBrodcastToPeers: Routing tables cleared.");
+                    SystemLogger.Log("Debug-TestBrodcastToPeers: Routing tables cleared.");
 
                     // Adding initial peer connections
-                    Console.WriteLine("Debug-TestBrodcastToPeers: Adding peers to routing tables...");
+                    SystemLogger.Log("Debug-TestBrodcastToPeers: Adding peers to routing tables...");
 
                     hostNode1.RoutingTable.AddPeer(hostNode2.Peer);
-                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode1 → Added peer: {hostNode2.Peer.NodeId}");
+                    SystemLogger.Log($"Debug-TestBrodcastToPeers: hostNode1 → Added peer: {hostNode2.Peer.NodeId}");
 
                     hostNode2.RoutingTable.AddPeer(hostNode1.Peer);
-                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode2 → Added peer: {hostNode1.Peer.NodeId}");
+                    SystemLogger.Log($"Debug-TestBrodcastToPeers: hostNode2 → Added peer: {hostNode1.Peer.NodeId}");
 
                     hostNode3.RoutingTable.AddPeer(hostNode2.Peer);
-                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode3 → Added peer: {hostNode2.Peer.NodeId}");
+                    SystemLogger.Log($"Debug-TestBrodcastToPeers: hostNode3 → Added peer: {hostNode2.Peer.NodeId}");
 
                     hostNode4.RoutingTable.AddPeer(hostNode3.Peer);
-                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode4 → Added peer: {hostNode3.Peer.NodeId}");
+                    SystemLogger.Log($"Debug-TestBrodcastToPeers: hostNode4 → Added peer: {hostNode3.Peer.NodeId}");
 
                     // Print routing table sizes before broadcast
-                    Console.WriteLine("Debug-TestBrodcastToPeers: Routing Table Sizes BEFORE Broadcast:");
-                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode1 → {hostNode1.RoutingTable.GetAllPeers().Count} peers.");
-                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode2 → {hostNode2.RoutingTable.GetAllPeers().Count} peers.");
-                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode3 → {hostNode3.RoutingTable.GetAllPeers().Count} peers.");
-                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode4 → {hostNode4.RoutingTable.GetAllPeers().Count} peers.");
+                    SystemLogger.Log("Debug-TestBrodcastToPeers: Routing Table Sizes BEFORE Broadcast:");
+                    SystemLogger.Log($"Debug-TestBrodcastToPeers: hostNode1 → {hostNode1.RoutingTable.GetAllPeers().Count} peers.");
+                    SystemLogger.Log($"Debug-TestBrodcastToPeers: hostNode2 → {hostNode2.RoutingTable.GetAllPeers().Count} peers.");
+                    SystemLogger.Log($"Debug-TestBrodcastToPeers: hostNode3 → {hostNode3.RoutingTable.GetAllPeers().Count} peers.");
+                    SystemLogger.Log($"Debug-TestBrodcastToPeers: hostNode4 → {hostNode4.RoutingTable.GetAllPeers().Count} peers.");
 
                     // Create a baby node and add a connection
-                    Console.WriteLine("Debug-TestBrodcastToPeers: Creating babyNode...");
+                    SystemLogger.Log("Debug-TestBrodcastToPeers: Creating babyNode...");
                     babyNode = Nodes[4];
                     babyNode.RoutingTable.ClearRoutingTable();
                     babyNode.RoutingTable.AddPeer(hostNode4.Peer);
-                    Console.WriteLine($"Debug-TestBrodcastToPeers: babyNode has {babyNode.RoutingTable.GetAllPeers().Count} peers");
-                    Console.WriteLine($"Debug-TestBrodcastToPeers: babyNode → Added initial peer: {hostNode4.Peer.NodeId}");
+                    SystemLogger.Log($"Debug-TestBrodcastToPeers: babyNode has {babyNode.RoutingTable.GetAllPeers().Count} peers");
+                    SystemLogger.Log($"Debug-TestBrodcastToPeers: babyNode → Added initial peer: {hostNode4.Peer.NodeId}");
 
                     foreach (var node in hostNodes)
                     {
@@ -1139,27 +1139,27 @@ namespace SPHERE.TestingLib
 
 
                     // Broadcasting network connection
-                    Console.WriteLine("Debug-TestBrodcastToPeers: babyNode Broadcasting Connection to Network...");
+                    SystemLogger.Log("Debug-TestBrodcastToPeers: babyNode Broadcasting Connection to Network...");
                     await babyNode.NetworkManager.BroadcastConnectionToNetwork(babyNode);
-                    Console.WriteLine("Debug-TestBrodcastToPeers: babyNode Broadcast completed.");
+                    SystemLogger.Log("Debug-TestBrodcastToPeers: babyNode Broadcast completed.");
 
                     // Print routing table sizes AFTER broadcast
                     // 🕒 Wait for peer propagation
                     await Task.Delay(TimeSpan.FromSeconds(2)); // Adjust delay if needed
 
                     // Print routing table sizes AFTER broadcast
-                    Console.WriteLine("Debug-TestBrodcastToPeers: Routing Table Sizes AFTER Broadcast:");
-                    Console.WriteLine($"Debug-TestBrodcastToPeers: babyNode  → {babyNode.RoutingTable.GetAllPeers().Count} peers.");
-                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode1 → {hostNode1.RoutingTable.GetAllPeers().Count} peers.");
-                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode2 → {hostNode2.RoutingTable.GetAllPeers().Count} peers.");
-                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode3 → {hostNode3.RoutingTable.GetAllPeers().Count} peers.");
-                    Console.WriteLine($"Debug-TestBrodcastToPeers: hostNode4 → {hostNode4.RoutingTable.GetAllPeers().Count} peers.");
+                    SystemLogger.Log("Debug-TestBrodcastToPeers: Routing Table Sizes AFTER Broadcast:");
+                    SystemLogger.Log($"Debug-TestBrodcastToPeers: babyNode  → {babyNode.RoutingTable.GetAllPeers().Count} peers.");
+                    SystemLogger.Log($"Debug-TestBrodcastToPeers: hostNode1 → {hostNode1.RoutingTable.GetAllPeers().Count} peers.");
+                    SystemLogger.Log($"Debug-TestBrodcastToPeers: hostNode2 → {hostNode2.RoutingTable.GetAllPeers().Count} peers.");
+                    SystemLogger.Log($"Debug-TestBrodcastToPeers: hostNode3 → {hostNode3.RoutingTable.GetAllPeers().Count} peers.");
+                    SystemLogger.Log($"Debug-TestBrodcastToPeers: hostNode4 → {hostNode4.RoutingTable.GetAllPeers().Count} peers.");
 
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Debug-TestBrodcastToPeers: [ERROR] {ex.Message}");
-                    Console.WriteLine($"Debug-TestBrodcastToPeers: [ERROR] Stack Trace: {ex.StackTrace}");
+                    SystemLogger.Log($"Debug-TestBrodcastToPeers: [ERROR] {ex.Message}");
+                    SystemLogger.Log($"Debug-TestBrodcastToPeers: [ERROR] Stack Trace: {ex.StackTrace}");
                     throw;
                 }
                 Console.ReadLine();

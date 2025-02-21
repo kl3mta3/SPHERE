@@ -1,4 +1,5 @@
 ﻿using SPHERE.Blockchain;
+using SPHERE.Configure.Logging;
 using SPHERE.Configure;
 using SPHERE.PacketLib;
 using System.Net.NetworkInformation;
@@ -169,7 +170,7 @@ namespace SPHERE.Networking
                 peer.NodeIP = newIP;
                 peer.NodePort = newPort;
 
-                Console.WriteLine($"Updated endpoint for peer {peerID}: {newIP}:{newPort}");
+                SystemLogger.Log($"Updated endpoint for peer {peerID}: {newIP}:{newPort}");
             }
         }
 
@@ -177,18 +178,18 @@ namespace SPHERE.Networking
         public async Task ProcessPeerListResponse(Node node, Packet packet)
         {
 
-            Console.WriteLine($"ProcessPeerListResponse: Processing response from {packet.Header.NodeId}...");
+            SystemLogger.Log($"ProcessPeerListResponse: Processing response from {packet.Header.NodeId}...");
             List<Peer> peers = JsonSerializer.Deserialize<List<Peer>>(packet.Content);
             Peer senderPeer = node.RoutingTable.GetPeerByID(packet.Header.NodeId);
             if (senderPeer == null)
             {
-                Console.WriteLine($"Warning: Sender {packet.Header.NodeId} is not in routing table. Ignoring response.");
+                SystemLogger.Log($"Warning: Sender {packet.Header.NodeId} is not in routing table. Ignoring response.");
                 return;
             }
 
             if (peers == null || peers.Count == 0)
             {
-                Console.WriteLine($"Warning: Received an empty or null peer list from {packet.Header.NodeId}.");
+                SystemLogger.Log($"Warning: Received an empty or null peer list from {packet.Header.NodeId}.");
                 node.NetworkManager.BroadcastReputationUpdate(node, senderPeer, Blockchain.Reputation.ReputationReason.GetContactFailed);
                  // Penalize peers that send empty responses
                 return;
@@ -211,7 +212,7 @@ namespace SPHERE.Networking
                     {
                         if (node.RoutingTable.GetAllPeers().Contains(peer))
                         {
-                            Console.WriteLine($"Warning: ProcessPeerListResponse: Skipping duplicate peer {peer.NodeId}.");
+                            SystemLogger.Log($"Warning: ProcessPeerListResponse: Skipping duplicate peer {peer.NodeId}.");
                             duplicateCount++;
 
                             continue;
@@ -224,13 +225,13 @@ namespace SPHERE.Networking
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"Error in ProcessPeerListResponse: {ex.Message}");
+                            SystemLogger.Log($"Error in ProcessPeerListResponse: {ex.Message}");
                         }
 
 
                         if (peer.NodeId == node.Peer.NodeId || peer.NodeId == senderPeer.NodeId || !isPeerValid)
                         {
-                            Console.WriteLine($"ERROR: Node ({node.Peer.NodeId}) received a bad peer from Sender: {packet.Header.NodeId}");
+                            SystemLogger.Log($"ERROR: Node ({node.Peer.NodeId}) received a bad peer from Sender: {packet.Header.NodeId}");
                             invalidPeerCount++;
                             continue;
                         }
@@ -251,7 +252,7 @@ namespace SPHERE.Networking
             catch (Exception ex)
             {
 
-                Console.WriteLine($"Error in ProcessPeerListResponse: {ex.Message}");
+                SystemLogger.Log($"Error in ProcessPeerListResponse: {ex.Message}");
 
             }
         }

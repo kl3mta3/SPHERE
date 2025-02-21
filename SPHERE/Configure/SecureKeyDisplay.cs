@@ -1,5 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 using SPHERE.Security;
+using SPHERE.Configure.Logging;
 
 namespace SPHERE.Configure
 {
@@ -14,16 +15,14 @@ namespace SPHERE.Configure
         {
             if (string.IsNullOrWhiteSpace(privateKey))
             {
-                Console.WriteLine("Private key is empty or null.");
+                SystemLogger.Log("Private key is empty or null.");
                 return;
             }
 
             // Show the private key in a Windows message box
             MessageBox(IntPtr.Zero, privateKey, "Secure Private Key Viewer", 0x00000001 | 0x00000040);
 
-            // Explanation of flags:
-            // 0x00000001 - OK button
-            // 0x00000040 - Information icon
+   
         }
 
         public static void ShowPrivateKeySecureWindow(KeyGenerator.KeyType keyType, Password password)
@@ -51,11 +50,11 @@ namespace SPHERE.Configure
             }
             catch (UnauthorizedAccessException ex)
             {
-                Console.WriteLine($"Access denied: {ex.Message}");
+                SystemLogger.Log($"Access denied: {ex.Message}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error displaying private key: {ex.Message}");
+                SystemLogger.Log($"Error displaying private key: {ex.Message}");
             }
         }
     }

@@ -1,4 +1,5 @@
 ﻿using SPHERE.Configure;
+using SPHERE.Configure.Logging;
 using SPHERE.Networking;
 using SPHERE.PacketLib;
 using System;
@@ -85,7 +86,7 @@ namespace SPHERE.Blockchain
 
             if (block != null)
             {
-                Console.WriteLine($"Debug-SendBlocksToPeer: {block.Header.BlockId} Block Set to send to peer");
+                SystemLogger.Log($"Debug-SendBlocksToPeer: {block.Header.BlockId} Block Set to send to peer");
 
                 // Build GetResponse packet
                 var responseHeader = Packet.PacketBuilder.BuildPacketHeader(
@@ -111,9 +112,9 @@ namespace SPHERE.Blockchain
                 bool success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedResponse);
 
                 if (success)
-                    Console.WriteLine($"Successfully sent GetResponse for {block.Header.BlockId} Blocks to {peer.NodeIP}:{peer.NodePort}");
+                    SystemLogger.Log($"Successfully sent GetResponse for {block.Header.BlockId} Blocks to {peer.NodeIP}:{peer.NodePort}");
                 else
-                    Console.WriteLine($"Failed to send GetResponse for {block} Blocks to {peer.NodeIP}:{peer.NodePort}");
+                    SystemLogger.Log($"Failed to send GetResponse for {block} Blocks to {peer.NodeIP}:{peer.NodePort}");
 
                 return;
             }
@@ -201,11 +202,11 @@ namespace SPHERE.Blockchain
             bool success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedPacket);
             if (success)
             {
-                Console.WriteLine($"Successfully requested {blockType} blocks from {peer.NodeId}");
+                SystemLogger.Log($"Successfully requested {blockType} blocks from {peer.NodeId}");
             }
             else
             {
-                Console.WriteLine($"Failed to request {blockType} blocks from {peer.NodeId}");
+                SystemLogger.Log($"Failed to request {blockType} blocks from {peer.NodeId}");
             }
         }
 
@@ -215,7 +216,7 @@ namespace SPHERE.Blockchain
             {
                 if (packet == null || packet.Header == null)
                 {
-                    Console.WriteLine("Error-ProcessSyncDHTResponse: Received invalid SyncDHTResponse packet.");
+                    SystemLogger.Log("Error-ProcessSyncDHTResponse: Received invalid SyncDHTResponse packet.");
                     return;
                 }
 
@@ -223,14 +224,14 @@ namespace SPHERE.Blockchain
                 var receivedBlock = JsonSerializer.Deserialize<Block>(packet.Content);
                 if (receivedBlock == null || receivedBlock.Header == null)
                 {
-                    Console.WriteLine("Debug-ProcessSyncDHTResponse: Error: Failed to deserialize block from SyncDHTResponse.");
+                    SystemLogger.Log("Debug-ProcessSyncDHTResponse: Error: Failed to deserialize block from SyncDHTResponse.");
                     return;
                 }
 
                 Block.BlockType blockType = Block.BlockHeader.ParseBlockType(packet.Header.Packet_Type);
 
                 string blockId = receivedBlock.Header.BlockId;
-                Console.WriteLine($"Debug-ProcessSyncDHTResponse: Processing SyncDHTResponse for Block ID: {blockId}");
+                SystemLogger.Log($"Debug-ProcessSyncDHTResponse: Processing SyncDHTResponse for Block ID: {blockId}");
 
 
                 switch (blockType)
@@ -240,7 +241,7 @@ namespace SPHERE.Blockchain
                         // Check if we already have this block
                         if (node.ContactDHT.GetBlock(blockId) != null)
                         {
-                            Console.WriteLine($"Debug-ProcessSyncDHTResponse: Block {blockId} already exists in DHT. Ignoring.");
+                            SystemLogger.Log($"Debug-ProcessSyncDHTResponse: Block {blockId} already exists in DHT. Ignoring.");
                             return;
                         }
 
@@ -255,7 +256,7 @@ namespace SPHERE.Blockchain
                             if (IsPeerCloser(node, peer, blockId))
                             {
                                 peerIsCloser = true;
-                                Console.WriteLine($"Debug-ProcessSyncDHTResponse: A closer peer found for block {blockId}: {peer.NodeId}");
+                                SystemLogger.Log($"Debug-ProcessSyncDHTResponse: A closer peer found for block {blockId}: {peer.NodeId}");
                                 break;
                             }
                         }
@@ -263,13 +264,13 @@ namespace SPHERE.Blockchain
                         if (underloaded || !peerIsCloser)
                         {
                             // Store the block locally
-                            Console.WriteLine($"Debug-ProcessSyncDHTResponse: Storing block {blockId} locally.");
+                            SystemLogger.Log($"Debug-ProcessSyncDHTResponse: Storing block {blockId} locally.");
                             node.ContactDHT.AddBlock(receivedBlock);
                         }
                         else
                         {
                             // Forward to the closest peer
-                            Console.WriteLine($"Debug-ProcessSyncDHTResponse: Forwarding block {blockId} to a closer peer.");
+                            SystemLogger.Log($"Debug-ProcessSyncDHTResponse: Forwarding block {blockId} to a closer peer.");
                             foreach (var peer in closestPeers)
                             {
                                 if (IsPeerCloser(node, peer, blockId))
@@ -288,7 +289,7 @@ namespace SPHERE.Blockchain
                         // Check if we already have this block
                         if (node.ReputationDHT.GetBlock(blockId) != null)
                         {
-                            Console.WriteLine($"Debug-ProcessSyncDHTResponse: Block {blockId} already exists in DHT. Ignoring.");
+                            SystemLogger.Log($"Debug-ProcessSyncDHTResponse: Block {blockId} already exists in DHT. Ignoring.");
                             return;
                         }
 
@@ -303,7 +304,7 @@ namespace SPHERE.Blockchain
                             if (IsPeerCloser(node, peer, blockId))
                             {
                                 peerIsCloser = true;
-                                Console.WriteLine($"Debug-ProcessSyncDHTResponse: A closer peer found for block {blockId}: {peer.NodeId}");
+                                SystemLogger.Log($"Debug-ProcessSyncDHTResponse: A closer peer found for block {blockId}: {peer.NodeId}");
                                 break;
                             }
                         }
@@ -311,13 +312,13 @@ namespace SPHERE.Blockchain
                         if (_underloaded || !_peerIsCloser)
                         {
                             // Store the block locally
-                            Console.WriteLine($"Debug-ProcessSyncDHTResponse: Storing block {blockId} locally.");
+                            SystemLogger.Log($"Debug-ProcessSyncDHTResponse: Storing block {blockId} locally.");
                             node.ReputationDHT.AddBlock(receivedBlock);
                         }
                         else
                         {
                             // Forward to the closest peer
-                            Console.WriteLine($"Forwarding block {blockId} to a closer peer.");
+                            SystemLogger.Log($"Forwarding block {blockId} to a closer peer.");
                             foreach (var peer in _closestPeers)
                             {
                                 if (IsPeerCloser(node, peer, blockId))
@@ -330,7 +331,7 @@ namespace SPHERE.Blockchain
                         break;
 
                     default:
-                        Console.WriteLine("Error-ProcessSyncDHTResponse: Received invalid block type in SyncDHTResponse.");
+                        SystemLogger.Log("Error-ProcessSyncDHTResponse: Received invalid block type in SyncDHTResponse.");
                         break;
 
                 }
@@ -338,7 +339,7 @@ namespace SPHERE.Blockchain
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error processing SyncDHTResponse: {ex.Message}");
+                SystemLogger.Log($"Error processing SyncDHTResponse: {ex.Message}");
             }
         }
 
@@ -375,7 +376,7 @@ namespace SPHERE.Blockchain
                         SendBlockToPeer(node, peer, block);
 
                         dht.RemoveBlock(block.Header.BlockId);
-                        Console.WriteLine($"Block {block.Header.BlockId} reassigned to {peer.NodeId}");
+                        SystemLogger.Log($"Block {block.Header.BlockId} reassigned to {peer.NodeId}");
                         break;
                     }
                 }
@@ -388,7 +389,7 @@ namespace SPHERE.Blockchain
             {
                 if (packet == null || packet.Header == null)
                 {
-                    Console.WriteLine("Error-ProcessSyncDHTRequest: Received invalid SyncDHTRequest packet.");
+                    SystemLogger.Log("Error-ProcessSyncDHTRequest: Received invalid SyncDHTRequest packet.");
                     return;
                 }
 
@@ -399,11 +400,11 @@ namespace SPHERE.Blockchain
 
                 if (closestBlocks.Count == 0)
                 {
-                    Console.WriteLine($"⚠️ No blocks close to {senderPeer.NodeId} found for {blockType}.");
+                    SystemLogger.Log($"⚠️ No blocks close to {senderPeer.NodeId} found for {blockType}.");
                     return;
                 }
 
-                Console.WriteLine($"📤 Sending {closestBlocks.Count} closest {blockType} blocks to {senderPeer.NodeId}.");
+                SystemLogger.Log($"📤 Sending {closestBlocks.Count} closest {blockType} blocks to {senderPeer.NodeId}.");
 
                 // Send each block in a separate task for parallel processing
                 foreach (var block in closestBlocks)
@@ -413,7 +414,7 @@ namespace SPHERE.Blockchain
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error processing SyncDHTRequest: {ex.Message}");
+                SystemLogger.Log($"❌ Error processing SyncDHTRequest: {ex.Message}");
             }
         }
 

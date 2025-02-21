@@ -1,6 +1,7 @@
 ﻿using System.Security.Cryptography;
 using SPHERE.Blockchain;
 using SPHERE.Security;
+using SPHERE.Configure.Logging;
 
 
 namespace SPHERE.Configure
@@ -168,7 +169,7 @@ namespace SPHERE.Configure
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"EncryptPacketWithPublicKey: Encryption error: {ex.Message}");
+                SystemLogger.Log($"EncryptPacketWithPublicKey: Encryption error: {ex.Message}");
                 throw;
             }
         }
@@ -253,7 +254,7 @@ namespace SPHERE.Configure
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"DecryptPacketWithPrivateKey: Decryption error: {ex.Message}");
+                SystemLogger.Log($"DecryptPacketWithPrivateKey: Decryption error: {ex.Message}");
                 throw;
             }
         }

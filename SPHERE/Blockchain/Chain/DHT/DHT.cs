@@ -1,5 +1,6 @@
 ﻿
 using SPHERE.Configure;
+using SPHERE.Configure.Logging;
 using SPHERE.Networking;
 using System.Text.Json;
 using SPHERE.Security;
@@ -61,7 +62,7 @@ namespace SPHERE.Blockchain
                     }
                     else
                     {
-                    Console.WriteLine($"Block {blockID} not found in local DHT.");
+                    SystemLogger.Log($"Block {blockID} not found in local DHT.");
                     DHTManagement.IncrementFailedLookups(this);
                     return null;
                 }
@@ -82,11 +83,11 @@ namespace SPHERE.Blockchain
                 try
                 {
                     _blocks.Remove(blockID, out _);
-                    Console.WriteLine($"Block {blockID} removed successfully.");
+                    SystemLogger.Log($"Block {blockID} removed successfully.");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Failed to remove block {blockID}: {ex.Message}");
+                    SystemLogger.Log($"Failed to remove block {blockID}: {ex.Message}");
                 }
                
             }
@@ -105,7 +106,7 @@ namespace SPHERE.Blockchain
                 Block block = GetBlock(blockID);
                 if (block == null)
                 {
-                    Console.WriteLine($"Block with ID {blockID} not found. Replacement aborted.");
+                    SystemLogger.Log($"Block with ID {blockID} not found. Replacement aborted.");
                     return;
                 }
 
@@ -116,11 +117,11 @@ namespace SPHERE.Blockchain
                     block.EncryptedContact = encryptedContact;
                     block.Header.LastUpdateTime = DateTime.UtcNow;
 
-                    Console.WriteLine($"Block {blockID} replaced successfully.");
+                    SystemLogger.Log($"Block {blockID} replaced successfully.");
                 }
                 else
                 {
-                    Console.WriteLine($"Signature verification failed for block {blockID}. Replacement aborted.");
+                    SystemLogger.Log($"Signature verification failed for block {blockID}. Replacement aborted.");
                 }
             }
         }
@@ -191,7 +192,7 @@ namespace SPHERE.Blockchain
             // Check for null or malformed data
             if (block == null || block.Header == null)
             {
-                Console.WriteLine("Block or block header is null.");
+                SystemLogger.Log("Block or block header is null.");
                 return false;
             }
 
@@ -199,14 +200,14 @@ namespace SPHERE.Blockchain
             string calculatedHash = block.Header.CalculateBlockHash();
             if (calculatedHash != block.Header.BlockHash)
             {
-                Console.WriteLine($"Invalid block hash for BlockId {block.Header.BlockId}. Expected {calculatedHash}, got {block.Header.BlockHash}.");
+                SystemLogger.Log($"Invalid block hash for BlockId {block.Header.BlockId}. Expected {calculatedHash}, got {block.Header.BlockHash}.");
                 return false;
             }
 
             // Optionally validate encryption algorithm, signature, or other policies
             if (block.Header.EncryptionAlgorithm != "AES256" && block.Header.EncryptionAlgorithm != "RSA2048")
             {
-                Console.WriteLine($"Unsupported encryption algorithm: {block.Header.EncryptionAlgorithm}");
+                SystemLogger.Log($"Unsupported encryption algorithm: {block.Header.EncryptionAlgorithm}");
                 return false;
             }
 
@@ -239,15 +240,15 @@ namespace SPHERE.Blockchain
                         writer.Write(json);
                     }
 
-                    Console.WriteLine("DHT state saved successfully.");
+                    SystemLogger.Log("DHT state saved successfully.");
                 }
                 catch (IOException ioEx)
                 {
-                    Console.WriteLine($"I/O error while saving DHT state: {ioEx.Message}");
+                    SystemLogger.Log($"I/O error while saving DHT state: {ioEx.Message}");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Failed to save DHT state: {ex.Message}");
+                    SystemLogger.Log($"Failed to save DHT state: {ex.Message}");
                 }
             }
         }
@@ -263,7 +264,7 @@ namespace SPHERE.Blockchain
 
                     if (!File.Exists(filePath))
                     {
-                        Console.WriteLine("DHT state file not found. Starting with an empty state.");
+                        SystemLogger.Log("DHT state file not found. Starting with an empty state.");
                         return;
                     }
 
@@ -283,25 +284,25 @@ namespace SPHERE.Blockchain
                                 _blocks[block.Key] = block.Value;
                             }
 
-                            Console.WriteLine("DHT state loaded successfully.");
+                            SystemLogger.Log("DHT state loaded successfully.");
                         }
                         else
                         {
-                            Console.WriteLine("No data found in the DHT state file. Starting with an empty state.");
+                            SystemLogger.Log("No data found in the DHT state file. Starting with an empty state.");
                         }
                     }
                 }
                 catch (IOException ioEx)
                 {
-                    Console.WriteLine($"I/O error while loading DHT state: {ioEx.Message}");
+                    SystemLogger.Log($"I/O error while loading DHT state: {ioEx.Message}");
                 }
                 catch (JsonException jsonEx)
                 {
-                    Console.WriteLine($"JSON error while loading DHT state: {jsonEx.Message}");
+                    SystemLogger.Log($"JSON error while loading DHT state: {jsonEx.Message}");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Failed to load DHT state: {ex.Message}");
+                    SystemLogger.Log($"Failed to load DHT state: {ex.Message}");
                 }
             }
         }   

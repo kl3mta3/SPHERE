@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using SPHERE.Configure;
+using SPHERE.Configure.Logging;
 using SPHERE.Security;
 using static SPHERE.PacketLib.Packet.PacketBuilder;
 using static SPHERE.PacketLib.Packet;
@@ -227,6 +228,7 @@ namespace SPHERE.Blockchain
 
             header.BlockHash = header.CalculateBlockHash();
 
+               SystemLogger.Log("Transaction Block Created");
             return new Block
             {
                 Header = header,
@@ -239,6 +241,8 @@ namespace SPHERE.Blockchain
         {
             return block?.Header?.BlockType != null &&
                    block.Header.BlockType == BlockType.Transaction.ToString();
+
+            
         }
 
     }

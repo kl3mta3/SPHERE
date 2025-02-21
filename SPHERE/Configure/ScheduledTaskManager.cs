@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using static SPHERE.Configure.CleanupTasks;
+using SPHERE.Configure.Logging;
 
 namespace SPHERE.Configure
 {
@@ -33,7 +34,7 @@ namespace SPHERE.Configure
         {
             foreach (StartupTasks task in Enum.GetValues(typeof(StartupTasks)))
             {
-                Console.WriteLine(task);
+                SystemLogger.Log(task.ToString());
 
                 if (TaskMap.TryGetValue(task, out var taskFunc))
                 {
@@ -54,7 +55,7 @@ namespace SPHERE.Configure
                 }
                 else
                 {
-                    Console.WriteLine($"No task found for: {task}");
+                    SystemLogger.Log($"No task found for: {task}");
                 }
             }
 
@@ -107,7 +108,7 @@ namespace SPHERE.Configure
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error in task '{scheduledTask.Name}': {ex.Message}");
+                    SystemLogger.Log($"Error in task '{scheduledTask.Name}': {ex.Message}");
                     // Decide whether to continue running the task or break.
                 }
                 // Wait for the specified interval before running again.

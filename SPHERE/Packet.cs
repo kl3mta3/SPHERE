@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using SPHERE.Configure.Logging;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -318,7 +319,7 @@ namespace SPHERE.PacketLib
 
                 if (data == null || data.Length == 0)
                 {
-                    Console.WriteLine("Debug-DeserializePacket: Input data is null or empty.");
+                    SystemLogger.Log("Debug-DeserializePacket: Input data is null or empty.");
                     throw new ArgumentException("Data cannot be null or empty.", nameof(data));
                 }
 
@@ -365,7 +366,7 @@ namespace SPHERE.PacketLib
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"DeserializePacket: Error deserializing packet: {ex.Message}");
+                        SystemLogger.Log($"DeserializePacket: Error deserializing packet: {ex.Message}");
                         throw;
                     }
 
@@ -408,11 +409,11 @@ namespace SPHERE.PacketLib
                     await ReadExactlyAsync(_stream, lengthPrefix, 4);
                     int messageLength = BitConverter.ToInt32(lengthPrefix, 0);
 
-                    // Console.WriteLine($"Debug-ReadMessage: Declared Message Length: {messageLength} bytes");
+                    // SystemLogger.Log($"Debug-ReadMessage: Declared Message Length: {messageLength} bytes");
 
                     if (messageLength <= 4 || messageLength > 10_000_000)
                     {
-                        Console.WriteLine($"Debug-ReadMessage: Invalid message length received: {messageLength}");
+                        SystemLogger.Log($"Debug-ReadMessage: Invalid message length received: {messageLength}");
                         return (null, null, null);
                     }
 
@@ -421,14 +422,14 @@ namespace SPHERE.PacketLib
                     byte[] fullPacket = new byte[remainingPacketSize];
                     await ReadExactlyAsync(_stream, fullPacket, remainingPacketSize);
 
-                    //Console.WriteLine($"Debug-ReadMessage: Fully Received Packet - {remainingPacketSize} bytes");
+                    //SystemLogger.Log($"Debug-ReadMessage: Fully Received Packet - {remainingPacketSize} bytes");
 
                     //Parse the packet to extract data
                     return ParsePacket(fullPacket);
                 }
                 catch (IOException ex)
                 {
-                    Console.WriteLine($"Error-ReadMessage: Connection closed before full message received. {ex.Message}");
+                    SystemLogger.Log($"Error-ReadMessage: Connection closed before full message received. {ex.Message}");
                     return (null, null, null);
                 }
             }
@@ -446,7 +447,7 @@ namespace SPHERE.PacketLib
                 {
                     if (fullPacket.Length < 12) // Must be at least 4 bytes (key length) + 4 bytes (signature length) + 4 bytes (some data)
                     {
-                        Console.WriteLine($"Debug-ParsePacket: Packet too small ({fullPacket.Length} bytes) to be valid.");
+                        SystemLogger.Log($"Debug-ParsePacket: Packet too small ({fullPacket.Length} bytes) to be valid.");
                         return (null, null, null);
                     }
 
@@ -456,7 +457,7 @@ namespace SPHERE.PacketLib
 
                     if (keyLength <= 0 || keyLength > fullPacket.Length - 8) // Must leave room for signature length
                     {
-                        Console.WriteLine($"Debug-ParsePacket: Invalid sender public key length: {keyLength}");
+                        SystemLogger.Log($"Debug-ParsePacket: Invalid sender public key length: {keyLength}");
                         return (null, null, null);
                     }
 
@@ -471,7 +472,7 @@ namespace SPHERE.PacketLib
 
                     if (signatureLength <= 0 || signatureLength > fullPacket.Length - signatureLengthOffset - 4)
                     {
-                        Console.WriteLine($"Debug-ParsePacket: Invalid signature length: {signatureLength}");
+                        SystemLogger.Log($"Debug-ParsePacket: Invalid signature length: {signatureLength}");
                         return (null, null, null);
                     }
 
@@ -486,19 +487,19 @@ namespace SPHERE.PacketLib
 
                     if (encryptedMessageLength <= 0)
                     {
-                        Console.WriteLine($"Debug-ParsePacket: Invalid encrypted message length: {encryptedMessageLength}");
+                        SystemLogger.Log($"Debug-ParsePacket: Invalid encrypted message length: {encryptedMessageLength}");
                         return (null, null, null);
                     }
 
                     if (encryptedMessageStart >= fullPacket.Length)
                     {
-                        Console.WriteLine($"Debug-ParsePacket: Encrypted message start ({encryptedMessageStart}) is out of bounds!");
+                        SystemLogger.Log($"Debug-ParsePacket: Encrypted message start ({encryptedMessageStart}) is out of bounds!");
                         return (null, null, null);
                     }
 
                     if (encryptedMessageLength + 4 == fullPacket.Length)
                     {
-                        Console.WriteLine("Detected misalignment, adjusting by -4...");
+                        SystemLogger.Log("Detected misalignment, adjusting by -4...");
                         encryptedMessageLength -= 4;
                     }
 
@@ -513,7 +514,7 @@ namespace SPHERE.PacketLib
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($" Error-ParsePacket: {ex.Message}");
+                    SystemLogger.Log($" Error-ParsePacket: {ex.Message}");
                     return (null, null, null);
                 }
             }
@@ -537,7 +538,7 @@ namespace SPHERE.PacketLib
 
                         if (bytesRead == 0)
                         {
-                            Console.WriteLine($"Warning-ReadExactlyAsync: Stream closed early. Read {totalBytesRead}/{size} bytes.");
+                            SystemLogger.Log($"Warning-ReadExactlyAsync: Stream closed early. Read {totalBytesRead}/{size} bytes.");
                             return false;
                         }
 
@@ -549,12 +550,12 @@ namespace SPHERE.PacketLib
                 }
                 catch (IOException ioEx)
                 {
-                    Console.WriteLine($"Warning-ReadExactlyAsync: IO Exception during read: {ioEx.Message}");
+                    SystemLogger.Log($"Warning-ReadExactlyAsync: IO Exception during read: {ioEx.Message}");
                     return false;
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error-ReadExactlyAsync: Unexpected error: {ex.Message}");
+                    SystemLogger.Log($"Error-ReadExactlyAsync: Unexpected error: {ex.Message}");
                     return false;
                 }
             }

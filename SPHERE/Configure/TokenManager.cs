@@ -8,6 +8,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 using SPHERE.Blockchain;
+using SPHERE.Configure.Logging;
 
 namespace SPHERE.Configure
 {
@@ -83,13 +84,13 @@ namespace SPHERE.Configure
                     }
                     else
                     {
-                        Console.WriteLine("Error: The token is not valid");
+                        SystemLogger.Log("Error: The token is not valid");
                     }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error: There was an error adding the earned Push Token {ex.Message}");
+                SystemLogger.Log($"Error: There was an error adding the earned Push Token {ex.Message}");
             }
         }
 
@@ -119,7 +120,7 @@ namespace SPHERE.Configure
                         if (DateTime.UtcNow - token.Timestamp >= _staleThreshold)
                         {
                             PushTokenBalance.TryRemove(token.TokenId, out _);
-                            Console.WriteLine($"Removed stale token {token.TokenId} issued at {token.Timestamp}");
+                            SystemLogger.Log($"Removed stale token {token.TokenId} issued at {token.Timestamp}");
                             if (PushTokenBalance.Count <= maxAllowed)
                                 break;
                         }
@@ -141,7 +142,7 @@ namespace SPHERE.Configure
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error: There was an error adding the earned Push Token {ex.Message}");
+                    SystemLogger.Log($"Error: There was an error adding the earned Push Token {ex.Message}");
                 }
             }
 
@@ -179,18 +180,18 @@ namespace SPHERE.Configure
                 {
                     if (!SignatureGenerator.VerifyIssuedPushToken(node, token, publicKey))
                     {
-                        Console.WriteLine("Error: The token is not valid");
+                        SystemLogger.Log("Error: The token is not valid");
                         return false;
                     }
 
                     if (PushTokenBalance.TryRemove(token.TokenId, out _))
                     {
-                        Console.WriteLine($"Debug-CashOutToken: Spent token {token.TokenId} from {token.IssuerId}");
+                        SystemLogger.Log($"Debug-CashOutToken: Spent token {token.TokenId} from {token.IssuerId}");
                         return true;
                     }
                     else
                     {
-                        Console.WriteLine("Error: The token is not in the balance");
+                        SystemLogger.Log("Error: The token is not in the balance");
                         return false;
                     }
 

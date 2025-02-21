@@ -1,6 +1,7 @@
 ﻿using SPHERE.Blockchain;
 using SPHERE.PacketLib;
 using SPHERE.Configure;
+using SPHERE.Configure.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,38 +19,38 @@ namespace SPHERE.Networking
 
             try
             {
-                Console.WriteLine($"Debug-SendBootstrapRequest: Starting Bootstrap Request...babyNodeID: {node.Peer.NodeId}");
+                SystemLogger.Log($"Debug-SendBootstrapRequest: Starting Bootstrap Request...babyNodeID: {node.Peer.NodeId}");
                 // Validate inputs
                 if (node == null)
                 {
-                    Console.WriteLine("Debug: Node is null.");
+                    SystemLogger.Log("Debug: Node is null.");
                     throw new ArgumentNullException(nameof(node), "Node cannot be null.");
                 }
 
                 if (string.IsNullOrWhiteSpace(iPAddress))
                 {
-                    Console.WriteLine("Debug: Invalid IP address input.");
+                    SystemLogger.Log("Debug: Invalid IP address input.");
                     throw new ArgumentException("IP address cannot be null or empty.", nameof(iPAddress));
                 }
 
                 if (port <= 0 || port > 65535)
                 {
-                    Console.WriteLine($"Debug: Invalid port: {port}.");
+                    SystemLogger.Log($"Debug: Invalid port: {port}.");
                     throw new ArgumentOutOfRangeException(nameof(port), "Port must be a valid number between 1 and 65535.");
                 }
 
                 if (string.IsNullOrWhiteSpace(Convert.ToBase64String(recipientsPublicEncryptKey)))
                 {
-                    Console.WriteLine("Debug: Recipient's public communication key is null or empty.");
+                    SystemLogger.Log("Debug: Recipient's public communication key is null or empty.");
                     throw new ArgumentException("Recipient's public communication key cannot be null or empty.", nameof(recipientsPublicEncryptKey));
                 }
 
-                Console.WriteLine($"Debug-SendBootstrapRequest: Inputs validated. IP: {iPAddress}, Port: {port}, PublicEncryptKey: {recipientsPublicEncryptKey}");
+                SystemLogger.Log($"Debug-SendBootstrapRequest: Inputs validated. IP: {iPAddress}, Port: {port}, PublicEncryptKey: {recipientsPublicEncryptKey}");
 
                 // Use RetryAsync to retry the operation on failure
                 await node.NetworkManager.RetryAsync<bool>(async () =>
                 {
-                    Console.WriteLine("Debug-SendBootstrapRequest: Building bootstrap request packet...");
+                    SystemLogger.Log("Debug-SendBootstrapRequest: Building bootstrap request packet...");
                     Packet.PacketHeader header = Packet.PacketBuilder.BuildPacketHeader(
                         Packet.PacketBuilder.PacketType.BootstrapRequest,
                         node.Peer.NodeId,
@@ -62,43 +63,43 @@ namespace SPHERE.Networking
                     );
 
                     Packet packet = Packet.PacketBuilder.BuildPacket(header, Packet.PacketBuilder.PacketType.BootstrapRequest.ToString());
-                    Console.WriteLine($"Debug-SendBootstrapRequest: Packet built with NodeId: {node.Peer.NodeId}, IP: {node.Client.clientIP}, Port: {node.Client.clientListenerPort}");
+                    SystemLogger.Log($"Debug-SendBootstrapRequest: Packet built with NodeId: {node.Peer.NodeId}, IP: {node.Client.clientIP}, Port: {node.Client.clientListenerPort}");
 
                     // Serialize the packet into a byte array
-                    Console.WriteLine("Debug-SendBootstrapRequest: Serializing packet...");
+                    SystemLogger.Log("Debug-SendBootstrapRequest: Serializing packet...");
                     byte[] data = Packet.PacketBuilder.SerializePacket(packet);
-                    Console.WriteLine($"Debug-SendBootstrapRequest: Packet serialized. Data Length: {data.Length} bytes");
+                    SystemLogger.Log($"Debug-SendBootstrapRequest: Packet serialized. Data Length: {data.Length} bytes");
 
                     bool success = new bool();
 
                     // Encrypt the packet using the recipient's public communication key
                     byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(data, recipientsPublicEncryptKey);
-                    Console.WriteLine($"Debug-SendBootstrapRequest: Packet encrypted. Encrypted Data Length: {encryptedData.Length} bytes");
+                    SystemLogger.Log($"Debug-SendBootstrapRequest: Packet encrypted. Encrypted Data Length: {encryptedData.Length} bytes");
 
 
                     // Send the encrypted data and signature to the recipient
-                    Console.WriteLine($"Debug-SendBootstrapRequest: Sending packet to {iPAddress}:{port}...");
+                    SystemLogger.Log($"Debug-SendBootstrapRequest: Sending packet to {iPAddress}:{port}...");
                     success = await Client.SendPacketToPeerAsync(iPAddress, port, encryptedData);
 
                     // If the send operation fails, throw an exception to trigger a retry
                     if (!success)
                     {
-                        Console.WriteLine($"Debug-SendBootstrapRequest: Failed to send bootstrap request to {iPAddress}:{port}");
+                        SystemLogger.Log($"Debug-SendBootstrapRequest: Failed to send bootstrap request to {iPAddress}:{port}");
                         throw new Exception($"SendBootstrapRequest: Failed to send bootstrap request to {iPAddress}:{port}.");
                     }
 
                     // Log successful bootstrap request
-                    Console.WriteLine($"Debug-SendBootstrapRequest: Bootstrap request successfully sent to {iPAddress}:{port}");
+                    SystemLogger.Log($"Debug-SendBootstrapRequest: Bootstrap request successfully sent to {iPAddress}:{port}");
 
-                    Console.WriteLine("Debug-SendBootstrapRequest: Bootstrap Request process completed.");
+                    SystemLogger.Log("Debug-SendBootstrapRequest: Bootstrap Request process completed.");
                     return success;
                 });
 
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error-SendBootstrapRequest: {ex.Message}");
-                Console.WriteLine($"SendBootstrapRequest: Debug Trace: {ex.StackTrace}");
+                SystemLogger.Log($"Error-SendBootstrapRequest: {ex.Message}");
+                SystemLogger.Log($"SendBootstrapRequest: Debug Trace: {ex.StackTrace}");
                 throw;
             }
         }
@@ -111,35 +112,35 @@ namespace SPHERE.Networking
             Peer senderPeer = node.RoutingTable.GetPeerByID(packet.Header.NodeId);
             if (senderPeer == null)
             {
-                Console.WriteLine($"Warning: Sender {packet.Header.NodeId} is not in routing table. Adding Peer");
+                SystemLogger.Log($"Warning: Sender {packet.Header.NodeId} is not in routing table. Adding Peer");
                 senderPeer = Peer.CreatePeerFromPacket(packet);
                 node.RoutingTable.AddPeer(senderPeer);
 
             }
-            Console.WriteLine($"Debug-ProcessBootstrapResponse: This NodeID: {packet.Header.NodeId}");
-            Console.WriteLine($"Debug-ProcessBootstrapResponse: Sender NodeID: {senderPeer.NodeId}.");
+            SystemLogger.Log($"Debug-ProcessBootstrapResponse: This NodeID: {packet.Header.NodeId}");
+            SystemLogger.Log($"Debug-ProcessBootstrapResponse: Sender NodeID: {senderPeer.NodeId}.");
 
             try
             {
-                Console.WriteLine("Debug-ProcessBootstrapResponse: Starting to process bootstrap response...");
+                SystemLogger.Log("Debug-ProcessBootstrapResponse: Starting to process bootstrap response...");
 
                 // Verify Node isn't already Bootstrapped, prevents re-bootstrapping by accident
                 if (node.isBootstrapped)
                 {
-                    Console.WriteLine("Debug-ProcessBootstrapResponse: Node is already bootstrapped. Ignoring the response.");
+                    SystemLogger.Log("Debug-ProcessBootstrapResponse: Node is already bootstrapped. Ignoring the response.");
                     return;
                 }
 
                 // Validate the packet and extract the header details
                 if (packet == null || packet.Header == null)
                 {
-                    Console.WriteLine("Debug-ProcessBootstrapResponse: Invalid packet or missing header.");
+                    SystemLogger.Log("Debug-ProcessBootstrapResponse: Invalid packet or missing header.");
 
                     //node.NetworkManager.BroadcastReputationUpdate(node, senderPeer, Blockchain.Reputation.ReputationReason.GetContactFailed)
                     return;
                 }
 
-                Console.WriteLine($"Debug-ProcessBootstrapResponse: Processing packet from Node ID: {packet.Header.NodeId}, IP: {packet.Header.IPAddress}, Port: {packet.Header.Port}");
+                SystemLogger.Log($"Debug-ProcessBootstrapResponse: Processing packet from Node ID: {packet.Header.NodeId}, IP: {packet.Header.IPAddress}, Port: {packet.Header.Port}");
 
                 // De-serialize the response payload
                 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
@@ -147,15 +148,15 @@ namespace SPHERE.Networking
 
                 if (responsePayload == null)
                 {
-                    Console.WriteLine("Debug-ProcessBootstrapResponse: Failed to deserialize bootstrap response payload.");
+                    SystemLogger.Log("Debug-ProcessBootstrapResponse: Failed to deserialize bootstrap response payload.");
                     return;
                 }
-                Console.WriteLine("Debug-ProcessBootstrapResponse: Bootstrap response payload deserialized successfully.");
+                SystemLogger.Log("Debug-ProcessBootstrapResponse: Bootstrap response payload deserialized successfully.");
 
                 // Process the peer list
                 if (responsePayload.Peers != null)
                 {
-                    Console.WriteLine($"Debug-ProcessBootstrapResponse: Processing {responsePayload.Peers.Count} peers...");
+                    SystemLogger.Log($"Debug-ProcessBootstrapResponse: Processing {responsePayload.Peers.Count} peers...");
 
                     int invalidPeers = 0;
                     int maxAllowedInvalidPeers = 15;
@@ -171,7 +172,7 @@ namespace SPHERE.Networking
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"Error-ProcessBootstrapResponse: {ex.Message}");
+                            SystemLogger.Log($"Error-ProcessBootstrapResponse: {ex.Message}");
                         }
 
                         if (peer == null || !isValidPeer)
@@ -189,7 +190,7 @@ namespace SPHERE.Networking
                             }
                             else if (invalidPeers >= maxAllowedInvalidPeers)
                             {
-                                Console.WriteLine($"Debug-ProcessBootstrapResponse: Too Many Invalid Peers. Applying severe penalty.");
+                                SystemLogger.Log($"Debug-ProcessBootstrapResponse: Too Many Invalid Peers. Applying severe penalty.");
                                 trustScoreUpdate--;
                                 break;
                             }
@@ -199,7 +200,7 @@ namespace SPHERE.Networking
                         // Add the peer to the RoutingTable (will handle duplicates automatically)
                         node.RoutingTable.AddPeer(peer);
                         trustScoreUpdate++;
-                        Console.WriteLine($"Debug-ProcessBootstrapResponse: Added or updated peer {peer.NodeId} in the routing table.");
+                        SystemLogger.Log($"Debug-ProcessBootstrapResponse: Added or updated peer {peer.NodeId} in the routing table.");
 
                     }
 
@@ -211,7 +212,7 @@ namespace SPHERE.Networking
                         int invalidDHTBlocks = 0;
                         int maxInvalidBlock = 15;
 
-                        Console.WriteLine($"Debug-ProcessBootstrapResponse: Processing {responsePayload.DHT.Count} DHT blocks...");
+                        SystemLogger.Log($"Debug-ProcessBootstrapResponse: Processing {responsePayload.DHT.Count} DHT blocks...");
                         lock (Node.stateLock) // Ensure thread-safe access to the DHT
                         {
                             foreach (var block in responsePayload.DHT)
@@ -222,11 +223,11 @@ namespace SPHERE.Networking
                                     node.ContactDHT.AddBlock(block);
                                     trustScoreUpdate++;
                                     validDHTBlocks++;
-                                    Console.WriteLine($"Debug-ProcessBootstrapResponse: Added DHT block: {block.Header.BlockId}");
+                                    SystemLogger.Log($"Debug-ProcessBootstrapResponse: Added DHT block: {block.Header.BlockId}");
                                 }
                                 else
                                 {
-                                    Console.WriteLine($"Debug-ProcessBootstrapResponse: Invalid block {block.Header.BlockId}. Skipping.");
+                                    SystemLogger.Log($"Debug-ProcessBootstrapResponse: Invalid block {block.Header.BlockId}. Skipping.");
 
                                     invalidDHTBlocks++;
 
@@ -249,15 +250,15 @@ namespace SPHERE.Networking
                             }
                         }
 
-                        Console.WriteLine("Debug-ProcessBootstrapResponse: Bootstrap response processed successfully.");
+                        SystemLogger.Log("Debug-ProcessBootstrapResponse: Bootstrap response processed successfully.");
                     }
                  
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error-ProcessBootstrapResponse: {ex.Message}");
-                Console.WriteLine($"ProcessBootstrapResponse: Debug Trace: {ex.StackTrace}");
+                SystemLogger.Log($"Error-ProcessBootstrapResponse: {ex.Message}");
+                SystemLogger.Log($"ProcessBootstrapResponse: Debug Trace: {ex.StackTrace}");
             }
 
         }
@@ -276,16 +277,16 @@ namespace SPHERE.Networking
 
             if (senderPeer == null)
             {
-                Console.WriteLine($"Warning: Sender {packet.Header.NodeId} is not in routing table. Adding Peer");
+                SystemLogger.Log($"Warning: Sender {packet.Header.NodeId} is not in routing table. Adding Peer");
                 return;
             }
 
-            Console.WriteLine($"Debug-ProcessBootstrapResponse: This NodeID: {packet.Header.NodeId}");
-            Console.WriteLine($"Debug-ProcessBootstrapResponse: Sender NodeID: {senderPeer.NodeId}.");
+            SystemLogger.Log($"Debug-ProcessBootstrapResponse: This NodeID: {packet.Header.NodeId}");
+            SystemLogger.Log($"Debug-ProcessBootstrapResponse: Sender NodeID: {senderPeer.NodeId}.");
 
             try
             {
-                Console.WriteLine("Debug-SendBootstrapResponse: Starting to send bootstrap response...");
+                SystemLogger.Log("Debug-SendBootstrapResponse: Starting to send bootstrap response...");
 
                 // Extract recipient details from the packet
                 string recipientsID = packet.Header.NodeId;
@@ -293,64 +294,64 @@ namespace SPHERE.Networking
                 int recipientPort = int.Parse(packet.Header.Port);
                 byte[] recipientPublicEncryptKey = packet.Header.PublicEncryptKey;
 
-                Console.WriteLine($"Debug-SendBootstrapResponse: Recipient details - NodeId: {recipientsID}, IP: {recipientIPAddress}, Port: {recipientPort}, PublicComKey: {recipientPublicEncryptKey}");
+                SystemLogger.Log($"Debug-SendBootstrapResponse: Recipient details - NodeId: {recipientsID}, IP: {recipientIPAddress}, Port: {recipientPort}, PublicComKey: {recipientPublicEncryptKey}");
 
                 // Validate inputs
                 if (packet == null)
                 {
-                    Console.WriteLine("Debug-SendBootstrapResponse: Packet is null.");
+                    SystemLogger.Log("Debug-SendBootstrapResponse: Packet is null.");
                     throw new ArgumentNullException(nameof(packet), "Packet cannot be null.");
                 }
 
                 if (node == null)
                 {
-                    Console.WriteLine("Debug-SendBootstrapResponse: Node is null.");
+                    SystemLogger.Log("Debug-SendBootstrapResponse: Node is null.");
                     throw new ArgumentNullException(nameof(node), "The Node cannot be null.");
                 }
 
                 if (string.IsNullOrWhiteSpace(recipientIPAddress))
                 {
-                    Console.WriteLine("Debug-SendBootstrapResponse: Recipient IP address is invalid.");
+                    SystemLogger.Log("Debug-SendBootstrapResponse: Recipient IP address is invalid.");
                     throw new ArgumentException("Packet's IP address cannot be null or empty.", nameof(recipientIPAddress));
                 }
 
                 if (recipientPort <= 0 || recipientPort > 65535)
                 {
-                    Console.WriteLine($"Debug-SendBootstrapResponse: Invalid recipient port: {recipientPort}");
+                    SystemLogger.Log($"Debug-SendBootstrapResponse: Invalid recipient port: {recipientPort}");
                     throw new ArgumentOutOfRangeException(nameof(recipientPort), "Packet port must be a valid number between 1 and 65535.");
                 }
 
                 if (string.IsNullOrWhiteSpace(Convert.ToBase64String(recipientPublicEncryptKey)))
                 {
-                    Console.WriteLine("Debug-SendBootstrapResponse: Recipient's public encryption key is invalid.");
+                    SystemLogger.Log("Debug-SendBootstrapResponse: Recipient's public encryption key is invalid.");
                     throw new ArgumentException("Recipient's public encryption key cannot be null or empty.", nameof(recipientPublicEncryptKey));
                 }
 
-                Console.WriteLine("Debug-SendBootstrapResponse: Inputs validated successfully.");
+                SystemLogger.Log("Debug-SendBootstrapResponse: Inputs validated successfully.");
 
                 // Use RetryAsync to ensure the response is sent
                 await node.NetworkManager.RetryAsync<bool>(async () =>
                 {
-                    Console.WriteLine("Debug-SendBootstrapResponse: Preparing peer list for response...");
+                    SystemLogger.Log("Debug-SendBootstrapResponse: Preparing peer list for response...");
                     List<Peer> peerList = new List<Peer>();
 
                     // Prepare a lightweight peer list for the response payload
                     if (!string.IsNullOrWhiteSpace(recipientsID))
                     {
                         peerList = node.RoutingTable.GetClosestPeers(recipientsID, 10);
-                        Console.WriteLine($"Debug-SendBootstrapResponse: Retrieved {peerList.Count} closest peers for NodeId {recipientsID}.");
+                        SystemLogger.Log($"Debug-SendBootstrapResponse: Retrieved {peerList.Count} closest peers for NodeId {recipientsID}.");
                     }
                     else
                     {
                         peerList = node.RoutingTable.GetAllPeers();
-                        Console.WriteLine($"Debug-SendBootstrapResponse: Retrieved all peers. Total: {peerList.Count}");
+                        SystemLogger.Log($"Debug-SendBootstrapResponse: Retrieved all peers. Total: {peerList.Count}");
                     }
 
-                    Console.WriteLine($"Debug-SendBootstrapResponse: Peer list prepared. Count: {peerList.Count}");
+                    SystemLogger.Log($"Debug-SendBootstrapResponse: Peer list prepared. Count: {peerList.Count}");
 
                     // Include DHT state (if necessary)
                     var dhtState = node.ContactDHT.GetCurrentState();
-                    Console.WriteLine($"Debug-SendBootstrapResponse: Prepared DHT state. Block count: {dhtState.Count}");
+                    SystemLogger.Log($"Debug-SendBootstrapResponse: Prepared DHT state. Block count: {dhtState.Count}");
 
                     //build packet header
                     Packet.PacketHeader header = Packet.PacketBuilder.BuildPacketHeader(
@@ -378,28 +379,28 @@ namespace SPHERE.Networking
 
                     byte[] serializedPacket = Packet.PacketBuilder.SerializePacket(responsePacket);
 
-                    Console.WriteLine($"Debug-SendBootstrapResponse: Serialized response payload. Size: {serializedPacket.Length} bytes");
+                    SystemLogger.Log($"Debug-SendBootstrapResponse: Serialized response payload. Size: {serializedPacket.Length} bytes");
 
                     bool success = new bool();
 
                     // Encrypt the response data using the recipient's public communication key
                     byte[] encryptedResponseData = Encryption.EncryptPacketWithPublicKey(serializedPacket, recipientPublicEncryptKey);
-                    Console.WriteLine($"Debug-SendBootstrapResponse: Encrypted response data. Encrypted size: {encryptedResponseData.Length} bytes");
+                    SystemLogger.Log($"Debug-SendBootstrapResponse: Encrypted response data. Encrypted size: {encryptedResponseData.Length} bytes");
 
                     // Send the encrypted response data and signature to the recipient
-                    Console.WriteLine($"Debug-SendBootstrapResponse: Sending response to {recipientIPAddress}:{recipientPort}...");
+                    SystemLogger.Log($"Debug-SendBootstrapResponse: Sending response to {recipientIPAddress}:{recipientPort}...");
                     success = await Client.SendPacketToPeerAsync(recipientIPAddress, recipientPort, encryptedResponseData);
 
 
                     // If the send operation fails, throw an exception to trigger a retry
                     if (!success)
                     {
-                        Console.WriteLine($"Debug-SendBootstrapResponse: Failed to send bootstrap response to {recipientIPAddress}:{recipientPort}");
+                        SystemLogger.Log($"Debug-SendBootstrapResponse: Failed to send bootstrap response to {recipientIPAddress}:{recipientPort}");
                         throw new Exception($"SendBootstrapResponse: Failed to send bootstrap response to {recipientIPAddress}:{recipientPort}.");
                     }
 
                     // Reward the recipient with a trust score for a valid request
-                    Console.WriteLine("Debug-SendBootstrapResponse: Updating trust score for recipient...");
+                    SystemLogger.Log("Debug-SendBootstrapResponse: Updating trust score for recipient...");
 
 
                     var peer = node.RoutingTable.GetPeerByIPAddress(recipientIPAddress);
@@ -407,25 +408,25 @@ namespace SPHERE.Networking
                     if (peer != null)
                     {
                         
-                        Console.WriteLine($"Debug-SendBootstrapResponse: Trust score updated for peer {peer.NodeId}. New Trust Score: {peer.Reputation}");
+                        SystemLogger.Log($"Debug-SendBootstrapResponse: Trust score updated for peer {peer.NodeId}. New Trust Score: {peer.Reputation}");
                     }
                     else
                     {
-                        Console.WriteLine("Debug-SendBootstrapResponse: Recipient peer not found in the routing table.");
+                        SystemLogger.Log("Debug-SendBootstrapResponse: Recipient peer not found in the routing table.");
                     }
 
 
                     // Log successful bootstrap response
-                    Console.WriteLine($"Debug-SendBootstrapResponse: Bootstrap response successfully sent to {recipientIPAddress}:{recipientPort}.");
+                    SystemLogger.Log($"Debug-SendBootstrapResponse: Bootstrap response successfully sent to {recipientIPAddress}:{recipientPort}.");
                     return success; // Explicitly return success
                 });
 
-                Console.WriteLine("Debug-SendBootstrapResponse: Bootstrap response process completed successfully.");
+                SystemLogger.Log("Debug-SendBootstrapResponse: Bootstrap response process completed successfully.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error-SendBootstrapResponse: {ex.Message}");
-                Console.WriteLine($"SendBootstrapResponse: Debug Trace: {ex.StackTrace}");
+                SystemLogger.Log($"Error-SendBootstrapResponse: {ex.Message}");
+                SystemLogger.Log($"SendBootstrapResponse: Debug Trace: {ex.StackTrace}");
                 throw;
             }
         }

@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using SPHERE.Configure;
+using SPHERE.Configure.Logging;
 using SPHERE.Networking;
 using SPHERE.PacketLib;
 using SPHERE.Security;
@@ -88,7 +89,7 @@ namespace SPHERE.Blockchain
             // Start background cleanup & maintenance tasks automatically
             ScheduledTasks.AutoStartCleanUpTasks(this);
 
-            Console.WriteLine("Node initialized - background tasks started.");
+            SystemLogger.Log("Node initialized - background tasks started.");
         }
 
         //This is used to Create the Node or Load one if it exists.
@@ -131,7 +132,7 @@ namespace SPHERE.Blockchain
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error retrieving or creating keys: {ex.Message}");
+                SystemLogger.Log($"Error retrieving or creating keys: {ex.Message}");
                 throw;
             }
 
@@ -151,15 +152,15 @@ namespace SPHERE.Blockchain
                 }
                 else
                 {
-                    Console.WriteLine("DHT state file not found. Starting with a fresh state.");
+                    SystemLogger.Log("DHT state file not found. Starting with a fresh state.");
                 }
 
 
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error loading DHT state: {ex.Message}");
-                Console.WriteLine("Starting with a fresh state.");
+                SystemLogger.Log($"Error loading DHT state: {ex.Message}");
+                SystemLogger.Log("Starting with a fresh state.");
                 node.ContactDHT = new DHT(); // Reinitialize
             }
 
@@ -173,15 +174,15 @@ namespace SPHERE.Blockchain
                 else
                 {
 
-                    Console.WriteLine("Routing Table state file not found. Starting with a fresh state.");
+                    SystemLogger.Log("Routing Table state file not found. Starting with a fresh state.");
                 }
 
 
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error loading RoutingTable state: {ex.Message}");
-                Console.WriteLine("Starting with a fresh state.");
+                SystemLogger.Log($"Error loading RoutingTable state: {ex.Message}");
+                SystemLogger.Log("Starting with a fresh state.");
                 node.RoutingTable = new RoutingTable(); // Reinitialize
             }
             node.RoutingTable.node = node;
@@ -232,7 +233,7 @@ namespace SPHERE.Blockchain
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error retrieving or creating keys: {ex.Message}");
+                SystemLogger.Log($"Error retrieving or creating keys: {ex.Message}");
                 throw;
             }
 
@@ -248,15 +249,15 @@ namespace SPHERE.Blockchain
                 }
                 else
                 {
-                    Console.WriteLine("DHT state file not found. Starting with a fresh state.");
+                    SystemLogger.Log("DHT state file not found. Starting with a fresh state.");
                 }
 
 
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error loading DHT state: {ex.Message}");
-                Console.WriteLine("Starting with a fresh state.");
+                SystemLogger.Log($"Error loading DHT state: {ex.Message}");
+                SystemLogger.Log("Starting with a fresh state.");
                 node.ContactDHT = new DHT(); // Reinitialize
             }
 
@@ -269,15 +270,15 @@ namespace SPHERE.Blockchain
                 }
                 else
                 {
-                    Console.WriteLine("Routing Table state file not found. Starting with a fresh state.");
+                    SystemLogger.Log("Routing Table state file not found. Starting with a fresh state.");
                 }
 
 
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error loading RoutingTable state: {ex.Message}");
-                Console.WriteLine("Starting with a fresh state.");
+                SystemLogger.Log($"Error loading RoutingTable state: {ex.Message}");
+                SystemLogger.Log("Starting with a fresh state.");
                 node.RoutingTable = new RoutingTable(); // Reinitialize
             }
 
@@ -289,6 +290,39 @@ namespace SPHERE.Blockchain
         {
             node.Peer.PreviousNodesHash = previousHash;
         }
+
+        public static Task<(string ip, string port, string publicEncryptSignature)> DisplayNodesBootStrapInfo(Node node)
+        {
+            
+            SystemLogger.Log("Node Information:");
+            try 
+            { 
+
+                if (node.RoutingTable.GetAllPeers().Count>0)
+                {
+                    Peer peer = node.RoutingTable
+                                     .GetAllPeers()
+                                     .OrderBy(peer => peer.Reputation)
+                                     .FirstOrDefault();
+                    if (peer == null)
+                    {
+                        Random random = new Random();
+                        int index = random.Next(node.RoutingTable.GetAllPeers().Count);
+                        peer = node.RoutingTable.GetAllPeers()[index];
+                    }
+
+                    return Task.FromResult((peer.NodeIP, peer.NodePort.ToString(), Convert.ToBase64String(peer.PublicEncryptKey)));
+                }
+
+                return Task.FromResult((node.Peer.NodeIP, node.Peer.NodePort.ToString(), Convert.ToBase64String(node.Peer.PublicEncryptKey)));
+            }
+            catch (Exception ex)
+            {
+                SystemLogger.Log($"Error displaying node information: {ex.Message}");
+                throw;
+            }
+        }
+
 
     }
 
