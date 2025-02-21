@@ -6,10 +6,11 @@ using System.Reflection;
 using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Text.Json.Serialization;
-using static SPHERE.PacketLib.Packet.PacketBuilder;
-using static System.Runtime.InteropServices.JavaScript.JSType;
+using static SPHERE.Networking.Packet.PacketBuilder;
 
-namespace SPHERE.PacketLib
+
+
+namespace SPHERE.Networking
 {
     /// <summary>
     /// A packet is just what it says it is created by a node to be sent by the client to another node. 
@@ -27,7 +28,7 @@ namespace SPHERE.PacketLib
             {
                 throw new UnauthorizedAccessException("Unauthorized access detected!");
             }
-           
+
         }
 
         [JsonPropertyName("Header")]
@@ -70,7 +71,7 @@ namespace SPHERE.PacketLib
 
         public static PacketType ParsePacketType(string type)
         {
-            Enum.TryParse(type, out PacketBuilder.PacketType parsedEnum);
+            Enum.TryParse(type, out PacketType parsedEnum);
             return parsedEnum;
         }
 

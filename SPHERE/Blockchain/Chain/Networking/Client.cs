@@ -2,9 +2,7 @@
 using System.Net.Sockets;
 using System.Text;
 using static SPHERE.Blockchain.Node;
-using SPHERE.PacketLib;
 using SPHERE.Blockchain;
-using static SPHERE.PacketLib.Packet;
 using SPHERE.Configure;
 using SPHERE.Configure.Logging;
 using SPHERE.Security;
@@ -14,6 +12,7 @@ using SPHERE.TestingLib;
 using System;
 using System.Security.Cryptography;
 using System.Text.Json;
+using static SPHERE.Networking.Packet;
 
 
 namespace SPHERE.Networking
@@ -708,7 +707,7 @@ namespace SPHERE.Networking
                         break;
 
                     case PacketBuilder.PacketType.PushTokenIssued:
-                        await node.NetworkManager.ProcessIssuedToken(node, packet);
+                        await NetworkManager.ProcessIssuedToken(node, packet);
                         break;
 
                     case PacketBuilder.PacketType.PingPal:
@@ -716,11 +715,11 @@ namespace SPHERE.Networking
                         break;
 
                     case PacketBuilder.PacketType.PongPal:
-                        await node.NetworkManager.PongPalProcess(node, packet);
+                        await NetworkManager.PongPalProcess(node, packet);
                         break;
 
                     case PacketBuilder.PacketType.ReputationUpdate:
-                        await node.NetworkManager.ProcessReputationUpdate(node, packet);
+                        await NetworkManager.ProcessReputationUpdate(node, packet);
                         break;
 
                     case PacketBuilder.PacketType.ReputationRequest:
@@ -728,7 +727,7 @@ namespace SPHERE.Networking
                         break;
 
                     case PacketBuilder.PacketType.ReputationResponse:
-                        await node.NetworkManager.ProcessReputationResponse(node, packet);
+                        await NetworkManager.ProcessReputationResponse(node, packet);
                         break;
 
                     default:

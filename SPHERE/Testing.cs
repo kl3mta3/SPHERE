@@ -1,8 +1,6 @@
 ﻿using SPHERE.Security;
-using SPHERE.PacketLib;
 using SPHERE.Configure.Logging;
 using SPHERE.Blockchain;
-using static SPHERE.PacketLib.Packet;
 using SPHERE.Networking;
 using System.Net;
 using System.DirectoryServices.AccountManagement;
@@ -10,6 +8,8 @@ using System.Security.Cryptography;
 using static SPHERE.Blockchain.Contact;
 using System;
 using System.Xml.Linq;
+using static SPHERE.Networking.Packet;
+
 
 
 namespace SPHERE.TestingLib
@@ -358,7 +358,9 @@ namespace SPHERE.TestingLib
                     {
                         Header = new Block.BlockHeader
                         {
-                            BlockId = peer.NodeId ?? "UnknownNodeId", // Check for null NodeId
+                            BlockId = peer.NodeId ?? "UnknownNodeId",
+                            BlockType = Block.BlockType.Contact.ToString(),
+                            BlockVersion = "1.0",
                             PreviousHash = "PreviousHashExample",
                             BlockCreationTime = DateTime.UtcNow,
                             LastUpdateTime = DateTime.UtcNow,
@@ -366,6 +368,9 @@ namespace SPHERE.TestingLib
                             KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
                             PublicSignatureKey = peer.PublicSignatureKey,
                             PublicEncryptionKey = peer.PublicEncryptKey,
+                            CNGCertificate = Convert.FromBase64String(testCNGCertificate),
+
+
                         },
                         EncryptedContact = Convert.ToBase64String(Guid.NewGuid().ToByteArray()),
                         EncryptedLocalSymmetricKey = Guid.NewGuid().ToByteArray()

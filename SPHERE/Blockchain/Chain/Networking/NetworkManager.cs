@@ -12,7 +12,6 @@ using System.Xml.Linq;
 using SPHERE.Blockchain;
 using SPHERE.Configure;
 using SPHERE.Configure.Logging;
-using SPHERE.PacketLib;
 using SPHERE.Security;
 
 namespace SPHERE.Networking

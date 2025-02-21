@@ -127,7 +127,7 @@ namespace SPHERE.Configure
                         if (node.TokenManager.IssuedPushTokens.TryRemove(key, out var token))
                         {
                             node.TokenManager.TokensPendingRemoval.TryAdd(now, token);
-                            node.NetworkManager.SendPushTokenExtendPing(node, token.TokenId, token.ReceiverId);
+                            NetworkManager.SendPushTokenExtendPing(node, token.TokenId, token.ReceiverId);
                             SystemLogger.Log($"Expired token {key} removed.");
                         }
                     }

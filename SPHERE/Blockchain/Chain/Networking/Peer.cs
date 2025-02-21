@@ -1,7 +1,6 @@
 ﻿using SPHERE.Blockchain;
 using SPHERE.Configure.Logging;
 using SPHERE.Configure;
-using SPHERE.PacketLib;
 using System.Net.NetworkInformation;
 using System.Text.Json;
 using System.Text;
@@ -55,7 +54,7 @@ namespace SPHERE.Networking
             return peer;
         }
 
-        public static Peer CreatePeerFromPacket(PacketLib.Packet packet)
+        public static Peer CreatePeerFromPacket(Packet packet)
         {
             NodeType nodeType = (NodeType)Enum.Parse(typeof(NodeType), packet.Header.Node_Type);
             DateTime now = DateTime.UtcNow;
@@ -190,7 +189,7 @@ namespace SPHERE.Networking
             if (peers == null || peers.Count == 0)
             {
                 SystemLogger.Log($"Warning: Received an empty or null peer list from {packet.Header.NodeId}.");
-                node.NetworkManager.BroadcastReputationUpdate(node, senderPeer, Blockchain.Reputation.ReputationReason.GetContactFailed);
+                NetworkManager.BroadcastReputationUpdate(node, senderPeer, Blockchain.Reputation.ReputationReason.GetContactFailed);
                  // Penalize peers that send empty responses
                 return;
             }
@@ -245,7 +244,7 @@ namespace SPHERE.Networking
 
                     if (trustChange != 0)
                     {
-                        node.NetworkManager.BroadcastReputationUpdate(node, senderPeer, Blockchain.Reputation.ReputationReason.GetContactFailed);
+                        NetworkManager.BroadcastReputationUpdate(node, senderPeer, Blockchain.Reputation.ReputationReason.GetContactFailed);
                     }
                 }
             }

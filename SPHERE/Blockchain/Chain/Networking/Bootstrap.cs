@@ -1,5 +1,4 @@
 ﻿using SPHERE.Blockchain;
-using SPHERE.PacketLib;
 using SPHERE.Configure;
 using SPHERE.Configure.Logging;
 using System;

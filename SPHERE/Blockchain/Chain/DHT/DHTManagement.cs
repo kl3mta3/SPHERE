@@ -1,7 +1,7 @@
-﻿using SPHERE.Configure;
+﻿
+using SPHERE.Configure;
 using SPHERE.Configure.Logging;
 using SPHERE.Networking;
-using SPHERE.PacketLib;
 using System;
 using System.Collections.Generic;
 using System.Linq;
