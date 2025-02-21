@@ -76,23 +76,9 @@ namespace SPHERE.Networking
         }
 
         //We adjust the trust score of a peer. 
-        public void UpdateTrustScore( Peer targetPeer, int change)
-        {
-            lock (stateLock)
-            {
-                if (this.NodeId == targetPeer.NodeId)
-                {
-                    Console.WriteLine("Error: A node cannot update its own trust score.");
-                    return;
-                }
+       
 
-                double newScore = Math.Clamp(targetPeer.Reputation + change, 0, 100);
-                targetPeer.Reputation = newScore;
-
-                Console.WriteLine($"Updated trust score for {targetPeer.NodeId} by {this.NodeId}: {targetPeer.Reputation}");
-            }
-        }
-
+        //Validate a peer.
         public static bool ValidatePeer(Peer peer)
         {
             if (peer == null)
@@ -203,7 +189,8 @@ namespace SPHERE.Networking
             if (peers == null || peers.Count == 0)
             {
                 Console.WriteLine($"Warning: Received an empty or null peer list from {packet.Header.NodeId}.");
-                senderPeer.UpdateTrustScore(senderPeer, -15); // Penalize peers that send empty responses
+                node.NetworkManager.BroadcastReputationUpdate(node, senderPeer, Blockchain.Reputation.ReputationReason.GetContactFailed);
+                 // Penalize peers that send empty responses
                 return;
             }
             int validPeerCount = 0;
@@ -257,7 +244,7 @@ namespace SPHERE.Networking
 
                     if (trustChange != 0)
                     {
-                        senderPeer.UpdateTrustScore(senderPeer, trustChange);
+                        node.NetworkManager.BroadcastReputationUpdate(node, senderPeer, Blockchain.Reputation.ReputationReason.GetContactFailed);
                     }
                 }
             }

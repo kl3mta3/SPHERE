@@ -4,6 +4,7 @@ using SPHERE.Networking;
 using System.Text.Json;
 using SPHERE.Security;
 using System.Collections.Concurrent;
+using System.Numerics;
 
 namespace SPHERE.Blockchain
 {
@@ -34,7 +35,12 @@ namespace SPHERE.Blockchain
 
                 lock (stateLock) // Ensures thread-safe access to the _blocks dictionary
                 {
-                    _blocks[block.Header.BlockId] = block;
+                    if (!_blocks.ContainsKey(block.Header.BlockId))
+                    {
+                        _blocks[block.Header.BlockId] = block;
+                        return;
+                    }
+                   
                 }
             
         }
@@ -55,7 +61,7 @@ namespace SPHERE.Blockchain
                     }
                     else
                     {
-                    Console.WriteLine($"⚠️ Block {blockID} not found in local DHT.");
+                    Console.WriteLine($"Block {blockID} not found in local DHT.");
                     DHTManagement.IncrementFailedLookups(this);
                     return null;
                 }
@@ -118,6 +124,7 @@ namespace SPHERE.Blockchain
                 }
             }
         }
+
         public int GetTotalBlockCount()
         {
             lock (stateLock) // Ensure thread safety
@@ -161,6 +168,23 @@ namespace SPHERE.Blockchain
             }
         }
 
+
+        public bool ShouldStoreBlock(Node node, string blockId, int replicationFactor = 20)
+        {
+            // Compute our distance from the block.
+            BigInteger ourDistance = RoutingTable.CalculateXorDistance(node.Peer.NodeId, blockId);
+
+            // Get the k (replicationFactor) closest peers for this block.
+            List<Peer> closestPeers = node.RoutingTable.GetClosestPeers(blockId, replicationFactor);
+
+            // Check if our node is among those peers.
+            bool weAreClosest = closestPeers.Any(peer => peer.NodeId == node.Peer.NodeId);
+
+            // Optionally, also check if our storage is underloaded.
+            bool underloaded = DHTManagement.IsUnderloaded(node, node.ContactDHT); // or ReputationDHT etc.
+
+            return weAreClosest || underloaded;
+        }
 
         public bool IsBlockValid(Block block)
         {

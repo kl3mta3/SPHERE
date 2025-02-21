@@ -701,6 +701,18 @@ namespace SPHERE.Networking
                         await DHTManagement.ProcessSyncDHTResponse(node, packet);
                         break;
 
+                    case PacketBuilder.PacketType.PushTokenIssued:
+                        await node.NetworkManager.ProcessIssuedToken(node, packet);
+                        break;
+
+                    case PacketBuilder.PacketType.PingPal:
+                        await node.NetworkManager.RespondToPingPalAsync(node, packet);
+                        break;
+
+                    case PacketBuilder.PacketType.PongPal:
+                        await node.NetworkManager.PongPalProcess(node, packet);
+                        break;
+
 
                     default:
                         Console.WriteLine($"ProcessIncomingPacket:Unknown packet type: {packet.Header.Packet_Type}");

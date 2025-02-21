@@ -11,6 +11,10 @@ using SPHERE.Blockchain;
 
 namespace SPHERE.Configure
 {
+    /// <summary>
+    /// This class is responsible for managing the tokens used for push notifications.
+    /// More or less a Proof of Work system.
+    /// </summary>
     public class TokenManager
     {
 
@@ -55,10 +59,6 @@ namespace SPHERE.Configure
             return token;
         }
 
-
-
-
-
         // Generates a Unique ID for the token using ECC signature
         public static string GenerateTokenId(string issuer, string receiver, DateTime timestamp)
         {
@@ -71,7 +71,6 @@ namespace SPHERE.Configure
         }
 
         //adds a token to the balance
-
         public async Task AddReceivedPushToken(Node node, PushToken token, byte[] publicKey)
         {
             try
@@ -94,6 +93,7 @@ namespace SPHERE.Configure
             }
         }
 
+        //cleans up the token balance
         public void CleanupTokenBalance()
         {
             lock (_lock)
@@ -128,7 +128,8 @@ namespace SPHERE.Configure
             }
         }
 
-            public async Task AddIssuedPushToken(PushToken token)
+        //Tracks Tokens that we issue to other nodes
+        public async Task AddIssuedPushToken(PushToken token)
             {
                 try
                 {
@@ -144,8 +145,8 @@ namespace SPHERE.Configure
                 }
             }
 
-            //spends a token from the balance
-            public PushToken SpendPushToken(Node node, PushToken token, byte[] publicKey)
+        //spends a token from the balance
+        public PushToken SpendPushToken(Node node, PushToken token, byte[] publicKey)
             {
                 lock (_lock)
                 {
@@ -162,8 +163,8 @@ namespace SPHERE.Configure
                 }
             }
 
-            //gets the number of tokens in the balance
-            public int GetTokenBalance()
+        //gets the number of tokens in the balance
+        public int GetTokenBalance()
             {
                 lock (_lock)
                 {
@@ -171,9 +172,8 @@ namespace SPHERE.Configure
                 }
             }
 
-
-            //cash out an Issued token
-            public async Task<bool> CashOutIssuedToken(Node node, PushToken token, byte[] publicKey)
+        //cash out an Issued token
+        public async Task<bool> CashOutIssuedToken(Node node, PushToken token, byte[] publicKey)
             {
                 lock (_lock)
                 {
@@ -197,8 +197,8 @@ namespace SPHERE.Configure
                 }
             }
 
-            //clears the token balance
-            public void ClearTokenBalance()
+        //clears the token balance
+        public void ClearTokenBalance()
             {
 
                 lock (_lock)

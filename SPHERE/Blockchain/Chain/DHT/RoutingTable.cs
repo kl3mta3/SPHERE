@@ -13,8 +13,8 @@ public class RoutingTable
     private readonly int _bucketSize;
     private readonly object _lock = new();
     public Node node { get; set; }
-
-    public RoutingTable(int bucketSize = 20)
+    public int replicationFactor { get; internal set; } = 50;
+    public RoutingTable(int bucketSize = 50)
     {
         _buckets = new List<Bucket>(Enumerable.Range(0, 256).Select(_ => new Bucket { node=node})); // 256 buckets for a 256-bit ID space
         _bucketSize = bucketSize;

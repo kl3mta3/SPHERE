@@ -14,6 +14,7 @@ namespace SPHERE.Blockchain
     {
         AES256,
         RSA2048,
+        SHA256,
         ECDsa
     }
 

@@ -16,7 +16,6 @@ namespace SPHERE.Networking
         public static async Task SendBootstrapRequest(Node node, string iPAddress, int port, byte[] recipientsPublicEncryptKey)
         {
 
-
             try
             {
                 Console.WriteLine($"Debug-SendBootstrapRequest: Starting Bootstrap Request...babyNodeID: {node.Peer.NodeId}");
@@ -135,8 +134,8 @@ namespace SPHERE.Networking
                 if (packet == null || packet.Header == null)
                 {
                     Console.WriteLine("Debug-ProcessBootstrapResponse: Invalid packet or missing header.");
-                    trustScoreUpdate = -10;
-                    senderPeer.UpdateTrustScore(senderPeer, trustScoreUpdate);
+
+                    //node.NetworkManager.BroadcastReputationUpdate(node, senderPeer, Blockchain.Reputation.ReputationReason.GetContactFailed)
                     return;
                 }
 
@@ -252,12 +251,7 @@ namespace SPHERE.Networking
 
                         Console.WriteLine("Debug-ProcessBootstrapResponse: Bootstrap response processed successfully.");
                     }
-
-                    if (trustScoreUpdate != 0)
-                    {
-                        senderPeer.UpdateTrustScore(senderPeer, trustScoreUpdate);
-                        Console.WriteLine($"Debug-ProcessBootstrapResponse: TrustScore added {senderPeer.Reputation}");
-                    }
+                 
                 }
             }
             catch (Exception ex)
@@ -412,7 +406,7 @@ namespace SPHERE.Networking
 
                     if (peer != null)
                     {
-                        peer.UpdateTrustScore(peer, +5); // Reward 5 points
+                        
                         Console.WriteLine($"Debug-SendBootstrapResponse: Trust score updated for peer {peer.NodeId}. New Trust Score: {peer.Reputation}");
                     }
                     else

@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Sockets;
 using System.Reflection.PortableExecutable;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using SPHERE.Blockchain;
 using SPHERE.Configure;
 using SPHERE.PacketLib;
@@ -273,7 +276,7 @@ namespace SPHERE.Networking
 
 
                 node.RoutingTable.UpdatePeer(peer);
-                peer.UpdateTrustScore(peer, 1);
+                node.NetworkManager.BroadcastReputationUpdate(node, peer, Blockchain.Reputation.ReputationReason.GetContactFailed);
 
             }
             catch (Exception ex)
@@ -282,8 +285,6 @@ namespace SPHERE.Networking
             }
 
         }
-
-
 
         //Send PingPal Request.
         public async Task<bool> PingPalAsync(Node node, Peer peer)
@@ -371,8 +372,9 @@ namespace SPHERE.Networking
                     Console.WriteLine($"Added or updated peer {senderPeer.NodeId} in the routing table.");
                 }
 
-                // Build the ping response packet
-                Packet responsePacket = new Packet
+              
+                    // Build the ping response packet
+                    Packet responsePacket = new Packet
                 {
                     Header = new Packet.PacketHeader
                     {
@@ -397,27 +399,40 @@ namespace SPHERE.Networking
 
                 if (!node.TokenManager.pingPals.ContainsKey(senderPeer))
                 {
-                    node.TokenManager.pingPals.Add(senderPeer, DateTime.UtcNow);
-
-                    bool success = await Client.SendPacketToPeerAsync(senderIPAddress, senderPort, encryptedResponseData);
-
-                    if (success)
+                    
+                    await node.NetworkManager.RetryAsync<bool>(async () =>
                     {
-                        Console.WriteLine($"Successfully sent PingResponse to {senderIPAddress}:{senderPort}");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Failed to send PingResponse to {senderIPAddress}:{senderPort}");
-                    }
+                        node.TokenManager.pingPals.Add(senderPeer, DateTime.UtcNow);
+
+                        bool success = await Client.SendPacketToPeerAsync(senderIPAddress, senderPort, encryptedResponseData);
+
+                        if (success)
+                        {
+                            Console.WriteLine($"Successfully sent PingResponse to {senderIPAddress}:{senderPort}");
+                            return success; 
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Failed to send PingResponse to {senderIPAddress}:{senderPort}");
+                            return success;
+                        }
+                    });
                 }
                 else
                 {
-                    DateTime lastPing = node.TokenManager.pingPals[senderPeer];
-                    if (DateTime.UtcNow - lastPing > TimeSpan.FromHours(24))
+                    bool success = false;
+                    await node.NetworkManager.RetryAsync<bool>(async () =>
                     {
-                        node.TokenManager.pingPals.Remove(senderPeer);
-                        node.TokenManager.CreatePushToken(node.Peer.NodeId, senderPeer.NodeId);
-                    }
+                        DateTime lastPing = node.TokenManager.pingPals[senderPeer];
+                        if (DateTime.UtcNow - lastPing > TimeSpan.FromHours(24))
+                        {
+                            node.TokenManager.pingPals.Remove(senderPeer);
+                            TokenManager.PushToken token = node.TokenManager.CreatePushToken(node.Peer.NodeId, senderPeer.NodeId);
+                            await node.NetworkManager.SendTokenToPeer(node, senderPeer, token);
+                            node.TokenManager.AddIssuedPushToken(token); 
+                        }
+                        return success;
+                    });
 
                 }
                
@@ -429,12 +444,12 @@ namespace SPHERE.Networking
         }
 
         //Process PongPal Response.
-        public async Task PongPalProcess(Node node, Peer peer)
+        public async Task PongPalProcess(Node node, Packet packet)
         {
+            Peer peer = Peer.CreatePeerFromPacket(packet);
             node.TokenManager.pingPal = peer;
 
         }
-
 
         //Send a Push Token Extend Ping to the receiver.
         public async Task SendPushTokenExtendPing(Node node, string tokenId, string receiverId)
@@ -588,7 +603,7 @@ namespace SPHERE.Networking
                         var peer = node.RoutingTable.GetPeerByIPAddress(recipientIPAddress);
                         if (peer != null)
                         {
-                            peer.UpdateTrustScore(peer, +5); // Reward 5 points
+                            node.NetworkManager.BroadcastReputationUpdate(node, peer, Blockchain.Reputation.ReputationReason.GetContactFailed);
                             Console.WriteLine($"Debug-PeerListResponse: Trust score updated for peer {peer.NodeId}. New Trust Score: {peer.Reputation}");
                         }
                         else
@@ -598,7 +613,7 @@ namespace SPHERE.Networking
                     }
 
                     // Log successful bootstrap response
-                    Console.WriteLine($"Debug-PeerListResponse: Peer List Responsesuccessfully sent to {recipientIPAddress}:{recipientPort}.");
+                    Console.WriteLine($"Debug-PeerListResponse: Peer List Response successfully sent to {recipientIPAddress}:{recipientPort}.");
 
                     await node.Client.BroadcastToPeerList(node, packet);
                     return success; // Explicitly return success
@@ -617,6 +632,80 @@ namespace SPHERE.Networking
 
         }
         
+        //Send a Push Token to a peer.
+        internal async Task SendTokenToPeer(Node node, Peer peer, TokenManager.PushToken token)
+        {
+            await node.NetworkManager.RetryAsync<bool>(async () =>
+            {
+                // Build GetResponse packet
+                var responseHeader = Packet.PacketBuilder.BuildPacketHeader(
+                Packet.PacketBuilder.PacketType.PushTokenIssued,
+                node.Peer.NodeId,
+                node.Peer.Node_Type.ToString(),
+                node.Peer.PublicSignatureKey,
+                node.Peer.PublicEncryptKey,
+                node.Client.clientListenerPort,
+                node.Client.clientIP.ToString(),
+                1
+                );
+
+                var responsePacket = Packet.PacketBuilder.BuildPacket(responseHeader, JsonSerializer.Serialize(token));
+                byte[] serializedResponse = Packet.PacketBuilder.SerializePacket(responsePacket);
+
+                // Encrypt with the requester's public key
+                byte[] encryptedResponse = Encryption.EncryptPacketWithPublicKey(serializedResponse, peer.PublicEncryptKey);
+
+                // Send the response to the requester
+                bool success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedResponse);
+
+                if (success)
+                    Console.WriteLine($"Successfully sent PushToken to {peer.NodeIP}:{peer.NodePort}");
+                else
+                    Console.WriteLine($"Failed to send PushToken to {peer.NodeIP}:{peer.NodePort}");
+
+                return success;
+            });
+        }
+
+        //Process a Push Token Issued packet.
+        internal async Task ProcessIssuedToken(Node node, Packet packet)
+        {
+            try
+            {
+                if (packet == null || packet.Header == null || packet.Content == null)
+                {
+                    Console.WriteLine("Received an invalid PushTokenIssued packet.");
+                    return;
+                }
+
+                Peer senderPeer = Peer.CreatePeerFromPacket(packet);
+
+                if (senderPeer == null)
+                {
+                    Console.WriteLine("Received an invalid PushTokenIssued packet.");
+                    return;
+                }
+
+                // Deserialize the payload
+                TokenManager.PushToken token = JsonSerializer.Deserialize<TokenManager.PushToken>(packet.Content);
+
+                if (token == null || string.IsNullOrWhiteSpace(token.TokenId))
+                {
+                    Console.WriteLine("Received an empty or invalid PushTokenIssued payload.");
+                    return;
+                }
+
+                // Add the token to the Issued Tokens
+                node.TokenManager.AddReceivedPushToken(node, token, senderPeer.PublicSignatureKey);
+
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error processing PushTokenIssued: {ex.Message}");
+            }
+        }
+
 
         //-----Node Get Calls-----\\
 
@@ -761,83 +850,88 @@ namespace SPHERE.Networking
                 }
 
 
-
                 if (requestedBlocks.Count > 0)
                 {
-                    Console.WriteLine($"Block {requestedBlockIds.Count} found locally. Sending GetResponse to requester...");
-
-                    BlockResponsePayload payload = new BlockResponsePayload
+                    await node.NetworkManager.RetryAsync<bool>(async () =>
                     {
-                        Type = requestedBlocks[0].Header.BlockType,
-                        Blocks = requestedBlocks
-                    };
+                        Console.WriteLine($"Block {requestedBlockIds.Count} found locally. Sending GetResponse to requester...");
 
-
-                    // Build GetResponse packet
-                    var responseHeader = Packet.PacketBuilder.BuildPacketHeader(
-                        Packet.PacketBuilder.PacketType.GetResponse,
-                        node.Peer.NodeId,
-                        node.Peer.Node_Type.ToString(),
-                        node.Peer.PublicSignatureKey,
-                        node.Peer.PublicEncryptKey,
-                        node.Client.clientListenerPort,
-                        node.Client.clientIP.ToString(),
-                        5 // TTL value for response
-                    );
-
-
-
-                    Packet responsePacket = Packet.PacketBuilder.BuildPacket(responseHeader, JsonSerializer.Serialize(payload));
-                    byte[] serializedResponse = Packet.PacketBuilder.SerializePacket(responsePacket);
-
-                    // Encrypt with the requester's public key
-                    byte[] encryptedResponse = Encryption.EncryptPacketWithPublicKey(serializedResponse, packet.Header.PublicEncryptKey);
-
-                    // Send the response to the requester
-                    bool success = await Client.SendPacketToPeerAsync(packet.Header.IPAddress, int.Parse(packet.Header.Port), encryptedResponse);
-                    if (success)
-                        Console.WriteLine($"Successfully sent GetResponse for {requestedBlockIds.Count} Blocks to {packet.Header.IPAddress}:{packet.Header.Port}");
-                    else
-                        Console.WriteLine($"Failed to send GetResponse for {requestedBlockIds} Blocks to {packet.Header.IPAddress}:{packet.Header.Port}");
-
-                    return;
-                }
-
-                // Block not found, rebroadcast the request to the closest peers
-                Console.WriteLine($"Blocks not found locally. Rebroadcasting request to peers...");
-
-                foreach (var Ids in notFoundBlocks)
-                {
-
-                    // Get closest peers
-                    List<Peer> closestPeers = node.RoutingTable.GetClosestPeers(Ids, 5);
-                    if (closestPeers.Count == 0)
-                    {
-                        Console.WriteLine("No peers available to forward the request.");
-                        continue;
-                    }
-
-                    packet.Header.TTL = newTTL.ToString();
-
-                    byte[] serializedPacket = Packet.PacketBuilder.SerializePacket(packet);
-
-                    var tasks = closestPeers.Select(async peer =>
-                    {
-                        Console.WriteLine($"Forwarding GetRequest for Block {Ids} to {peer.NodeIP}:{peer.NodePort}");
-
-                        try
+                        BlockResponsePayload payload = new BlockResponsePayload
                         {
-                            byte[] encryptedPacket = Encryption.EncryptPacketWithPublicKey(serializedPacket, peer.PublicEncryptKey);
-                            await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedPacket);
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Error forwarding GetRequest to {peer.NodeIP}:{peer.NodePort}: {ex.Message}");
-                        }
+                            Type = requestedBlocks[0].Header.BlockType,
+                            Blocks = requestedBlocks
+                        };
+
+
+                        // Build GetResponse packet
+                        var responseHeader = Packet.PacketBuilder.BuildPacketHeader(
+                                Packet.PacketBuilder.PacketType.GetResponse,
+                                node.Peer.NodeId,
+                                node.Peer.Node_Type.ToString(),
+                                node.Peer.PublicSignatureKey,
+                                node.Peer.PublicEncryptKey,
+                                node.Client.clientListenerPort,
+                                node.Client.clientIP.ToString(),
+                                5 // TTL value for response
+                            );
+
+
+
+                        Packet responsePacket = Packet.PacketBuilder.BuildPacket(responseHeader, JsonSerializer.Serialize(payload));
+                        byte[] serializedResponse = Packet.PacketBuilder.SerializePacket(responsePacket);
+
+                        // Encrypt with the requester's public key
+                        byte[] encryptedResponse = Encryption.EncryptPacketWithPublicKey(serializedResponse, packet.Header.PublicEncryptKey);
+
+                        // Send the response to the requester
+                        bool success = await Client.SendPacketToPeerAsync(packet.Header.IPAddress, int.Parse(packet.Header.Port), encryptedResponse);
+                        if (success)
+                            Console.WriteLine($"Successfully sent GetResponse for {requestedBlockIds.Count} Blocks to {packet.Header.IPAddress}:{packet.Header.Port}");
+                        else
+                            Console.WriteLine($"Failed to send GetResponse for {requestedBlockIds} Blocks to {packet.Header.IPAddress}:{packet.Header.Port}");
+
+                        return success;
                     });
+                 }
+                    // Block not found, rebroadcast the request to the closest peers
+                    Console.WriteLine($"Blocks not found locally. Rebroadcasting request to peers...");
 
-                    await Task.WhenAll(tasks); // Efficient parallel execution
-                }
+                bool success = false;
+                await node.NetworkManager.RetryAsync<bool>(async () =>
+                {
+                    foreach (var Ids in notFoundBlocks)
+                    {   
+                    
+                        // Get closest peers
+                        List<Peer> closestPeers = node.RoutingTable.GetClosestPeers(Ids, 5);
+                        if (closestPeers.Count == 0)
+                        {
+                            Console.WriteLine("No peers available to forward the request.");
+                            continue;
+                        }
+
+                        packet.Header.TTL = newTTL.ToString();
+
+                        byte[] serializedPacket = Packet.PacketBuilder.SerializePacket(packet);
+
+                        var tasks = closestPeers.Select(async peer =>
+                        {
+                            Console.WriteLine($"Forwarding GetRequest for Block {Ids} to {peer.NodeIP}:{peer.NodePort}");
+
+                            try
+                            {
+                                byte[] encryptedPacket = Encryption.EncryptPacketWithPublicKey(serializedPacket, peer.PublicEncryptKey);
+                                 success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedPacket);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Error forwarding GetRequest to {peer.NodeIP}:{peer.NodePort}: {ex.Message}");
+                            }
+                        });
+                        await Task.WhenAll(tasks); 
+                    }
+                        return success;
+                });
             }
             catch (Exception ex)
             {
@@ -892,6 +986,18 @@ namespace SPHERE.Networking
 
                     Console.WriteLine($"Successfully added block {block.Header.BlockId} to the DHT.");
                 }
+
+                //Reward the sender with a Reputation Score and a Token
+               Peer senderPeer= Peer.CreatePeerFromPacket(packet);
+
+                if (senderPeer != null)
+                {
+                    TokenManager.PushToken token = node.TokenManager.CreatePushToken(node.Peer.NodeId, senderPeer.NodeId);
+                    await node.NetworkManager.SendTokenToPeer(node, senderPeer, token);
+                    node.TokenManager.AddIssuedPushToken(token);
+
+                    node.NetworkManager.BroadcastReputationUpdate(node, senderPeer, Blockchain.Reputation.ReputationReason.GetContactFailed);
+                }
             }
             catch (Exception ex)
             {
@@ -899,6 +1005,155 @@ namespace SPHERE.Networking
             }
         }
 
+
+        //-----Reputation Management-----\\
+
+        //Send a Reputation Update to network
+        public async Task BroadcastReputationUpdate(Node node, Peer peer, Reputation.ReputationReason reason)
+        {
+            try
+            {
+                Reputation reputation = new();
+                reputation.CreateReputation(node.Peer.NodeId, peer.NodeId, reason);
+
+                string content = JsonSerializer.Serialize(reputation);
+
+                // Build the ReputationUpdate packet
+                Packet responsePacket = new Packet
+                {
+                    Header = new Packet.PacketHeader
+                    {
+                        NodeId = node.Peer.NodeId,
+                        IPAddress = node.Client.clientIP.ToString(),
+                        Port = node.Client.clientListenerPort.ToString(),
+                        PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
+                        PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
+                        Packet_Type = Packet.PacketBuilder.PacketType.ReputationUpdate.ToString(),
+                        TTL = "1"
+                    },
+                    Content = content,
+                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Convert.FromBase64String(content))),
+                };
+
+                // Send the response to the requester
+                 node.Client.BroadcastToPeerList(node, responsePacket);
+
+               
+                    Console.WriteLine($"Successfully sent ReputationUpdate to {peer.NodeIP}:{peer.NodePort}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error sending ReputationUpdate: {ex.Message}");
+            }
+        }
+
+        //Process a Reputation Update.
+        public async Task ProcessReputationUpdate(Node node, Packet packet)
+        {
+            try
+            {
+                if (packet == null || packet.Header == null || packet.Content == null)
+                {
+                    Console.WriteLine("Received an invalid ReputationUpdate packet.");
+                    return;
+                }
+                Peer senderPeer = Peer.CreatePeerFromPacket(packet);
+
+                if(senderPeer == null)
+                {
+                    Console.WriteLine("Received an invalid ReputationUpdate packet.");
+                    return;
+                }
+
+
+                // Deserialize the payload
+                var reputation = JsonSerializer.Deserialize<Reputation>(packet.Content);
+
+                if (reputation == null || string.IsNullOrWhiteSpace(reputation.UpdateIssuedByNodeId) || string.IsNullOrWhiteSpace(reputation.NodeId))
+                {
+                    Console.WriteLine("Received an empty or invalid ReputationUpdate payload.");
+                    return;
+                }
+
+                // Validate the signature
+                byte[] signature = Convert.FromBase64String(packet.Signature);
+                byte[] content = Encoding.UTF8.GetBytes(packet.Content);
+
+                if (!SignatureGenerator.VerifyByteArray(content, signature, senderPeer.PublicSignatureKey))
+                {
+                    Console.WriteLine("Invalid signature on ReputationUpdate packet.");
+                    return;
+                }
+
+                //Check is we have the Reputation Block in the ReputationDHT.
+                Block block = node.ReputationDHT.GetBlock(reputation.UpdateIssuedByNodeId);
+                Reputation newReputation = Reputation.UpdatedReputation(reputation, reputation.UpdateIssuedByNodeId, Reputation.GetReputationReasonFromString(reputation.Reason));
+
+                if (block != null)
+                {
+                    // Add the reputation to the Reputation DHT
+
+                    block.ReputationBlock = JsonSerializer.Serialize(newReputation);
+                }
+                else
+                {
+
+                    Console.WriteLine("Reputation Block not found in the Reputation DHT.");
+                   // Add the reputation to the Reputation DHT
+                    if (node.ReputationDHT.ShouldStoreBlock(node, reputation.NodeId, node.RoutingTable.replicationFactor))
+                    { 
+                        Reputation.ReputationReason reason= Reputation.GetReputationReasonFromString(reputation.Reason);
+                        string serialiszedNewReputation = JsonSerializer.Serialize(newReputation);
+                        Block newBlock = Block.CreateReputationBlock(
+                            "UNKNOWN",
+                            serialiszedNewReputation,
+                            EncryptionAlgorithm.AES256
+                            );
+                        node.ReputationDHT.AddBlock(newBlock);
+
+
+                    }
+                }
+           
+
+                bool success=false;
+                // Use RetryAsync to retry the operation on failure
+                await node.NetworkManager.RetryAsync<bool>(async () =>
+                {
+                    await node.Client.BroadcastToPeerList(node, packet);
+                     return success;
+                });
+
+
+                // Update the reputation score
+                Peer receiver = node.RoutingTable.GetPeerByID(reputation.NodeId);
+
+                if (receiver != null)
+                {
+                    receiver.Reputation += reputation.ReputationChange;
+                    Console.WriteLine($"Reputation updated for {receiver.NodeId}. New score: {receiver.Reputation}");
+                }
+                else
+                {
+                    Console.WriteLine($"Peer {reputation.NodeId} not found in the routing table.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error processing ReputationUpdate: {ex.Message}");
+            }
+        }
+
+        // We are missing Reputation Block Request.
+
+        public async Task RequestPeerReputation()
+        {
+
+
+
+
+        }
+       // Fix^;
 
         //-----Configuration Calls-----\\
 

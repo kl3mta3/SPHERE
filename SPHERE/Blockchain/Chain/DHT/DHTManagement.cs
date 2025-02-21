@@ -12,6 +12,10 @@ using System.Xml.Linq;
 
 namespace SPHERE.Blockchain
 {
+    /// <summary>
+    /// DHTManagement is responsible for managing the Distributed Hash Table (DHT) in the blockchain.
+    /// It provides dynamic load balancing and block reassignment to optimize storage and retrieval.
+    /// </summary>
     internal class DHTManagement
     {
 
@@ -70,7 +74,7 @@ namespace SPHERE.Blockchain
             failedBlockLookupCounts[dhtName]++;
         }
 
-        private static bool IsUnderloaded(Node node, DHT dht)
+        internal static bool IsUnderloaded(Node node, DHT dht)
         {
             int storedBlocks = dht.GetTotalBlockCount();
             return storedBlocks < EstimateIdealBlockCount(node, dht) * 0.5; // If 50% under ideal, we fetch more

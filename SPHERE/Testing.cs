@@ -152,7 +152,7 @@ namespace SPHERE.TestingLib
 
                     try
                     {
-                        PopulateTestDHTWithFakeBlocks(testNode.ContactDHT, fakePeers, testNode.MaxPeers);
+                        PopulateTestDHTWithFakeBlocks(testNode.ContactDHT, fakePeers, testNode.RoutingTable.replicationFactor);
                     }
                     catch (Exception ex)
                     {
@@ -1005,7 +1005,6 @@ namespace SPHERE.TestingLib
                         //Create a Full Fake Node DHT and RT and assign as HOST
                         CreateFakeNodeTest(1);
                         hostNode = GetFirstNode();
-                        hostNode.Test_Mode = true;
                         Console.WriteLine($"Starting hostNode Listener at {hostNode.Client.clientIP}:{hostNode.Client.clientListenerPort}");
                         hostNode.Client.StartClientListenerAsync(hostNode, hostNode.Client);
                         Console.WriteLine($"hostNode Created Successfully");
@@ -1022,7 +1021,6 @@ namespace SPHERE.TestingLib
                     {
                         // Create a babyNode with no Rt or DHT.   
                         babyNode = CreateTestNodeWithNoDHTorRoutingTable(NodeType.Full);
-                        babyNode.Test_Mode = true;
                         Console.WriteLine($"babyNode Created Successfully");
                         Console.WriteLine($"Starting babyNode Listener at {babyNode.Client.clientIP}:{babyNode.Client.clientListenerPort}");
                         babyNode.Client.StartClientListenerAsync(babyNode, babyNode.Client);

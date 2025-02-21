@@ -62,21 +62,24 @@ namespace SPHERE.Blockchain
         internal static readonly object stateLock = new object();
         internal const string DefaultPreviousHash = "UNKNOWN";
         public RoutingTable RoutingTable { get; set; } = new();
+
         internal ConcurrentDictionary<string, DateTime> seenPackets = new();
         internal ConcurrentDictionary<string, DateTime> requestedBlocks = new();
         internal ConcurrentDictionary<string, DateTime> issuedTokens = new();
+
         internal TokenManager TokenManager = new TokenManager();
         internal NetworkManager NetworkManager = new NetworkManager();
         internal ScheduledTaskManager ScheduledTasks = new ScheduledTaskManager();
+
         public TimeSpan cacheLifetime { get; internal set; } = TimeSpan.FromMinutes(5);
         public bool isBootstrapped { get; internal set; } = false;
         public Peer Peer { get; set;} = new();
+
         public Client Client { get; set;} = new();
+
         public DHT ContactDHT { get; set; } = new();
         public DHT ReputationDHT { get; set; } = new();
         public DHT TransactionDHT { get; set; } = new();
-        internal readonly int MaxPeers = 75;
-        public bool Test_Mode = false;
 
         internal CleanupTasks AutomaticFunctions = new();
 
@@ -307,5 +310,7 @@ namespace SPHERE.Blockchain
         [JsonPropertyName("Blocks")]
         public List<Block> Blocks { get; set; }
     }
+
+   
 }
 

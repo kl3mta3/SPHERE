@@ -8,12 +8,16 @@ using static SPHERE.Configure.CleanupTasks;
 
 namespace SPHERE.Configure
 {
+    /// <summary>
+    ///  This class is responsible for managing scheduled tasks.
+    /// </summary>
     internal class ScheduledTaskManager
     {
         
         private CancellationTokenSource _cts;
         private readonly List<Task> _runningTasks = new();
         internal List<ScheduledTask> _tasks = new();
+
         public class ScheduledTask
         {
             // The task delegate to execute periodically.
@@ -24,6 +28,7 @@ namespace SPHERE.Configure
             public string Name { get; set; }
         }
 
+        // AutoStartCleanUpTasks is a method that starts all the cleanup tasks on startup
         internal async Task AutoStartCleanUpTasks(Node node)
         {
             foreach (StartupTasks task in Enum.GetValues(typeof(StartupTasks)))
@@ -36,8 +41,6 @@ namespace SPHERE.Configure
                     TimeSpan interval = CleanupTasks.TaskIntervals.TryGetValue(task, out TimeSpan taskInterval)
                                           ? taskInterval
                                           : TimeSpan.FromHours(24); // Fall back interval if not found
-
-
 
                     AddTask(new ScheduledTask
                     {
@@ -60,6 +63,7 @@ namespace SPHERE.Configure
             await Task.CompletedTask;
         }   
 
+        // Adds a new scheduled task to the manager.
         public void AddTask(ScheduledTask scheduledTask)
         {
             _tasks.Add(scheduledTask);
@@ -86,6 +90,7 @@ namespace SPHERE.Configure
             }
         }
 
+        // Runs a scheduled task in a loop until cancellation is requested.
         private async Task RunScheduledTask(ScheduledTask scheduledTask, CancellationToken cancellationToken)
         {
             // Optional initial delay can be added here if needed.
