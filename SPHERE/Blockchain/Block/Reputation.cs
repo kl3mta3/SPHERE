@@ -6,6 +6,8 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using SPHERE.Configure;
 using SPHERE.Configure.Logging;
+using SPHERE.Networking;
+using SPHERE.Security;
 
 namespace SPHERE.Blockchain
 {
@@ -117,7 +119,48 @@ namespace SPHERE.Blockchain
 
         }
 
-       
+        //Request a peer's reputation.
+        public Task RequestPeerReputation(Node node, string nodeIdToGet)
+        {
+            if (node == null)
+            {
+                SystemLogger.Log($"Error-RequestPeerReputation: Node cannot be null.");
+            }
+            if (string.IsNullOrWhiteSpace(nodeIdToGet))
+            {
+                SystemLogger.Log($"Error-RequestPeerReputation: nodeIdToGet cannot be null.");
+            }
+
+            try
+            {
+
+
+                Packet responsePacket = new Packet
+                {
+                    Header = new Packet.PacketHeader
+                    {
+                        NodeId = node.Peer.NodeId,
+                        IPAddress = node.Client.clientIP.ToString(),
+                        Port = node.Client.clientListenerPort.ToString(),
+                        PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
+                        PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
+                        Packet_Type = Packet.PacketBuilder.PacketType.ReputationRequest.ToString(),
+                        TTL = "1"
+                    },
+                    Content = nodeIdToGet,
+                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Convert.FromBase64String(nodeIdToGet))),
+                };
+
+                // Send the response to the requester
+                node.Client.BroadcastToPeerList(node, responsePacket);
+            }
+            catch (Exception ex)
+            {
+                SystemLogger.Log($"Error sending ReputationRequest: {ex.Message}");
+            }
+
+            return Task.CompletedTask;
+        }
     }
 
     

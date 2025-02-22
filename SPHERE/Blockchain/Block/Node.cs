@@ -323,6 +323,47 @@ namespace SPHERE.Blockchain
             }
         }
 
+        public async Task<bool>RequestPutBlockWithToken(Node node, Block block)
+        {
+            try
+            {
+                if (node == null || node.Peer ==null)
+                {
+                    SystemLogger.Log("Error-RequestPutBlockWithToken: Node has no peer information.");
+                    return false;
+                }
+                if (block == null)
+                {
+                    SystemLogger.Log("Error-RequestPutBlockWithToken: Block is null.");
+                    return false;
+                }
+                if (node.TokenManager.GetTokenBalance() == 0)
+                {
+                    SystemLogger.Log("Error-RequestPutBlockWithToken: Node has no tokens.");
+                    return false;
+                }
+
+                TokenManager.PushToken token = node.TokenManager.GetToken(node.TokenManager.GetTokenBalance().ToString());
+
+                bool success = await NetworkManager.RequestPutWithToken(node, block, token);
+                if (success)
+                {
+                    return success;
+                }
+                else 
+                {
+                    SystemLogger.Log("Error-RequestPutBlockWithToken: Failed to request block.");
+                    return false;
+                }
+
+                
+            }
+            catch (Exception ex)
+            {
+                SystemLogger.Log($"Error requesting block: {ex.Message}");
+                return false;
+            }
+        }
 
     }
 
@@ -345,6 +386,14 @@ namespace SPHERE.Blockchain
         public required List<Block> Blocks { get; set; }
     }
 
+    public class PutRequestPayload
+    {
+        [JsonPropertyName("Block")]
+        public required Block Block { get; set; }
+
+        [JsonPropertyName("Token")]
+        public required TokenManager.PushToken Token{ get; set; }
+    }
    
 }
 

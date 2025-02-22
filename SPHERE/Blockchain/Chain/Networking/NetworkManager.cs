@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.DirectoryServices.ActiveDirectory;
 using System.Linq;
 using System.Net.Sockets;
 using System.Reflection.Metadata;
@@ -115,7 +116,6 @@ namespace SPHERE.Networking
         }
 
 
-
         //-----Pings-----\\
 
         //Ping a single peer. Returns True or false based on successful ping. 
@@ -224,17 +224,21 @@ namespace SPHERE.Networking
                     node.Peer.PublicEncryptKey
 
                 );
-
-                bool success = await Client.SendPacketToPeerAsync(senderIPAddress, senderPort, encryptedResponseData);
-
-                if (success)
+                await RetryAsync<bool>(async () =>
                 {
-                    SystemLogger.Log($"Successfully sent PingResponse to {senderIPAddress}:{senderPort}");
-                }
-                else
-                {
-                    SystemLogger.Log($"Failed to send PingResponse to {senderIPAddress}:{senderPort}");
-                }
+                    bool success = await Client.SendPacketToPeerAsync(senderIPAddress, senderPort, encryptedResponseData);
+
+                    if (success)
+                    {
+                        SystemLogger.Log($"Successfully sent PingResponse to {senderIPAddress}:{senderPort}");
+                        return success;
+                    }
+                    else
+                    {
+                        SystemLogger.Log($"Failed to send PingResponse to {senderIPAddress}:{senderPort}");
+                        return success;
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -376,7 +380,7 @@ namespace SPHERE.Networking
               
                     // Build the ping response packet
                     Packet responsePacket = new Packet
-                {
+                    {
                     Header = new Packet.PacketHeader
                     {
                         NodeId = node.Peer.NodeId,
@@ -453,6 +457,7 @@ namespace SPHERE.Networking
         }
 
         //Send a Push Token Extend Ping to the receiver.
+        //The receiver will then send a Push Token Extend Pong to us that includes the original Token as proof or a Failed pong if they can not.
         public static  Task SendPushTokenExtendPing(Node node, string tokenId, string receiverId)
         {
 
@@ -467,7 +472,115 @@ namespace SPHERE.Networking
             //They will then send a push token extend pong to us that includes the original Token as proof or a Failed pong if they can not.
             return Task.CompletedTask;
         }
-        
+
+        //Process a Push Token Extend Pong.
+        public static async Task ProcessPushTokenExtendPing(Node node, Packet packet)
+        {
+            try
+            {
+                if (packet == null || packet.Header == null || packet.Content == null)
+                {
+                    SystemLogger.Log("Received an invalid PushTokenExtendPong packet.");
+                    return ;
+                }
+
+                Peer senderPeer = Peer.CreatePeerFromPacket(packet);
+
+                if (senderPeer == null)
+                {
+                    SystemLogger.Log("Received an invalid PushTokenExtendPong packet.");
+                    return ;
+                }
+
+                // Deserialize the payload
+                string tokenId = JsonSerializer.Deserialize<string>(packet.Content);
+
+                if (string.IsNullOrWhiteSpace(tokenId))
+                {
+                    SystemLogger.Log("Received an empty or invalid PushTokenExtendPong payload.");
+                    return ;
+                }
+
+                TokenManager.PushToken token = node.TokenManager.GetToken(tokenId);
+                var serilizedToken = JsonSerializer.Serialize<TokenManager.PushToken>(token);
+                Packet responsePacket = new Packet
+                {
+                    Header = new Packet.PacketHeader
+                    {
+                        NodeId = node.Peer.NodeId,
+                        IPAddress = node.Client.clientIP.ToString(),
+                        Port = node.Client.clientListenerPort.ToString(),
+                        PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
+                        PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
+                        Packet_Type = Packet.PacketBuilder.PacketType.PongPal.ToString(),
+                        TTL = "1"
+                    },
+                    Content = serilizedToken,
+                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Encoding.UTF8.GetBytes("Pong")))
+                };
+
+                byte[] bytes = Packet.PacketBuilder.SerializePacket(responsePacket);
+                byte[] encryptedResponseData = Encryption.EncryptPacketWithPublicKey(bytes, senderPeer.PublicEncryptKey);
+
+                await node.NetworkManager.RetryAsync<bool>(async () =>
+                {
+                   bool success= await Client.SendPacketToPeerAsync(senderPeer.NodeIP, senderPeer.NodePort, encryptedResponseData);
+
+                    if (success)
+                        {
+                        SystemLogger.Log($"Successfully sent PushTokenExtendPong to {senderPeer.NodeId}");
+                        return success;
+                    }
+                    else
+                    {
+                        SystemLogger.Log($"Failed to send PushTokenExtendPong to {senderPeer.NodeId}");
+                        return success;
+                    }
+                });
+                  
+
+            }
+            catch (Exception ex)
+            {
+                SystemLogger.Log($"Error processing PushTokenExtendPong: {ex.Message}");
+            }
+            return;
+        }
+
+
+        //Process a Push Token Extend Pong.
+        public static Task ProcessPushTokenExtendPong(Node node, Packet packet)
+        {
+            try
+            {
+                Peer peer = Peer.CreatePeerFromPacket(packet);
+                if (node == null || packet == null || peer == null)
+                {
+                    SystemLogger.Log("Error: Invalid PushTokenExtendPong packet.");
+                    return Task.CompletedTask;
+                }
+
+                TokenManager.PushToken token = JsonSerializer.Deserialize<TokenManager.PushToken>(packet.Content);
+                if (token == null || !node.TokenManager.IssuedPushTokens.ContainsKey(token.IssuerId))
+                {
+                    SystemLogger.Log("Error: Invalid PushTokenExtendPong payload.");
+                    return Task.CompletedTask;
+                }
+                if (SignatureGenerator.VerifyIssuedPushToken(node, token))
+                {
+
+                    var storedToken = node.TokenManager.IssuedPushTokens[token.IssuerId];
+                    storedToken.Timestamp = DateTime.UtcNow;
+                    node.TokenManager.IssuedPushTokens[token.IssuerId] = storedToken;
+                }
+                return Task.CompletedTask;
+            }
+            catch (Exception ex)
+            {
+                SystemLogger.Log($"Error processing PushTokenExtendPong: {ex.Message}");
+                return Task.CompletedTask;
+            }
+        }
 
         //-----Peers-----\\
 
@@ -711,6 +824,24 @@ namespace SPHERE.Networking
 
 
         //-----Node Get Calls-----\\
+
+        /// <summary>
+        /// Get calls are used to request a block from the network.
+        /// The request is sent to the closest peer (in terms of node ID distance) to the desired block.
+        /// If the receiving node has the block, it sends the block back to the requester.
+        /// If the block is not available locally, the node will forward (rebroadcast) the request
+        /// to the closest peer it knows of to the target block.
+        /// Leveraging Kademlia's routing algorithm, any block in the network can be reached in O(log n) hops,
+        /// ensuring efficient retrieval even in large distributed networks.
+        /// Example:
+        /// _____________________________________________________________________________________
+        /// | Total Nodes (n)	Redundancy (k)	Max Hops (log₂ n)   Avg Hops (with redundancy)   |
+        /// |____________________________________________________________________________________|
+        /// | 1,000,000  	 |      20	       |   ~20	          |  12-16                       |
+        /// | 2,000,000	     |      20         |   ~21	          |  13-17                       |
+        /// | 10,000,000	 |      20         |   ~24	          |  15-20                       |
+        /// |____________________________________________________________________________________|
+        /// </summary>
 
         //Request a block from the network.
         public static async Task RequestBlockFromNetwork(Node node, string blockId)
@@ -1008,11 +1139,255 @@ namespace SPHERE.Networking
             }
         }
 
+
+        //-----Node Put Calls-----\\
+
+        /// <summary>
+        /// Put Calls are to broadcast a block to the network.
+        /// A node can not do this it self. If a node wants to add a block to the network it must use a token that will have been provided from another node for work done.
+        /// The block and the token must be sent to the peer that issued the token. The peer will then broadcast the block to the network after verifying the token and block.
+        /// </summary>
+       
+        //Broadcast a Put request to the network if the included Token was issued by this node and is valid.
+        internal static async  Task VerifyAndBroadcastPutRequest(Node node, Packet packet)
+        {
+            try
+            {
+
+                if (node == null)
+                {
+                    SystemLogger.Log($"{nameof(node)}, Node cannot be null.");
+                    return;
+                }
+                if (packet == null || packet.Header == null || packet.Content == null)
+                {
+                    SystemLogger.Log("Received an invalid PutRequest packet.");
+                    return;
+                }
+
+                Peer requestingPeer = Peer.CreatePeerFromPacket(packet);
+                PutRequestPayload payload = JsonSerializer.Deserialize<PutRequestPayload>(packet.Content);
+                Block block= payload.Block;
+                TokenManager.PushToken token = payload.Token;
+
+                if (block == null)
+                {
+                    SystemLogger.Log($"{nameof(block)}, Block cannot be null.");
+                    return;
+                }
+
+                if (token == null || !SignatureGenerator.VerifyIssuedPushToken(node, token))
+                {
+                    SystemLogger.Log($"{nameof(token)}, Reputation cannot be null.");
+                    return;
+                }
+
+
+                    // Build a PutRequest packet
+                    var header = Packet.PacketBuilder.BuildPacketHeader(
+                        Packet.PacketBuilder.PacketType.PutRequest,
+                        node.Peer.NodeId,
+                        node.Peer.Node_Type.ToString(),
+                        node.Peer.PublicSignatureKey,
+                        node.Peer.PublicEncryptKey,
+                        node.Client.clientListenerPort,
+                        node.Client.clientIP.ToString(),
+                        50 // TTL value
+                    );
+
+                    Packet putPacket = Packet.PacketBuilder.BuildPacket(header, JsonSerializer.Serialize(block));
+                 
+       
+                    SystemLogger.Log($"Sending PutRequest to peerlist");
+
+                try
+                {
+                   bool success = await node.Client.BroadcastToPeerList(node, putPacket);
+
+                    if (success)
+                    {
+                        SystemLogger.Log($"Successfully sent PutRequest to peer list.");
+                        node.TokenManager.CashOutIssuedToken(node, token);
+                    }
+                    else
+                    {
+                        SystemLogger.Log($"Failed to send PutRequest to peer list.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    SystemLogger.Log($"Error sending PutRequest to peer list {ex.Message}");
+                }
+        
+            }
+            catch (Exception ex)
+            {
+                SystemLogger.Log($"Error broadcasting PutRequest: {ex.Message}");
+            }
+            return;
+        }
+
+        //Request a block be Put into the network by a peer providing back a token the node was issued.
+        internal static async Task<bool> RequestPutWithToken(Node node, Block block, TokenManager.PushToken token)
+        {
+            try
+            {
+                if (node == null)
+                {
+                    SystemLogger.Log($"Error:-RequestPutWithToken: {nameof(node)}, Node cannot be null.");
+                    return false;
+                }
+
+                if (block == null)
+                {
+                    SystemLogger.Log($"Error:-RequestPutWithToken: {nameof(block)}, Block cannot be null.");
+                    return false;
+                }
+
+                Peer tokenIssuingPeer = node.RoutingTable.GetPeerByID(token.IssuerId);
+
+                if (tokenIssuingPeer == null)
+                {
+                    SystemLogger.Log("Error:-RequestPutWithTokenToken: Issuer not in peer list.");
+                    return false;
+                }
+
+                if (token == null || !SignatureGenerator.VerifyReceivedPushToken(node, token, tokenIssuingPeer.PublicSignatureKey))
+                {
+                    SystemLogger.Log($"Error:-RequestPutWithToken: {nameof(token)}, Token is not valid.");
+                    return false;
+                }
+
+                // Build a PutRequest packet
+                var header = Packet.PacketBuilder.BuildPacketHeader(
+                    Packet.PacketBuilder.PacketType.PutRequest,
+                    node.Peer.NodeId,
+                    node.Peer.Node_Type.ToString(),
+                    node.Peer.PublicSignatureKey,
+                    node.Peer.PublicEncryptKey,
+                    node.Client.clientListenerPort,
+                    node.Client.clientIP.ToString(),
+                    1 // TTL value
+                );
+
+                PutRequestPayload payload = new PutRequestPayload
+                {
+                    Block = block,
+                    Token = token
+                };
+
+                
+                Packet putPacket = Packet.PacketBuilder.BuildPacket(header, JsonSerializer.Serialize<PutRequestPayload>(payload));
+
+                SystemLogger.Log($"Error:-RequestPutWithToken: Sending PutRequest to peerlist");
+
+                bool success = await node.Client.BroadcastToPeerList(node, putPacket);
+
+                if (success)
+                {
+                    SystemLogger.Log($"Error:-RequestPutWithToken: Successfully sent PutRequest to peer list.");
+                    node.TokenManager.CashOutIssuedToken(node, token);
+                }
+                else
+                {
+                    SystemLogger.Log($"Error:-RequestPutWithToken: Failed to send PutRequest to peer list.");
+                }
+
+                return success;
+            }
+            catch (Exception ex)
+            {
+                SystemLogger.Log($"Error:-RequestPutWithToken: Error broadcasting PutRequest: {ex.Message}");
+                return false;
+            }
+        }
+
+        //Process a Put Request adding the Block if its within the range of the node and rebroadcasting the request.
+        internal static async Task ProcessIncomingVerifiedPutRequest(Node node, Packet packet)
+        {
+            try
+            {
+                if (packet == null || packet.Header == null || packet.Content == null)
+                {
+                    SystemLogger.Log("Received an invalid PutRequest packet.");
+                    return;
+                }
+
+                // Deserialize the payload
+                Block block = JsonSerializer.Deserialize<Block>(packet.Content);
+
+                if (block == null || string.IsNullOrWhiteSpace(block.Header.BlockId))
+                {
+                    SystemLogger.Log("Received an empty or invalid PutRequest payload.");
+                    return;
+                }
+
+                // Check if the block is already in the DHT
+                if (node.ContactDHT.GetBlock(block.Header.BlockId) != null)
+                {
+                    SystemLogger.Log($"Block {block.Header.BlockId} already exists locally. Ignoring PutRequest.");
+
+                }
+                else
+                {
+                    // Check if the block is within the range of the node
+                    if (node.ContactDHT.ShouldStoreBlock(node, block.Header.BlockId, node.RoutingTable.replicationFactor))
+                    {
+                         // Add the block to the DHT
+                        SystemLogger.Log($"Block {block.Header.BlockId} is within the range of the node. Adding Block.");
+                        node.ContactDHT.AddBlock(block);
+                    }
+                    else
+                    {
+                        SystemLogger.Log($"Block {block.Header.BlockId} is not within the range of the node. Ignoring PutRequest.");
+
+                    }
+
+                }
+                // Rebroadcast the PutRequest to the closest peers
+                List<Peer> closestPeers = node.RoutingTable.GetClosestPeers(block.Header.BlockId, 5);
+                if (closestPeers.Count == 0)
+                {
+                    SystemLogger.Log("No peers available to forward the request.");
+                    return;
+                }
+                SystemLogger.Log($"Sending PutRequest to peerlist");
+
+                try
+                {
+                    bool success = await node.Client.BroadcastToPeerList(node, packet);
+
+                    if (success)
+                    {
+                        SystemLogger.Log($"Successfully sent PutRequest to peer list.");
+                    }
+                    else
+                    {
+                        SystemLogger.Log($"Failed to send PutRequest to peer list.");
+                    }
+                }
+                catch (Exception)
+                {
+                    SystemLogger.Log($"Error sending PutRequest to peer list.");
+                }
+            }
+            catch (Exception ex)
+            {
+                SystemLogger.Log($"Error processing PutRequest: {ex.Message}");
+            }
+        }
+
+
         //-----Reputation Management-----\\
 
         //Send a Reputation Update to network
         public static Task BroadcastReputationUpdate(Node node, Peer peer, Reputation.ReputationReason reason)
         {
+            if (node.Peer==peer)
+            {
+                SystemLogger.Log("Error-BroadcastReputationUpdate: Cannot send a Reputation Update to self.");
+                return Task.CompletedTask;
+            }
 
             if (node !=null && Peer.ValidatePeer(peer) )
             {
@@ -1056,7 +1431,7 @@ namespace SPHERE.Networking
         }
 
         //Process a Reputation Update.
-        public static async Task ProcessReputationUpdate(Node node, Packet packet)
+        internal static async Task ProcessReputationUpdate(Node node, Packet packet)
         {
             try
             {
@@ -1150,49 +1525,6 @@ namespace SPHERE.Networking
             {
                 SystemLogger.Log($"Error processing ReputationUpdate: {ex.Message}");
             }
-        }
-
-        //Request a peer's reputation.
-        public Task RequestPeerReputation(Node node, string nodeIdToGet)
-        {
-            if (node == null)
-            {
-                SystemLogger.Log($"Error-RequestPeerReputation: Node cannot be null.");
-            }
-            if (string.IsNullOrWhiteSpace(nodeIdToGet))
-            {
-                SystemLogger.Log($"Error-RequestPeerReputation: nodeIdToGet cannot be null.");
-            }
-
-            try
-            {
-
-
-                Packet responsePacket = new Packet
-                {
-                    Header = new Packet.PacketHeader
-                    {
-                        NodeId = node.Peer.NodeId,
-                        IPAddress = node.Client.clientIP.ToString(),
-                        Port = node.Client.clientListenerPort.ToString(),
-                        PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
-                        PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
-                        Packet_Type = Packet.PacketBuilder.PacketType.ReputationRequest.ToString(),
-                        TTL = "1"
-                    },
-                    Content = nodeIdToGet,
-                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Convert.FromBase64String(nodeIdToGet))),
-                };
-
-                // Send the response to the requester
-                node.Client.BroadcastToPeerList(node, responsePacket);
-            }
-            catch (Exception ex)
-            {
-                SystemLogger.Log($"Error sending ReputationRequest: {ex.Message}");
-            }
-
-            return Task.CompletedTask;
         }
 
         //Process a Reputation Request.
@@ -1301,6 +1633,8 @@ namespace SPHERE.Networking
             }
             return Task.CompletedTask;
         }
+
+        
 
         //-----Configuration Calls-----\\
 

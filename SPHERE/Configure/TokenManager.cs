@@ -147,7 +147,7 @@ namespace SPHERE.Configure
             }
 
         //spends a token from the balance
-        public PushToken SpendPushToken(Node node, PushToken token, byte[] publicKey)
+        public PushToken SpendPushToken(Node node, byte[] publicKey, PushToken token)
             {
                 lock (_lock)
                 {
@@ -174,29 +174,29 @@ namespace SPHERE.Configure
             }
 
         //cash out an Issued token
-        public async Task<bool> CashOutIssuedToken(Node node, PushToken token, byte[] publicKey)
-            {
+        public  Task CashOutIssuedToken(Node node, PushToken token)
+        {
                 lock (_lock)
                 {
-                    if (!SignatureGenerator.VerifyIssuedPushToken(node, token, publicKey))
+                    if (!SignatureGenerator.VerifyIssuedPushToken(node, token))
                     {
                         SystemLogger.Log("Error: The token is not valid");
-                        return false;
+                        return Task.CompletedTask;
                     }
 
                     if (PushTokenBalance.TryRemove(token.TokenId, out _))
                     {
                         SystemLogger.Log($"Debug-CashOutToken: Spent token {token.TokenId} from {token.IssuerId}");
-                        return true;
+                        return Task.CompletedTask;
                     }
                     else
                     {
                         SystemLogger.Log("Error: The token is not in the balance");
-                        return false;
+                        return Task.CompletedTask;
                     }
 
                 }
-            }
+        }
 
         //clears the token balance
         public void ClearTokenBalance()
@@ -209,6 +209,38 @@ namespace SPHERE.Configure
 
             }
 
+
+        //returns the oldest token from the balance
+        public PushToken GetToken(string tokenId)
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    if (GetTokenBalance() == 0 || string.IsNullOrWhiteSpace(tokenId))
+                    {
+                        return null;
+                    }
+
+                    PushToken tokens = PushTokenBalance.Values.OrderBy(t => t.Timestamp).FirstOrDefault();
+
+                    if (tokens != null)
+                    {
+                        return tokens;
+                    }
+                    else
+                    {
+                        return null;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                SystemLogger.Log($"Error: There was an error getting the token {ex.Message}");
+                return null;
+            }
         }
+
     }
+}
 

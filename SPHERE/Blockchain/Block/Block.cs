@@ -92,7 +92,7 @@ namespace SPHERE.Blockchain
             public required byte[] PublicEncryptionKey { get; set; }                  // This is the public key for encrypt messages to the user.
 
             [JsonPropertyName("GNCCertificate")]
-            public required byte[] CNGCertificate { get; set; }                      // GNC Container Certificate for the Private Key, Used to validate application used correct security when storing privatekey. 
+            public  byte[] CNGCertificate { get; set; }                      // GNC Container Certificate for the Private Key, Used to validate application used correct security when storing privatekey. 
 
             [JsonPropertyName("PreviousHash")]
             public string PreviousHash { get; set; } = "";                      // Hash of the previous block

@@ -18,9 +18,9 @@ namespace SPHERE.Networking
     /// the receiver can use this and the included node ID and public key to verify the signature. 
     /// 
     /// </summary>
-    public class Packet
+    internal class Packet
     {
-        public Packet() { }
+        internal Packet() { Header = new PacketHeader();  Content = string.Empty; Signature = string.Empty; }
 
         static Packet()
         {
@@ -39,7 +39,7 @@ namespace SPHERE.Networking
         public string Signature;
 
 
-        public class PacketHeader
+        internal class PacketHeader
         {
             [JsonPropertyName("NodeId")]
             public string NodeId { get; set; }
@@ -60,7 +60,7 @@ namespace SPHERE.Networking
         }
 
 
-        public Packet BuildPacketContent(string content)
+        internal Packet BuildPacketContent(string content)
         {
             Packet packet = new Packet();
             packet.Content = content;
@@ -69,7 +69,7 @@ namespace SPHERE.Networking
             return new Packet();
         }
 
-        public static PacketType ParsePacketType(string type)
+        internal static PacketType ParsePacketType(string type)
         {
             Enum.TryParse(type, out PacketType parsedEnum);
             return parsedEnum;
@@ -106,6 +106,8 @@ namespace SPHERE.Networking
                 ReputationRequest,
                 ReputationResponse,
                 ReputationUpdate,
+                TokenPing,
+                TokenPong,
             }
 
             public static readonly Dictionary<PacketType, int> PacketTypes = new Dictionary<PacketType, int>
@@ -130,9 +132,11 @@ namespace SPHERE.Networking
             { PacketType.ReputationRequest,18},
             { PacketType.ReputationResponse,19},
             { PacketType.ReputationUpdate,20},
+            { PacketType.TokenPing,21},
+            { PacketType.TokenPong,22},
             };
 
-            public static PacketHeader BuildPacketHeader(PacketType packetType, string nodeId, string nodeType, byte[] publicSignatureKey, byte[] publicEncryptKey, int port, string iPAddress, int tTL)
+            internal static PacketHeader BuildPacketHeader(PacketType packetType, string nodeId, string nodeType, byte[] publicSignatureKey, byte[] publicEncryptKey, int port, string iPAddress, int tTL)
             {
                 if (Debugger.IsAttached || Debugger.IsLogging())
                 {
@@ -166,7 +170,7 @@ namespace SPHERE.Networking
 
 
 
-            public static Packet BuildPacket(PacketHeader header, string message)
+            internal static Packet BuildPacket(PacketHeader header, string message)
             {
                 if (Debugger.IsAttached || Debugger.IsLogging())
                 {
@@ -183,7 +187,7 @@ namespace SPHERE.Networking
                 return packet;
             }
 
-            public static byte[] SerializePacket(Packet packet)
+            internal static byte[] SerializePacket(Packet packet)
             {
                 if (Debugger.IsAttached || Debugger.IsLogging())
                 {
@@ -298,7 +302,9 @@ namespace SPHERE.Networking
                     return ms.ToArray();
                 }
             }
-            public static Packet DeserializePacket(byte[] data)
+            
+            
+            internal static Packet DeserializePacket(byte[] data)
             {
                 if (Debugger.IsAttached || Debugger.IsLogging())
                 {
@@ -385,7 +391,7 @@ namespace SPHERE.Networking
         /// The packet reader will convert the steam back into a serialized pack once that happens it can use the packet type to process the packet accordingly.
         /// 
         /// </summary>
-        public class PacketReader : BinaryReader
+        internal class PacketReader : BinaryReader
         {
             private readonly NetworkStream _stream;
 

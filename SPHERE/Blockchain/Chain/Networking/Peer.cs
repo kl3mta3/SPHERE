@@ -31,7 +31,8 @@ namespace SPHERE.Networking
         public DateTime LastSeen { get; set; } =new();
         public DateTime FirstSeen { get; set; } = new();
 
-        public static Peer CreatePeer(NodeType nodeType, string nodeID, string nodeIP, int nodePort, string? previousHash, byte[] publicSignatureKey, byte[] publicEncryptKey)
+        //Create a peer.
+        internal static Peer CreatePeer(NodeType nodeType, string nodeID, string nodeIP, int nodePort, string? previousHash, byte[] publicSignatureKey, byte[] publicEncryptKey)
         {
             DateTime now = DateTime.UtcNow;
             Peer peer = new Peer
@@ -54,7 +55,8 @@ namespace SPHERE.Networking
             return peer;
         }
 
-        public static Peer CreatePeerFromPacket(Packet packet)
+        //Create a peer from a packet.
+        internal static Peer CreatePeerFromPacket(Packet packet)
         {
             NodeType nodeType = (NodeType)Enum.Parse(typeof(NodeType), packet.Header.Node_Type);
             DateTime now = DateTime.UtcNow;
@@ -75,11 +77,8 @@ namespace SPHERE.Networking
             return peer;
         }
 
-        //We adjust the trust score of a peer. 
-       
-
         //Validate a peer.
-        public static bool ValidatePeer(Peer peer)
+        internal static bool ValidatePeer(Peer peer)
         {
             if (peer == null)
                 return false;
@@ -92,7 +91,7 @@ namespace SPHERE.Networking
         }
 
         //Calculate the distance between the node an a peer.
-        public double CalculateProximity(Peer peer)
+        internal double CalculateProximity(Peer peer)
         {
             // Example weights
             double latencyWeight = 0.6;
@@ -121,7 +120,7 @@ namespace SPHERE.Networking
         }
 
         //CalculateLatency
-        public int CalculateLatency(Peer peer)
+        internal int CalculateLatency(Peer peer)
         {
             try
             {
@@ -140,7 +139,7 @@ namespace SPHERE.Networking
         }
 
         //Update the endpoint of a peer.
-        public void UpdatePeerEndpoint(Node node, string peerID, string newIP, int newPort)
+        internal void UpdatePeerEndpoint(Node node, string peerID, string newIP, int newPort)
         {
             if (string.IsNullOrEmpty(peerID))
             {
@@ -174,7 +173,7 @@ namespace SPHERE.Networking
         }
 
         //Process PeerList Response.
-        public async Task ProcessPeerListResponse(Node node, Packet packet)
+        internal Task ProcessPeerListResponse(Node node, Packet packet)
         {
 
             SystemLogger.Log($"ProcessPeerListResponse: Processing response from {packet.Header.NodeId}...");
@@ -183,15 +182,15 @@ namespace SPHERE.Networking
             if (senderPeer == null)
             {
                 SystemLogger.Log($"Warning: Sender {packet.Header.NodeId} is not in routing table. Ignoring response.");
-                return;
+                return Task.CompletedTask;
             }
 
             if (peers == null || peers.Count == 0)
             {
                 SystemLogger.Log($"Warning: Received an empty or null peer list from {packet.Header.NodeId}.");
                 NetworkManager.BroadcastReputationUpdate(node, senderPeer, Blockchain.Reputation.ReputationReason.GetContactFailed);
-                 // Penalize peers that send empty responses
-                return;
+                // Penalize peers that send empty responses
+                return Task.CompletedTask;
             }
             int validPeerCount = 0;
             int duplicateCount = 0;
@@ -254,7 +253,9 @@ namespace SPHERE.Networking
                 SystemLogger.Log($"Error in ProcessPeerListResponse: {ex.Message}");
 
             }
+            return Task.CompletedTask;
         }
+
 
     }
 }

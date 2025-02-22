@@ -12,9 +12,33 @@ namespace SPHERE.Configure.Logging
 
         public static void Log(string message)
         {
-            string logEntry = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - {message}";
-            Console.WriteLine(logEntry); 
-            File.AppendAllText(logFilePath, logEntry + Environment.NewLine);
+            bool isTesting = Environment.GetEnvironmentVariable("SPHERE_TEST_MODE") == "true";
+
+            if (!isTesting)
+            {
+                try
+                {
+
+                    string directoryPath = Path.GetDirectoryName(logFilePath);
+
+                    if (!Directory.Exists(directoryPath))
+                    {
+                        Directory.CreateDirectory(directoryPath);
+                    }
+
+
+                    string logEntry = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - {message}";
+
+
+                    Console.WriteLine(logEntry);
+                    File.AppendAllText(logFilePath, logEntry + Environment.NewLine);
+                }
+                catch (Exception ex)
+                {
+
+                    Console.WriteLine($"Logging failed: {ex.Message}");
+                }
+            }
         }
 
     }

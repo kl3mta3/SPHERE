@@ -218,25 +218,7 @@ namespace SPHERE.Configure
         }
 
         // Verify a received PushToken using the public key
-        public static bool VerifyReceivedPushToken(Node node, PushToken token, byte[] publicKey)
-        {
-            if (node.Peer.NodeId == token.ReceiverId || node.Peer.NodeId != token.IssuerId)
-            {
-                return false;
-            }
-
-            string data = $"{token.IssuerId}|{token.ReceiverId}|{token.Timestamp:o}";
-
-            using (var ecdsa = ECDsa.Create())
-            {
-                ecdsa.ImportSubjectPublicKeyInfo(publicKey, out _);
-                byte[] signatureBytes = Convert.FromBase64String(token.Signature);
-                return ecdsa.VerifyData(Encoding.UTF8.GetBytes(data), signatureBytes, HashAlgorithmName.SHA256);
-            }
-        }
-
-        // Verify an Issued PushToken using the public key
-        public static bool VerifyIssuedPushToken(Node node, PushToken token, byte[] publicKey)
+        public static bool VerifyReceivedPushToken(Node node, PushToken token, byte[] issuerPublicKey)
         {
             if (node.Peer.NodeId != token.ReceiverId || node.Peer.NodeId == token.IssuerId)
             {
@@ -247,9 +229,27 @@ namespace SPHERE.Configure
 
             using (var ecdsa = ECDsa.Create())
             {
-                ecdsa.ImportSubjectPublicKeyInfo(publicKey, out _);
+                ecdsa.ImportSubjectPublicKeyInfo(issuerPublicKey, out _);
                 byte[] signatureBytes = Convert.FromBase64String(token.Signature);
                 return ecdsa.VerifyData(Encoding.UTF8.GetBytes(data), signatureBytes, HashAlgorithmName.SHA256);
+            }
+        }
+
+        // Verify an Issued PushToken using the public key
+        public static bool VerifyIssuedPushToken(Node node, PushToken token)
+        {
+            if (node.Peer.NodeId == token.ReceiverId || node.Peer.NodeId != token.IssuerId)
+            {
+                return false;
+            }
+
+            string data = $"{token.IssuerId}|{token.ReceiverId}|{token.Timestamp:o}";
+
+            using (var ecdsa = ECDsa.Create())
+            {
+                ecdsa.ImportSubjectPublicKeyInfo(ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey), out _);
+               
+               return ecdsa.VerifyData(Encoding.UTF8.GetBytes(data), ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey), HashAlgorithmName.SHA256);
             }
         }
 

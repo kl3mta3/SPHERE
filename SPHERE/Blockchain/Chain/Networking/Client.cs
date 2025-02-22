@@ -1,4 +1,6 @@
-﻿using System.Net;
+﻿// Ignore Spelling: Encryptedpacket
+
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using static SPHERE.Blockchain.Node;
@@ -49,15 +51,39 @@ namespace SPHERE.Networking
         private const int EndPort = 6000;                       // End of the port range
         public TcpClient client;
         public TcpListener Listener;
-        public PacketBuilder packetBuilder;
-        public Packet.PacketReader packetReader;
+        internal PacketBuilder packetBuilder;
+        internal Packet.PacketReader packetReader;
 
-        public IPAddress clientIP;
-        public int clientListenerPort = 0;                             
-        public int clientCommunicationPort;
+        internal IPAddress clientIP;
+        internal int clientListenerPort = 0;
+        internal int clientCommunicationPort;
+
+
+        //Dictionary of packet types and their handlers for easier processing
+        private static readonly Dictionary<PacketBuilder.PacketType, Func<Node, Packet, Task>> packetHandlers = new()
+        {
+            { PacketBuilder.PacketType.BootstrapRequest, (node, packet) => Bootstrap.SendBootstrapResponse(node, packet) },
+            { PacketBuilder.PacketType.BootstrapResponse, (node, packet) => Bootstrap.ProcessBootstrapResponse(node, packet) },
+            { PacketBuilder.PacketType.Ping, (node, packet) => node.NetworkManager.PongPeerAsync(node, packet) },
+            { PacketBuilder.PacketType.Pong, (node, packet) => node.NetworkManager.ProcessPongAsync(node, packet) },
+            { PacketBuilder.PacketType.GetRequest, (node, packet) => node.NetworkManager.RespondToGetRequest(node, packet) },
+            { PacketBuilder.PacketType.BrodcastConnection, (node, packet) => node.NetworkManager.PeerListResponse(node, packet) },
+            { PacketBuilder.PacketType.PeerUpdate, (node, packet) => node.Peer.ProcessPeerListResponse(node, packet) },
+            { PacketBuilder.PacketType.SyncDHTRequest, (node, packet) => DHTManagement.ProcessSyncDHTRequest(node, packet) },
+            { PacketBuilder.PacketType.SyncDHTResponse, (node, packet) => DHTManagement.ProcessSyncDHTResponse(node, packet) },
+            { PacketBuilder.PacketType.PushTokenIssued, (node, packet) => NetworkManager.ProcessIssuedToken(node, packet) },
+            { PacketBuilder.PacketType.PingPal, (node, packet) => node.NetworkManager.RespondToPingPalAsync(node, packet) },
+            { PacketBuilder.PacketType.PongPal, (node, packet) => NetworkManager.PongPalProcess(node, packet) },
+            { PacketBuilder.PacketType.ReputationUpdate, (node, packet) => NetworkManager.ProcessReputationUpdate(node, packet) },
+            { PacketBuilder.PacketType.ReputationRequest, (node, packet) => node.NetworkManager.ReturnRequestedReputation(node, packet) },
+            { PacketBuilder.PacketType.ReputationResponse, (node, packet) => NetworkManager.ProcessReputationResponse(node, packet) },
+            { PacketBuilder.PacketType.PutRequest, (node, packet) => NetworkManager.VerifyAndBroadcastPutRequest(node, packet) },
+            { PacketBuilder.PacketType.PutResponse, (node, packet) => NetworkManager.ProcessIncomingVerifiedPutRequest(node, packet) },
+            { PacketBuilder.PacketType.TokenPing, (node, packet) => NetworkManager.ProcessPushTokenExtendPing(node, packet) }
+        };
 
         //Send a packet to a peer async
-        public static async Task<bool> SendPacketToPeerAsync(string ip, int port, byte[] encryptedPacket)
+        internal static async Task<bool> SendPacketToPeerAsync(string ip, int port, byte[] encryptedPacket)
         {
             
             
@@ -181,18 +207,18 @@ namespace SPHERE.Networking
             }
 
         //Broadcast a packet to all peers in the peer list async
-        public async Task BroadcastToPeerList(Node node, Packet packet)
-            {
+        internal async Task<bool> BroadcastToPeerList(Node node, Packet unEncryptedpacket)
+        {
                 try
                 {
 
                    
-                    string packetHash = ComputeHash(packet.Content); // Hash only the static parts
+                    string packetHash = ComputeHash(unEncryptedpacket.Content); // Hash only the static parts
 
                     if (node.seenPackets.ContainsKey(packetHash))
                     {
                         SystemLogger.Log("Duplicate packet detected. Dropping...");
-                        return;
+                        return false;
                     }
 
                     //  Use TryAdd to prevent overwrites from race conditions
@@ -202,57 +228,65 @@ namespace SPHERE.Networking
                     }
 
 
-                    // Reduce TTL
-                    int newTTL = int.Parse(packet.Header.TTL) - 1;
-                    if (newTTL <= 0)
-                    {
-                        SystemLogger.Log("Debug-RebroadcastToPeerList: TTL expired, not forwarding.");
-                        return;
-                    }
+                // Reduce TTL
+                if (!int.TryParse(unEncryptedpacket.Header.TTL, out int newTTL) || newTTL <= 0)
+                {
+                    SystemLogger.Log("Debug-RebroadcastToPeerList: TTL expired or invalid, not forwarding.");
+                    return false;
+                }
 
-                    // Update the TTL in the packet header
-                    packet.Header.TTL = newTTL.ToString();
+                // Update the TTL in the packet header
+                unEncryptedpacket.Header.TTL = newTTL.ToString();
 
                     // Get peers excluding the original sender
                     List<Peer> peersToSend = node.RoutingTable.GetAllPeers()
-                        .Where(peer => peer.NodeId != packet.Header.NodeId) // Don't send back to sender
+                        .Where(peer => peer.NodeId != unEncryptedpacket.Header.NodeId) // Don't send back to sender
                         .ToList();
 
 
                     if (peersToSend.Count == 0)
                     {
                         SystemLogger.Log("Debug-RebroadcastToPeerList: No peers to forward to.");
-                        return;
+                        return false;
                     }
 
                     // Serialize the original packet exactly as it was
-                    byte[] data = Packet.PacketBuilder.SerializePacket(packet);
+                    byte[] data = Packet.PacketBuilder.SerializePacket(unEncryptedpacket);
+                    
+                    bool atLeastOneSuccess = false;
 
                     // Send the packet to each peer
                     foreach (var peer in peersToSend)
                     {
-                        await node.NetworkManager.RetryAsync<bool>(async () =>
+                        bool success = await node.NetworkManager.RetryAsync<bool>(async () =>
                         { 
                             byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(data, peer.PublicEncryptKey);
                             bool success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedData);
 
-                            if (!success)
+                            if (success)
                             {
-                                SystemLogger.Log($"Debug-RebroadcastToPeerList: Failed to rebroadcast to {peer.NodeIP}:{peer.NodePort}");
-                                return success;
+                                
+                                SystemLogger.Log($"Debug-RebroadcastToPeerList: Forwarded to {peer.NodeIP}:{peer.NodePort}");
+                               return true;
+                                
                             }
                             else
                             {
-                                SystemLogger.Log($"Debug-RebroadcastToPeerList: Forwarded to {peer.NodeIP}:{peer.NodePort}");
-                                return success;
+                                SystemLogger.Log($"Debug-RebroadcastToPeerList: Failed to rebroadcast to {peer.NodeIP}:{peer.NodePort}");
+                               return false;
                             }
+
                         });
+
+                        if(success)atLeastOneSuccess = true;
+                    }
+                    return atLeastOneSuccess;
                 }
-            }
-            catch (Exception ex)
-            {
-                SystemLogger.Log($"Error-RebroadcastToPeerList: {ex.Message}");
-            }
+                catch (Exception ex)
+                {
+                    SystemLogger.Log($"Error-RebroadcastToPeerList: {ex.Message}");
+                }
+            return false;
         }
 
 
@@ -668,72 +702,89 @@ namespace SPHERE.Networking
 
                 PacketBuilder.PacketType packetType = ParsePacketType(packet.Header.Packet_Type);
 
-                switch (packetType)
+                if (packetHandlers.TryGetValue(packetType, out var handler))
                 {
-                    case PacketBuilder.PacketType.BootstrapRequest:
-                            await Bootstrap.SendBootstrapResponse(node, packet);
-                            break;
-
-                    case PacketBuilder.PacketType.BootstrapResponse:
-                            await Bootstrap.ProcessBootstrapResponse(node, packet);
-                            break;
-
-                    case PacketBuilder.PacketType.Ping:
-                            await node.NetworkManager.PongPeerAsync(node, packet);
-                            break;
-
-                    case PacketBuilder.PacketType.Pong:
-                            await node.NetworkManager.ProcessPongAsync(node, packet);
-                            break;
-
-                    case PacketBuilder.PacketType.GetRequest:
-                            await node.NetworkManager.RespondToGetRequest(node, packet);
-                            break;
-
-                    case PacketBuilder.PacketType.BrodcastConnection:
-                            await node.NetworkManager.PeerListResponse(node, packet);
-                            break;
-
-                    case PacketBuilder.PacketType.PeerUpdate:
-                            await node.Peer.ProcessPeerListResponse(node, packet);
-                            break;
-
-                    case PacketBuilder.PacketType.SyncDHTRequest:
-                        await DHTManagement.ProcessSyncDHTRequest(node, packet);
-                        break;
-
-                    case PacketBuilder.PacketType.SyncDHTResponse:
-                        await DHTManagement.ProcessSyncDHTResponse(node, packet);
-                        break;
-
-                    case PacketBuilder.PacketType.PushTokenIssued:
-                        await NetworkManager.ProcessIssuedToken(node, packet);
-                        break;
-
-                    case PacketBuilder.PacketType.PingPal:
-                        await node.NetworkManager.RespondToPingPalAsync(node, packet);
-                        break;
-
-                    case PacketBuilder.PacketType.PongPal:
-                        await NetworkManager.PongPalProcess(node, packet);
-                        break;
-
-                    case PacketBuilder.PacketType.ReputationUpdate:
-                        await NetworkManager.ProcessReputationUpdate(node, packet);
-                        break;
-
-                    case PacketBuilder.PacketType.ReputationRequest:
-                        await node.NetworkManager.ReturnRequestedReputation(node, packet);
-                        break;
-
-                    case PacketBuilder.PacketType.ReputationResponse:
-                        await NetworkManager.ProcessReputationResponse(node, packet);
-                        break;
-
-                    default:
-                        SystemLogger.Log($"ProcessIncomingPacket:Unknown packet type: {packet.Header.Packet_Type}");
-                        break;
+                    await handler(node, packet);
                 }
+                else
+                {
+                    SystemLogger.Log($"ProcessIncomingPacket: Unknown packet type: {packet.Header.Packet_Type}");
+                }
+
+                //switch (packetType)
+                //{
+                //    case PacketBuilder.PacketType.BootstrapRequest:
+                //            await Bootstrap.SendBootstrapResponse(node, packet);
+                //            break;
+
+                //    case PacketBuilder.PacketType.BootstrapResponse:
+                //            await Bootstrap.ProcessBootstrapResponse(node, packet);
+                //            break;
+
+                //    case PacketBuilder.PacketType.Ping:
+                //            await node.NetworkManager.PongPeerAsync(node, packet);
+                //            break;
+
+                //    case PacketBuilder.PacketType.Pong:
+                //            await node.NetworkManager.ProcessPongAsync(node, packet);
+                //            break;
+
+                //    case PacketBuilder.PacketType.GetRequest:
+                //            await node.NetworkManager.RespondToGetRequest(node, packet);
+                //            break;
+
+                //    case PacketBuilder.PacketType.BrodcastConnection:
+                //            await node.NetworkManager.PeerListResponse(node, packet);
+                //            break;
+
+                //    case PacketBuilder.PacketType.PeerUpdate:
+                //            await node.Peer.ProcessPeerListResponse(node, packet);
+                //            break;
+
+                //    case PacketBuilder.PacketType.SyncDHTRequest:
+                //        await DHTManagement.ProcessSyncDHTRequest(node, packet);
+                //        break;
+
+                //    case PacketBuilder.PacketType.SyncDHTResponse:
+                //        await DHTManagement.ProcessSyncDHTResponse(node, packet);
+                //        break;
+
+                //    case PacketBuilder.PacketType.PushTokenIssued:
+                //        await NetworkManager.ProcessIssuedToken(node, packet);
+                //        break;
+
+                //    case PacketBuilder.PacketType.PingPal:
+                //        await node.NetworkManager.RespondToPingPalAsync(node, packet);
+                //        break;
+
+                //    case PacketBuilder.PacketType.PongPal:
+                //        await NetworkManager.PongPalProcess(node, packet);
+                //        break;
+
+                //    case PacketBuilder.PacketType.ReputationUpdate:
+                //        await NetworkManager.ProcessReputationUpdate(node, packet);
+                //        break;
+
+                //    case PacketBuilder.PacketType.ReputationRequest:
+                //        await node.NetworkManager.ReturnRequestedReputation(node, packet);
+                //        break;
+
+                //    case PacketBuilder.PacketType.ReputationResponse:
+                //        await NetworkManager.ProcessReputationResponse(node, packet);
+                //        break;
+
+                //    case PacketBuilder.PacketType.PutRequest:
+                //        await NetworkManager.VerifyAndBroadcastPutRequest(node, packet);
+                //        break;
+
+                //    case PacketBuilder.PacketType.PutResponse:
+                //        await NetworkManager.ProcessIncomingVerifiedPutRequest(node, packet);
+                //        break;
+
+                //    default:
+                //        SystemLogger.Log($"ProcessIncomingPacket:Unknown packet type: {packet.Header.Packet_Type}");
+                //        break;
+                //}
             }
             catch (Exception ex)
             {

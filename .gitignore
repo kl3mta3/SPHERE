@@ -408,6 +408,6 @@ FodyWeavers.xsd
 FodyWeavers.xml
 
 # Security Folder
-Security/
+#Security/
 !Security/.gitkeep
 
