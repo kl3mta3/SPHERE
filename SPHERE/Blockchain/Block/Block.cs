@@ -94,6 +94,9 @@ namespace SPHERE.Blockchain
             [JsonPropertyName("GNCCertificate")]
             public  byte[] CNGCertificate { get; set; }                      // GNC Container Certificate for the Private Key, Used to validate application used correct security when storing privatekey. 
 
+            [JsonPropertyName("CreatorNodeId")]
+            public required string CreatorNodeId { get; set; } = "";                      // Node ID of the creator of the block
+            
             [JsonPropertyName("PreviousHash")]
             public string PreviousHash { get; set; } = "";                      // Hash of the previous block
 
@@ -128,7 +131,7 @@ namespace SPHERE.Blockchain
 
 
         // Creating a Contact Block
-        public static Block CreateContactBlock(string previousHash, string encryptedContactData, EncryptionAlgorithm encryptionAlgorithm)
+        public static Block CreateContactBlock(string nodeId, string previousHash, string encryptedContactData, EncryptionAlgorithm encryptionAlgorithm)
         {
 
                 //Check to see if Keys exist.
@@ -151,6 +154,7 @@ namespace SPHERE.Blockchain
                     KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
                     PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalSignatureKey),
                     PublicEncryptionKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalEncryptionKey),
+                    CreatorNodeId = nodeId,
                     CNGCertificate = SignatureGenerator.CreateSphereCNGCertificate(KeyGenerator.KeyType.PrivatePersonalEncryptionKey),
                 };
 
@@ -176,7 +180,7 @@ namespace SPHERE.Blockchain
         }
 
         // Creating a Reputation Block
-        public static Block CreateReputationBlock(string previousHash, string reputationData, EncryptionAlgorithm encryptionAlgorithm)
+        public static Block CreateReputationBlock(string nodeId, string previousHash, string reputationData, EncryptionAlgorithm encryptionAlgorithm)
         {
             DateTime creationTime = DateTime.UtcNow;
 
@@ -192,6 +196,7 @@ namespace SPHERE.Blockchain
                 KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
                 PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalSignatureKey),
                 PublicEncryptionKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalEncryptionKey),
+                CreatorNodeId = nodeId,
                 CNGCertificate = SignatureGenerator.CreateSphereCNGCertificate(KeyGenerator.KeyType.PrivatePersonalEncryptionKey),
             };
             header.BlockHash = header.CalculateBlockHash();
@@ -216,7 +221,7 @@ namespace SPHERE.Blockchain
         }
 
         // Creating a Reputation Block
-        public static Block CreateTransactionBlock(string previousHash, string transactionData, EncryptionAlgorithm encryptionAlgorithm)
+        public static Block CreateTransactionBlock(string nodeId, string previousHash, string transactionData, EncryptionAlgorithm encryptionAlgorithm)
         {
             DateTime creationTime = DateTime.UtcNow;
 
@@ -232,6 +237,7 @@ namespace SPHERE.Blockchain
                 KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
                 PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalSignatureKey),
                 PublicEncryptionKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalEncryptionKey),
+                CreatorNodeId = nodeId,
                 CNGCertificate = SignatureGenerator.CreateSphereCNGCertificate(KeyGenerator.KeyType.PrivatePersonalEncryptionKey),
             };
 

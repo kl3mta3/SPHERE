@@ -25,6 +25,7 @@ namespace SPHERE.Blockchain
         private static readonly object stateLock = new object(); // For thread safety
 
         private readonly ConcurrentDictionary<string, Block> _blocks = new();
+        private readonly ConcurrentDictionary<string, Block> _CreatedBlocks = new();
 
         public void AddBlock(Block block)
         {
@@ -184,6 +185,7 @@ namespace SPHERE.Blockchain
             // Optionally, also check if our storage is underloaded.
             bool underloaded = DHTManagement.IsUnderloaded(node, node.ContactDHT); // or ReputationDHT etc.
 
+           
             return weAreClosest || underloaded;
         }
 

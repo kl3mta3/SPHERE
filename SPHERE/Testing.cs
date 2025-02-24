@@ -152,7 +152,7 @@ namespace SPHERE.TestingLib
 
                     try
                     {
-                        PopulateTestDHTWithFakeBlocks(testNode.ContactDHT, fakePeers, testNode.RoutingTable.replicationFactor);
+                        PopulateTestDHTWithFakeBlocks( testNode.Peer.NodeId, testNode.ContactDHT, fakePeers, testNode.RoutingTable.replicationFactor);
                     }
                     catch (Exception ex)
                     {
@@ -309,7 +309,7 @@ namespace SPHERE.TestingLib
         }
 
         //Populate a DHT with fake blocks from a peer list.
-        public static void PopulateTestDHTWithFakeBlocks(DHT dht, List<Peer> peerList, int numberOfBlocks)
+        public static void PopulateTestDHTWithFakeBlocks(string nodeId, DHT dht, List<Peer> peerList, int numberOfBlocks)
         {
             // Check if the DHT object is null
             if (dht == null)
@@ -370,7 +370,7 @@ namespace SPHERE.TestingLib
                             KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
                             PublicSignatureKey = peer.PublicSignatureKey,
                             PublicEncryptionKey = peer.PublicEncryptKey,
-                            
+                            CreatorNodeId = peer.NodeId ?? "UnknownNodeId",
 
 
                         },

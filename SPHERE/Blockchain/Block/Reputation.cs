@@ -161,6 +161,59 @@ namespace SPHERE.Blockchain
 
             return Task.CompletedTask;
         }
+
+        internal static bool ShouldAcceptReputationUpdate(Node node, Packet packet)
+        {
+            // Compute a unique hash based on the static content
+            string hash = Client.ComputeHash(packet.Content + packet.Header.NodeId + packet.Header.Packet_Type);
+
+            if (node.seenRepPackets.TryGetValue(hash, out RepPacketEntry existingEntry))
+            {
+                if (existingEntry.PeerId == packet.Header.NodeId &&
+                    (DateTime.UtcNow - existingEntry.Timestamp).TotalDays < 3)
+                {
+                    // Reject the update if it's from the same peer within 3 days
+                    return false;
+                }
+
+                // Update time stamp and increment the count (could signal abuse)
+                existingEntry.Timestamp = DateTime.UtcNow;
+                existingEntry.Count++;
+                node.seenRepPackets[hash] = existingEntry;
+            }
+            else
+            {
+                // Add the new entry to track this reputation update
+                node.seenRepPackets.TryAdd(hash, new RepPacketEntry
+                {
+                    PeerId = packet.Header.NodeId,
+                    Timestamp = DateTime.UtcNow
+                });
+            }
+
+            return true; // Accept the update if not a duplicate
+        }
+
+        internal static void PruneOldSeenReputationEntries(Node node)
+        {
+            var cutoff = DateTime.UtcNow.AddDays(-3);
+
+            foreach (var entry in node.seenRepPackets)
+            {
+                if (entry.Value.Timestamp < cutoff)
+                {
+                    node.seenRepPackets.TryRemove(entry.Key, out _);
+                }
+            }
+        }
+        public class RepPacketEntry
+        {
+
+            public string PeerId { get; set; }
+            public DateTime Timestamp { get; set; }
+            public int Count { get; set; } = 1; // For potential abuse detection
+        }
+
     }
 
     

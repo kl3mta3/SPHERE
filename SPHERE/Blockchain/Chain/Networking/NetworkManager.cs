@@ -1458,6 +1458,14 @@ namespace SPHERE.Networking
                     return;
                 }
 
+                if(!Reputation.ShouldAcceptReputationUpdate(node, packet))
+                {
+                    SystemLogger.Log("Reputation updated too recently from same peer for same reason.");
+                    return;
+
+                }
+
+
                 // Validate the signature
                 byte[] signature = Convert.FromBase64String(packet.Signature);
                 byte[] content = Encoding.UTF8.GetBytes(packet.Content);
@@ -1488,6 +1496,7 @@ namespace SPHERE.Networking
                         Reputation.ReputationReason reason= Reputation.GetReputationReasonFromString(reputation.Reason);
                         string serialiszedNewReputation = JsonSerializer.Serialize(newReputation);
                         Block newBlock = Block.CreateReputationBlock(
+                            senderPeer.NodeId,
                             "UNKNOWN",
                             serialiszedNewReputation,
                             EncryptionAlgorithm.AES256

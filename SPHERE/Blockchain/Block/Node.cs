@@ -67,6 +67,9 @@ namespace SPHERE.Blockchain
         internal ConcurrentDictionary<string, DateTime> seenPackets = new();
         internal ConcurrentDictionary<string, DateTime> requestedBlocks = new();
         internal ConcurrentDictionary<string, DateTime> issuedTokens = new();
+        internal ConcurrentDictionary<string, Reputation.RepPacketEntry> seenRepPackets = new();
+
+
 
         internal TokenManager TokenManager = new TokenManager();
         internal NetworkManager NetworkManager = new NetworkManager();

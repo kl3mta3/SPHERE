@@ -105,6 +105,7 @@ namespace SPHERE.Configure
                 {
                     node.seenPackets.TryRemove(key, out _);
                 }
+            Reputation.PruneOldSeenReputationEntries(node);
             await Task.CompletedTask;
         }
 

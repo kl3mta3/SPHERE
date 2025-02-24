@@ -259,23 +259,23 @@ namespace SPHERE.Networking
                     foreach (var peer in peersToSend)
                     {
                         bool success = await node.NetworkManager.RetryAsync<bool>(async () =>
-                        { 
-                            byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(data, peer.PublicEncryptKey);
-                            bool success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedData);
+                        {
+                                byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(data, peer.PublicEncryptKey);
+                                bool success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedData);
 
-                            if (success)
-                            {
-                                
-                                SystemLogger.Log($"Debug-RebroadcastToPeerList: Forwarded to {peer.NodeIP}:{peer.NodePort}");
-                               return true;
-                                
-                            }
-                            else
-                            {
-                                SystemLogger.Log($"Debug-RebroadcastToPeerList: Failed to rebroadcast to {peer.NodeIP}:{peer.NodePort}");
-                               return false;
-                            }
+                                if (success)
+                                {
 
+                                    SystemLogger.Log($"Debug-RebroadcastToPeerList: Forwarded to {peer.NodeIP}:{peer.NodePort}");
+                                    return true;
+
+                                }
+                                else
+                                {
+                                    SystemLogger.Log($"Debug-RebroadcastToPeerList: Failed to rebroadcast to {peer.NodeIP}:{peer.NodePort}");
+                                    return false;
+                                }
+       
                         });
 
                         if(success)atLeastOneSuccess = true;
