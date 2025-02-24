@@ -1,42 +1,53 @@
 # SPHERE Project
 
-Welcome to the SPHERE Project repository! 
+Welcome to the **SPHERE** (Secure Peer-to-Peer Hosted Encryption Record Exchange) repository!
 
-SPHERE (Secure Peer-to-Peer Hosted Encryption Record Exchange) is a robust framework designed for secure, decentralized communication and data sharing. The framework prioritizes user privacy, data integrity, and seamless encryption management while allowing for versatile application development.
+SPHERE is a highly secure, decentralized framework designed for peer-to-peer communication, encrypted data exchange, and decentralized identity management. It offers robust privacy, data integrity, and cryptographic security while maintaining scalability and efficiency for various applications.
 
 ---
-## (Active Work in Progress)
 
-## Features
+## Active Development
 
-### 1. **Secure Contact List Management**
-- Unified contact management across all applications built on the SPHERE framework.
-- Users have full control over their contact information and can modify it as needed.
-- Peer-to-peer (P2P) architecture ensures data is not stored on centralized servers.
+This project is a work in progress, with ongoing improvements to enhance security, scalability, and decentralized efficiency.
 
-### 2. **End-to-End Encryption**
-- All communications are encrypted using robust algorithms, ensuring privacy and security.
-- Each communication session uses unique, dynamically generated keys.
+---
 
-### 3. **Decentralized Networking**
-- Utilizes a Distributed Hash Table (DHT) for node discovery and data exchange.
-- Eliminates single points of failure and enhances system resilience.
+## Key Features
 
-### 4. **Modular Design**
-- Highly extensible with components for encryption, authentication, and data handling.
-- Developers can easily add new features or adapt the framework to specific use cases.
+### Secure Contact List Management
+- Unified, decentralized contact list across all SPHERE applications.
+- Full user control over contacts, including key rotation and access permissions.
+- Peer-to-peer (P2P) architecture eliminates reliance on centralized servers.
 
-### 5. **Digital Signature Verification**
-- Ensures the integrity and authenticity of messages and files exchanged.
-- Prevents tampering and verifies sender identity.
+### End-to-End Encryption
+- Uses **AES256**, **RSA2048**, and **ECDsa** algorithms for top-tier security.
+- Dynamic key generation for each communication session.
+- Private keys stored in secure local containers (CNG) without export unless explicitly allowed.
 
-### 6. **Built-in Encryption Record Management**
-- Encryption records are securely stored and shared only with authorized parties.
-- Prevents unauthorized access and data leaks.
+### Decentralized Networking
+- Built on a **Distributed Hash Table (DHT)** for efficient peer discovery and data exchange.
+- Uses a **Kademlia-based routing table** to optimize node connectivity.
+- Integrated **Gossip Protocols** for propagating data across the network.
 
-### 7. **High Scalability**
-- Optimized for performance, even in large-scale, distributed environments.
-- Lightweight components ensure low resource consumption.
+### Modular and Scalable Design
+- Plug-and-play modules for encryption, authentication, routing, and token management.
+- Scales efficiently even in resource-constrained environments (e.g., mobile clients).
+
+### Digital Signature Verification
+- Verifies message authenticity and integrity using **ECDsa** signatures.
+- Prevents tampering and validates the origin of messages.
+
+### Token-Based Proof of Work
+- Implements a token system for peer validation and incentivized interactions.
+- Tokens are issued for completed actions (e.g., message relays) and spent on data requests.
+
+### Reputation Management
+- Dynamic trust scores based on peer behavior and network contributions.
+- Penalizes malicious actions and rewards reliable participation.
+
+### High Scalability and Performance
+- Adaptive sharding splits the DHT into manageable chunks.
+- Dynamic load balancing ensures efficient resource use across nodes.
 
 ---
 
@@ -44,96 +55,76 @@ SPHERE (Secure Peer-to-Peer Hosted Encryption Record Exchange) is a robust frame
 
 ### Core Components
 
-#### 1. **Distributed Hash Table (DHT)**
-The DHT is the backbone of the SPHERE network, providing efficient node discovery and data exchange. Each node maintains a local table of other nodes, enabling:
-- Fast lookup of peers and resources.
-- Redundancy through distributed storage.
+#### Encryption Module (`Encryption.cs`)
+- Implements symmetric and asymmetric encryption.
+- Hybrid key management for secure communications.
+- Encrypted local symmetric keys (LSK) for contact data confidentiality.
 
-#### 2. **Encryption Module**
-The `Encryption.cs` file contains:
-- Symmetric encryption for message confidentiality.
-- Asymmetric encryption for key exchange and authentication.
-- A hybrid approach that combines the strengths of both.
+#### Packet Management (`Packet.cs`)
+- Defines and serializes packets for node-to-node communication.
+- Includes validation for packet types, TTL, and cryptographic signatures.
 
-#### 3. **Digital Signature System**
-Implemented in `SignatureGenerator.cs`:
-- Generates and verifies cryptographic signatures.
-- Protects data integrity and authenticates communication origins.
+#### Service Account Management (`ServiceAccountManager.cs`)
+- Manages encryption keys bound to service accounts for added security.
+- Uses CNG containers that prevent unauthorized key access.
 
-#### 4. **Packet Management**
-- `Packet.cs`: Defines the structure of data packets used in communication.
-- `PacketBuilder.cs` and `PacketReader.cs`: Handle serialization and deserialization of packets, ensuring efficient data exchange.
+#### Distributed Hash Table (DHT) (`DHT.cs`)
+- Handles decentralized storage and retrieval of contact, reputation, and transaction blocks.
+- Uses a **Kademlia-based routing algorithm** for efficient node lookups.
 
-#### 5. **Credential and Key Management**
-- `CredentialManager.cs` ensures secure handling of user credentials.
-- `KeyGenerator.cs` dynamically generates cryptographic keys for secure sessions.
+#### Networking Layer (`NetworkManager.cs`, `Client.cs`)
+- Handles all network communication between nodes.
+- Integrates **STUN/TURN** for NAT traversal and port discovery.
 
-#### 6. **Node and Client Management**
-- `Node.cs`: Defines the core behavior of SPHERE nodes, including message routing and data storage.
-- `Client.cs`: Manages client interactions, providing an interface for user applications to interact with the network.
+#### Reputation System (`Reputation.cs`)
+- Evaluates node behavior based on network participation.
+- Adjusts reputation scores dynamically.
 
-#### 7. **Block Contact System**
-- `BlockContact.cs`: Implements a mechanism for storing contact info in a secure way and provide access only to those with provided access.
+---
 
-### Security Features
+## Security Features
 
-#### End-to-End Encryption
-- Ensures that only intended recipients can decrypt messages.
-- Uses ephemeral session keys to minimize the risk of long-term key exposure.
-
-#### Secure Key Exchange
-- Diffie-Hellman key exchange for secure initial handshake.
-- Keys are never transmitted in plaintext, ensuring confidentiality.
-
-#### Authentication and Integrity
-- Digital signatures verify the sender's identity and ensure data has not been tampered with.
-- Hash-based Message Authentication Code (HMAC) provides an additional layer of integrity.
-
-#### Resistance to Attacks
-- Decentralized architecture mitigates risks associated with single points of failure.
-- Replay attacks are prevented through timestamped messages and nonce usage.
+- **End-to-End Encryption**: Each message is securely encrypted from sender to recipient.
+- **Secure Key Exchange**: Uses Diffie-Hellman key exchange for secure session initiation.
+- **Digital Signature Verification**: Validates message authenticity and integrity.
+- **Anti-Replay Protection**: Prevents replay attacks using timestamped messages and nonces.
 
 ---
 
 ## Getting Started
 
 ### Prerequisites
-- Visual Studio 2022 or later.
-- .NET Core SDK.
-- A basic understanding of C# and distributed systems.
+- Visual Studio 2022 or later
+- .NET Core SDK
+- Basic understanding of distributed systems and C#
 
 ### Installation
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/SPHERE.git
-   ```
-2. Open `SPHERE.sln` in Visual Studio.
-3. Build the solution to restore dependencies.
-4. Start the project by running the desired module or application.
+```bash
+git clone https://github.com/yourusername/SPHERE.git
+```
+1. Open `SPHERE.sln` in Visual Studio.
+2. Build the solution to restore dependencies.
+3. Run the project and bootstrap the network using available nodes.
 
 ---
 
 ## Contributing
-We welcome contributions to SPHERE! If you have ideas for improvements or want to report issues, feel free to contact us. 
+
+We welcome contributions! Please fork the repository, create a feature branch, and submit a pull request. Issues and feature suggestions are also encouraged.
 
 ---
 
-
 ## License
-This project is licensed under the [GPLv3 License](LICENSE). See the `LICENSE` file in the repository for more details.
+
+This project is licensed under the [GPLv3 License](LICENSE).
 
 ---
 
 ## Acknowledgments
 - Inspired by the need for secure and decentralized communication.
-- Special thanks to contributors and the open-source community for their support.
-
-For questions or feedback, feel free to open an issue or contact the repository maintainer.
+- Special thanks to contributors and the open-source community for ongoing support.
 
 ---
 
 ## Contact
-For questions or support, please reach out to [kl3mta3](https://github.com/kl3mta3) through GitHub or email.
-
-
-
+For questions or support, contact [kl3mta3](https://github.com/kl3mta3) through GitHub or via email.
