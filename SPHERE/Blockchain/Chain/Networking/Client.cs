@@ -83,7 +83,7 @@ namespace SPHERE.Networking
         };
 
         //Send a packet to a peer async
-        internal static async Task<bool> SendPacketToPeerAsync(string ip, int port, byte[] encryptedPacket)
+        internal static async Task<bool> SendPacketToPeerAsync(Node node, string ip, int port, byte[] encryptedPacket)
         {
             
             
@@ -93,7 +93,7 @@ namespace SPHERE.Networking
 
                     if (isTesting)
                     {
-                        byte[] sendersKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicTestNodeEncryptionKey);
+                        byte[] sendersKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicNodeEncryptionKey);
                         using TcpClient client = new TcpClient();
                         await client.ConnectAsync(ip, port);
                         using NetworkStream stream = client.GetStream();
@@ -101,7 +101,7 @@ namespace SPHERE.Networking
                         // Prepare the signature parts
                         byte[] keyLengthPrefix = BitConverter.GetBytes(sendersKey.Length);
                         // Generate signature as byte array from the signature generator.
-                        byte[] signatureBytes = SignatureGenerator.SignByteArray(encryptedPacket);
+                        byte[] signatureBytes = SignatureGenerator.SignByteArray(node, encryptedPacket);
                         // Convert the signature bytes to a Base64 string.
                         string signature = Convert.ToBase64String(signatureBytes);
                         // Now encode the signature string into bytes.
@@ -146,7 +146,7 @@ namespace SPHERE.Networking
                     }
                     else
                     {
-                        byte[] sendersKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey);
+                        byte[] sendersKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicNodeEncryptionKey);
                     using TcpClient client = new TcpClient();
                     await client.ConnectAsync(ip, port);
                     using NetworkStream stream = client.GetStream();
@@ -154,7 +154,7 @@ namespace SPHERE.Networking
                     // Prepare the signature parts
                     byte[] keyLengthPrefix = BitConverter.GetBytes(sendersKey.Length);
                     // Generate signature as byte array from the signature generator.
-                    byte[] signatureBytes = SignatureGenerator.SignByteArray(encryptedPacket);
+                    byte[] signatureBytes = SignatureGenerator.SignByteArray(node, encryptedPacket);
                     // Convert the signature bytes to a Base64 string.
                     string signature = Convert.ToBase64String(signatureBytes);
                     // Now encode the signature string into bytes.
@@ -260,8 +260,8 @@ namespace SPHERE.Networking
                     {
                         bool success = await node.NetworkManager.RetryAsync<bool>(async () =>
                         {
-                                byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(data, peer.PublicEncryptKey);
-                                bool success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedData);
+                                byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(node, data, peer.PublicEncryptKey);
+                                bool success = await Client.SendPacketToPeerAsync(node, peer.NodeIP, peer.NodePort, encryptedData);
 
                                 if (success)
                                 {
@@ -596,10 +596,10 @@ namespace SPHERE.Networking
                     try
                     {
 
-                        byte[] recipientsPublicKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateTestNodeEncryptionKey);
+                        byte[] recipientsPublicKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PrivateNodeEncryptionKey);
 
                         //  Decrypt using both the sender’s public key & recipient’s private key
-                        byte[] decryptedData = Encryption.DecryptPacketWithPrivateKey(packetData, senderPublicEncryptKey);
+                        byte[] decryptedData = Encryption.DecryptPacketWithPrivateKey(node, packetData, senderPublicEncryptKey);
 
                         packet = PacketBuilder.DeserializePacket(decryptedData);
 
@@ -658,10 +658,10 @@ namespace SPHERE.Networking
                 {
                     try
                     {
-                        byte[] recipientsPublicKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateNodeEncryptionKey);
+                        byte[] recipientsPublicKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PrivateNodeEncryptionKey);
 
                         //  Decrypt using both the sender’s public key & recipient’s private key
-                        byte[] decryptedData = Encryption.DecryptPacketWithPrivateKey(packetData, senderPublicEncryptKey);
+                        byte[] decryptedData = Encryption.DecryptPacketWithPrivateKey(node, packetData, senderPublicEncryptKey);
 
                         packet = PacketBuilder.DeserializePacket(decryptedData);
 

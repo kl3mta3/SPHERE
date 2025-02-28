@@ -106,10 +106,10 @@ namespace SPHERE.Blockchain
                 byte[] serializedResponse = Packet.PacketBuilder.SerializePacket(responsePacket);
 
                 // Encrypt with the requester's public key
-                byte[] encryptedResponse = Encryption.EncryptPacketWithPublicKey(serializedResponse, peer.PublicEncryptKey);
+                byte[] encryptedResponse = Encryption.EncryptPacketWithPublicKey(node, serializedResponse, peer.PublicEncryptKey);
 
                 // Send the response to the requester
-                bool success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedResponse);
+                bool success = await Client.SendPacketToPeerAsync(node, peer.NodeIP, peer.NodePort, encryptedResponse);
 
                 if (success)
                     SystemLogger.Log($"Successfully sent GetResponse for {block.Header.BlockId} Blocks to {peer.NodeIP}:{peer.NodePort}");
@@ -196,10 +196,10 @@ namespace SPHERE.Blockchain
             byte[] serializedPacket = Packet.PacketBuilder.SerializePacket(requestPacket);
 
             // Encrypt the packet with the peer's public key
-            byte[] encryptedPacket = Encryption.EncryptPacketWithPublicKey(serializedPacket, peer.PublicEncryptKey);
+            byte[] encryptedPacket = Encryption.EncryptPacketWithPublicKey(node, serializedPacket, peer.PublicEncryptKey);
 
             // Send the request to the peer
-            bool success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedPacket);
+            bool success = await Client.SendPacketToPeerAsync(node, peer.NodeIP, peer.NodePort, encryptedPacket);
             if (success)
             {
                 SystemLogger.Log($"Successfully requested {blockType} blocks from {peer.NodeId}");

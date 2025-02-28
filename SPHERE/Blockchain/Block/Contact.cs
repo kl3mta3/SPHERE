@@ -8,6 +8,9 @@ namespace SPHERE.Blockchain
     {
         public ContactMetaData MetaData { get; set; }               // Contacts needed MetaData.
         public ContactKeys Keys { get; set; }                       // Contacts needed Encryption keys. 
+        public EncryptedKeyParts KeySignatureParts { get; set; }    // Contacts Private key is encrypted and stored in parts with noise
+        public EncryptedKeyParts KeyEncryptionParts { get; set; }   // Contacts Private key is encrypted and stored in parts with noise
+        public List<(byte[], byte[])> AuthenticationData = new();   // Hashes user for User Authentication and VAlidation for Password reset and recovery.
 
         /// <summary>
         /// !!!
@@ -22,37 +25,30 @@ namespace SPHERE.Blockchain
         /// !!!
         /// <returns></returns>
         /// </summary>
-        public static Contact CreateNewContact(string displayName, string name, string blockId, string? avatarURL, string? description, Password privateKeyPassword)
+        public static Contact CreateNewContact(Node node, string displayName, string name, string blockId, string? avatarURL, string? description, Password privateKeyPassword)
         {
-            
-
+            PrivateKeyManager PrivateKeyManager = new();
             //Generate the set or Key Pairs needed  (Signature and Communication pair)
             KeyGenerator.GeneratePersonalKeyPairSets(privateKeyPassword);
+
             var semiPublicKey = KeyGenerator.GenerateSymmetricKey();
-            ServiceAccountManager.StorePublicKeyInContainerWithExportPlainText(semiPublicKey, KeyGenerator.KeyType.SemiPublicKey);
-            semiPublicKey = null;
+            PrivateKeyManager.SetPrivatePersonalKey(semiPublicKey, KeyGenerator.KeyType.SemiPublicKey);
 
             //used to encrypt the contact
             var localSymmetricKey = KeyGenerator.GenerateSymmetricKey();
-            ServiceAccountManager.StorePrivateKeyInContainerWithExportPlainText(localSymmetricKey, KeyGenerator.KeyType.LocalSymmetricKey, privateKeyPassword);
-            localSymmetricKey = null;
+            PrivateKeyManager.SetPrivatePersonalKey(localSymmetricKey, KeyGenerator.KeyType.LocalSymmetricKey);
 
             //the LocalSymmetricKey is Encrypted with the SemiPublicKey and attached to the block so only approved people with the semiPublicKey can decrypt the EncryptedLocalSymetricKey and then decrypt the contact. 
             var encryptedLocalSymmetricKey = Encryption.EncryptLocalSymmetricKey(localSymmetricKey, semiPublicKey);
-            ServiceAccountManager.StorePublicKeyInContainerWithExportPlainText(encryptedLocalSymmetricKey, KeyGenerator.KeyType.EncryptedLocalSymmetricKey);
-            encryptedLocalSymmetricKey = null;
-
-            //Create a GNC Certificate for the PrivatePersonalEncryptionKey to verify correct standards are used. For Node application quality checks. (May remove later) 
-            var GNCCert = SignatureGenerator.CreateSphereCNGCertificate(KeyGenerator.KeyType.PrivatePersonalEncryptionKey);
-            ServiceAccountManager.StoreKeyInContainerWithoutExport(GNCCert, KeyGenerator.KeyType.CNGCert);
-            GNCCert = null;
+            PrivateKeyManager.SetPrivatePersonalKey(encryptedLocalSymmetricKey, KeyGenerator.KeyType.EncryptedLocalSymmetricKey);
+          
 
             ContactKeys keys = new ContactKeys
             {
-                PublicPersonalEncryptionKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalEncryptionKey),
-                PublicPersonalSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalSignatureKey),
-                SemiPublicKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.SemiPublicKey),
-                LocalSymmetricKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.LocalSymmetricKey)
+                PublicPersonalEncryptionKey = PrivateKeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicPersonalEncryptionKey),
+                PublicPersonalSignatureKey = PrivateKeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicPersonalSignatureKey),
+                SemiPublicKey = semiPublicKey,
+                LocalSymmetricKey = localSymmetricKey
             };
 
             ContactMetaData metaData = new ContactMetaData
@@ -82,6 +78,7 @@ namespace SPHERE.Blockchain
             return encryptedContact;
 
         }
+
         /// <summary>
         /// The contact is intended to be the core of a block.  It will be encrypted with a Local Symmetric Key before it is placed on the block.  
         /// The purpose is to allow for users to control their data, but also gain the security and decentralization of a p2p DHT.
@@ -101,6 +98,7 @@ namespace SPHERE.Blockchain
         /// The merchant and even the verifying server do not have access.
         /// ***
         /// </summary>
+        /// 
         public class ContactMetaData()
         {
             public string DisplayName { get; set; }                     // User's display name
@@ -120,7 +118,7 @@ namespace SPHERE.Blockchain
         public class ContactKeys()
         {
             public byte[] SemiPublicKey { get; set; }                   // Semi-public key
-            public byte[] LocalSymmetricKey { get; set; }               // Unencrypted Local Symetric code used to encrypt the Contact. 
+            public byte[] LocalSymmetricKey { get; set; }               // Unencrypted Local Symmetric code used to encrypt the Contact. 
             public byte[] PublicPersonalEncryptionKey { get; set; }                 // Personal Communication key for encrypting messages only the user can decrypt
             public byte[] PublicPersonalSignatureKey { get; set; }              // Used to verify signatures created with the PrivateSignatureKey
         }

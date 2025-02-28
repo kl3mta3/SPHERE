@@ -31,10 +31,6 @@ namespace SPHERE.TestingLib
         private static readonly string testClientIP = "127.0.0.1";
         private static readonly int testClientListenerPort = 0;
 
-        //Test Service Account info
-        private static readonly string ServiceAccountName = "TestServiceAccount";
-        private static readonly string testCNGCertificate = "TestCNGCertificate";
-
         internal static Packet BuildTestPacket(PacketBuilder.PacketType packetType, string message, byte[] publicSigKey, byte[] publicEncKey)
         {
             PacketHeader header = PacketBuilder.BuildPacketHeader(packetType, 9999.ToString(), "Full", publicSigKey, publicEncKey, 6969, "127.0.0.1", 75);
@@ -53,50 +49,41 @@ namespace SPHERE.TestingLib
         //This is used to Create the Node and populate a fake DHT and RT
         public static  Node CreateTestNodeWithFakeSTUNAsync(NodeType nodeType)
         {
-
+            
             Node testNode = new Node();
-
+            testNode.Peer.NodeId = Node.GenerateKademliaId();
+            testNode.KeyManager = new();
+            testNode.KeyManager.SetNodeEncryptionFilePath(testNode);
             try
             {
                 Console.WriteLine($"Debug: Starting Create Client ");
                 Client client = new Client();
                 client.clientListenerPort = testClientListenerPort;
                 client.clientIP = IPAddress.Parse(testClientIP);
-                Console.WriteLine($"Debug: Starting Create TestNode ");
+                Console.WriteLine($"Debug: Starting Create TestNode "); 
 
                 try
                 {
-                    Console.WriteLine("Checking if CNG Keys Exist...");
-                    if (!DoesCngKeyExist(KeyGenerator.KeyType.PrivateTestNodeEncryptionKey) ||
-                        !DoesCngKeyExist(KeyGenerator.KeyType.PublicTestNodeEncryptionKey) ||
-                        !DoesCngKeyExist(KeyGenerator.KeyType.PrivateTestNodeSignatureKey) ||
-                        !DoesCngKeyExist(KeyGenerator.KeyType.PublicTestNodeSignatureKey))
-                    {
-                        Console.WriteLine("CNG Keys Missing. Generating Test Keys...");
-                        GenerateTestNodeKeyPairs();
-                    }
+                    Console.WriteLine("Generating Test Keys...");
+                    KeyGenerator.GenerateNodeKeyPairs(testNode);
+                    
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error Checking or Generating CNG Keys: {ex.Message}");
+                    Console.WriteLine($"Error-CreateTestNodeWithFakeSTUNAsync: Generating Key pairs. Reason: {ex.Message}");
                     throw;
                 }
 
                 try
                 {
                     Console.WriteLine("Retrieving Keys from Storage...");
-                    byte[] publicSigKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicTestNodeSignatureKey);
-                    byte[] privateSigKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateTestNodeSignatureKey);
-                    byte[] publicEncKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicTestNodeEncryptionKey);
-                    byte[] privateEncKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateTestNodeEncryptionKey);
+                    byte[] publicSigKey = testNode.KeyManager.UseKeyInStorageContainer(testNode, KeyGenerator.KeyType.PublicNodeSignatureKey);
+                    byte[] privateSigKey = testNode.KeyManager.UseKeyInStorageContainer(testNode, KeyGenerator.KeyType.PrivateNodeSignatureKey);
+                    byte[] publicEncKey = testNode.KeyManager.UseKeyInStorageContainer(testNode, KeyGenerator.KeyType.PublicNodeEncryptionKey);
+                    byte[] privateEncKey = testNode.KeyManager.UseKeyInStorageContainer(testNode, KeyGenerator.KeyType.PrivateNodeEncryptionKey);
 
                     string sigKeyBase64 = Convert.ToBase64String(publicSigKey);
                     string encKeyBase64 = Convert.ToBase64String(publicEncKey);
-
-
-                    Console.WriteLine($"Signature Public Key: {sigKeyBase64}");
-
-                    Console.WriteLine($"Encryption Public Key: {encKeyBase64}");
 
                 }
                 catch (Exception ex)
@@ -128,12 +115,12 @@ namespace SPHERE.TestingLib
                     Peer peer = new Peer
                     {
                         Node_Type = nodeType,
-                        NodeId = ServiceAccountManager.GenerateKademliaId(),
+                        NodeId = testNode.Peer.NodeId,
                         NodeIP = client.clientIP.ToString(),
                         NodePort = client.clientListenerPort,
                         PreviousNodesHash = Node.DefaultPreviousHash,
-                        PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicTestNodeSignatureKey),
-                        PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicTestNodeEncryptionKey),
+                        PublicSignatureKey = testNode.KeyManager.UseKeyInStorageContainer(testNode, KeyGenerator.KeyType.PublicNodeSignatureKey),
+                        PublicEncryptKey = testNode.KeyManager.UseKeyInStorageContainer(testNode, KeyGenerator.KeyType.PublicNodeEncryptionKey),
                     };
                     testNode.Peer = peer;
                 }
@@ -200,43 +187,41 @@ namespace SPHERE.TestingLib
             }
         }
 
-        public static bool DoesCngKeyExist(KeyGenerator.KeyType keytype)
-        {
-            string keyName = keytype.ToString();
-
-            try
-            {
-                return CngKey.Exists(keyName, CngProvider.MicrosoftSoftwareKeyStorageProvider);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error checking CNG key existence: {ex.Message}");
-                return false;
-            }
-        }
-
         //This is used to Create the Node With an Empty RT and DHT
         public  static Node CreateTestNodeWithNoDHTorRoutingTable(NodeType nodeType)
         {
 
 
-            Node testNode = new Node();
 
+            Node testNode = new Node();
+            string nodeId = Node.GenerateKademliaId();
+            testNode.Peer.NodeId = nodeId;
+            testNode.KeyManager = new();
+            testNode.KeyManager.SetNodeEncryptionFilePath(testNode);
 
             Client client = new Client();
             client.clientListenerPort = testClientListenerPort;
             client.clientIP = IPAddress.Parse(testClientIP);
 
-            if (!DoesCngKeyExist(KeyGenerator.KeyType.PrivateTestNodeEncryptionKey) || !DoesCngKeyExist(KeyGenerator.KeyType.PublicTestNodeEncryptionKey) || !DoesCngKeyExist(KeyGenerator.KeyType.PrivateTestNodeSignatureKey) || !DoesCngKeyExist(KeyGenerator.KeyType.PublicTestNodeSignatureKey))
+
+            try
             {
-                GenerateTestNodeKeyPairs();
+                Console.WriteLine("Generating Test Keys...");
+                KeyGenerator.GenerateNodeKeyPairs(testNode);
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error-CreateTestNodeWithFakeSTUNAsync: Generating Key pairs. Reason: {ex.Message}");
+                throw;
             }
 
-            byte[] publicSigKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicTestNodeSignatureKey);
-            byte[] priveateSigKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateTestNodeSignatureKey);
 
-            byte[] publicEncKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicTestNodeEncryptionKey);
-            byte[] privateEncKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PrivateTestNodeEncryptionKey);
+            byte[] publicSigKey = testNode.KeyManager.UseKeyInStorageContainer(testNode, KeyGenerator.KeyType.PublicNodeSignatureKey);
+            byte[] priveateSigKey = testNode.KeyManager.UseKeyInStorageContainer(testNode, KeyGenerator.KeyType.PrivateNodeSignatureKey);
+
+            byte[] publicEncKey = testNode.KeyManager.UseKeyInStorageContainer(testNode, KeyGenerator.KeyType.PublicNodeEncryptionKey);
+            byte[] privateEncKey = testNode.KeyManager.UseKeyInStorageContainer(testNode, KeyGenerator.KeyType.PrivateNodeEncryptionKey);
 
             Random random = new Random();
             // Generate NodePort
@@ -246,6 +231,7 @@ namespace SPHERE.TestingLib
                 Console.WriteLine($"Error: Generating NodePort {nodePort}. ");
             }
             client.clientListenerPort = nodePort;
+
             try
             {
 
@@ -253,7 +239,7 @@ namespace SPHERE.TestingLib
                 Peer peer = new Peer
                 {
                     Node_Type = nodeType,
-                    NodeId = ServiceAccountManager.GenerateKademliaId(),
+                    NodeId= nodeId,
                     NodeIP = client.clientIP.ToString(),
                     NodePort = client.clientListenerPort,
                     PreviousNodesHash = Node.DefaultPreviousHash,
@@ -277,9 +263,6 @@ namespace SPHERE.TestingLib
 
             try
             {
-
-
-
                 Console.WriteLine("Starting with a fresh state.");
                 testNode.ContactDHT = new DHT(); // Reinitialize
 
@@ -427,7 +410,7 @@ namespace SPHERE.TestingLib
                 try
                 {
                     // Generate NodeId
-                    string nodeId = ServiceAccountManager.GenerateKademliaId();
+                    string nodeId = Node.GenerateKademliaId();
                     if (string.IsNullOrWhiteSpace(nodeId))
                     {
                         Console.WriteLine($"Warning: Generated NodeId is null or empty for peer {i}.");
@@ -550,309 +533,6 @@ namespace SPHERE.TestingLib
             return routingTable;
         }
 
-        public static void StoreTestSignaturePrivateKey(byte[] keyBlob)
-        {
-            try
-            {
-                string keyName = KeyGenerator.KeyType.PrivateTestNodeSignatureKey.ToString();
-                var provider = CngProvider.MicrosoftSoftwareKeyStorageProvider;
-
-                if (CngKey.Exists(keyName, provider))
-                {
-                    Console.WriteLine($"Private signature key '{keyName}' already exists. Skipping storage.");
-                    return;
-                }
-
-                // 🔥 Create a persistent private key in CNG storage
-                var creationParams = new CngKeyCreationParameters
-                {
-                    Provider = provider,
-                    KeyUsage = CngKeyUsages.Signing, // ✅ Ensures this key is used for signing
-                    ExportPolicy = CngExportPolicies.AllowPlaintextExport
-                };
-
-                using var newCngKey = CngKey.Create(CngAlgorithm.ECDsaP256, keyName, creationParams);
-                newCngKey.SetProperty(new CngProperty("Length", BitConverter.GetBytes(256), CngPropertyOptions.None));
-
-                Console.WriteLine($"Private signature key '{keyName}' stored permanently in CNG.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error storing private signature key: {ex.Message}");
-            }
-        }
-
-        public static void StoreTestSignaturePublicKey(byte[] keyBlob)
-        {
-            try
-            {
-                string keyName = KeyGenerator.KeyType.PublicTestNodeSignatureKey.ToString();
-                var provider = CngProvider.MicrosoftSoftwareKeyStorageProvider;
-
-                if (CngKey.Exists(keyName, provider))
-                {
-                    Console.WriteLine($"Public signature key '{keyName}' already exists. Skipping storage.");
-                    return;
-                }
-
-                // 🔥 Create a persistent public key in CNG storage
-                var creationParams = new CngKeyCreationParameters
-                {
-                    Provider = provider,
-                    KeyUsage = CngKeyUsages.Signing // ✅ Ensures this key is used for signatures
-                };
-
-                using var newCngKey = CngKey.Create(CngAlgorithm.ECDsaP256, keyName, creationParams);
-                newCngKey.SetProperty(new CngProperty("Length", BitConverter.GetBytes(256), CngPropertyOptions.None));
-
-                Console.WriteLine($"Public signature key '{keyName}' stored permanently in CNG.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error storing public signature key: {ex.Message}");
-            }
-        }
-
-        public static void StoreEncryptionPrivateKey(byte[] keyBlob)
-        {
-            try
-            {
-                string keyName = KeyGenerator.KeyType.PrivateTestNodeEncryptionKey.ToString();
-                var provider = CngProvider.MicrosoftSoftwareKeyStorageProvider;
-
-                if (CngKey.Exists(keyName, provider))
-                {
-                    Console.WriteLine($"Private encryption key '{keyName}' already exists. Skipping storage.");
-                    return;
-                }
-
-                // 🔥 Create a persistent key in CNG storage
-                var creationParams = new CngKeyCreationParameters
-                {
-                    Provider = provider,
-                    KeyUsage = CngKeyUsages.KeyAgreement, // ✅ Ensure it's used for ECDH key exchange
-                    ExportPolicy = CngExportPolicies.AllowPlaintextExport
-                };
-
-                using var newCngKey = CngKey.Create(CngAlgorithm.ECDiffieHellmanP256, keyName, creationParams);
-                newCngKey.SetProperty(new CngProperty("Length", BitConverter.GetBytes(256), CngPropertyOptions.None));
-
-                Console.WriteLine($"Private encryption key '{keyName}' stored permanently in CNG.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error storing private encryption key: {ex.Message}");
-            }
-        }
-
-        public static void StoreEncryptionPublicKey(byte[] keyBlob)
-        {
-            try
-            {
-                string keyName = KeyGenerator.KeyType.PublicTestNodeEncryptionKey.ToString();
-                var provider = CngProvider.MicrosoftSoftwareKeyStorageProvider;
-
-                // 🔥 Use SubjectPublicKeyInfo format to avoid import issues
-                var format = CngKeyBlobFormat.GenericPublicBlob;
-
-                if (CngKey.Exists(keyName, provider))
-                {
-                    Console.WriteLine($"Public encryption key '{keyName}' already exists. Skipping storage.");
-                    return;
-                }
-
-                // 🔥 Create a persistent public key in CNG storage
-                var creationParams = new CngKeyCreationParameters
-                {
-                    Provider = provider,
-                    KeyUsage = CngKeyUsages.KeyAgreement
-                };
-
-                using var newCngKey = CngKey.Create(CngAlgorithm.ECDiffieHellmanP256, keyName, creationParams);
-                newCngKey.SetProperty(new CngProperty("Length", BitConverter.GetBytes(256), CngPropertyOptions.None));
-
-                Console.WriteLine($"Public encryption key '{keyName}' stored permanently in CNG.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error storing public encryption key: {ex.Message}");
-            }
-        }
-
-        public static void GenerateTestNodeKeyPairs()
-        {
-            Console.WriteLine(" Starting key pair generation...");
-
-            // ----- Signature Keys (ECDSA) -----
-            string sigPrivateKeyName = KeyGenerator.KeyType.PrivateTestNodeSignatureKey.ToString();
-            string sigPublicKeyName = KeyGenerator.KeyType.PublicTestNodeSignatureKey.ToString();
-
-            byte[] privateSigKeyBlob = null;
-            byte[] publicSigKeyBlob = null;
-
-            if (CngKey.Exists(sigPrivateKeyName))
-            {
-                Console.WriteLine($" Using existing signature key: {sigPrivateKeyName}");
-                using var sigKey = CngKey.Open(sigPrivateKeyName);
-                privateSigKeyBlob = sigKey.Export(CngKeyBlobFormat.Pkcs8PrivateBlob);
-                //publicSigKeyBlob = sigKey.Export(CngKeyBlobFormat.EccPublicBlob);
-            }
-            else
-            {
-                Console.WriteLine($" Creating new exportable signature key: {sigPrivateKeyName}");
-                var sigCreationParams = new CngKeyCreationParameters
-                {
-                    Provider = CngProvider.MicrosoftSoftwareKeyStorageProvider,
-                    ExportPolicy = CngExportPolicies.AllowPlaintextExport,  // Allow export in test mode
-                    KeyUsage = CngKeyUsages.Signing,
-
-                };
-
-                using var sigKey = CngKey.Create(CngAlgorithm.ECDsaP256, sigPrivateKeyName, sigCreationParams);
-                privateSigKeyBlob = sigKey.Export(CngKeyBlobFormat.Pkcs8PrivateBlob);
-
-
-              
-
-            }
-
-            if (CngKey.Exists(sigPublicKeyName))
-            {
-                Console.WriteLine($" Using existing signature key: {sigPublicKeyName}");
-                using var sigKey = CngKey.Open(sigPublicKeyName);
-                //privateSigKeyBlob = sigKey.Export(CngKeyBlobFormat.Pkcs8PrivateBlob);
-                publicSigKeyBlob = sigKey.Export(CngKeyBlobFormat.EccPublicBlob);
-            }
-            else
-            {
-                Console.WriteLine($" Creating new exportable signature key: {sigPrivateKeyName}");
-                var sigCreationParams = new CngKeyCreationParameters
-                {
-                    Provider = CngProvider.MicrosoftSoftwareKeyStorageProvider,
-                    ExportPolicy = CngExportPolicies.AllowPlaintextExport,  // Allow export in test mode
-                    KeyUsage = CngKeyUsages.Signing,
-
-                };
-
-                using var sigKey = CngKey.Create(CngAlgorithm.ECDsaP256, sigPublicKeyName, sigCreationParams);
-               // privateSigKeyBlob = sigKey.Export(CngKeyBlobFormat.Pkcs8PrivateBlob);
-
-
-                publicSigKeyBlob = sigKey.Export(CngKeyBlobFormat.EccPublicBlob);
-            }
-
-            // ----- Encryption Keys (ECDH) -----
-            string encPrivateKeyName = KeyGenerator.KeyType.PrivateTestNodeEncryptionKey.ToString();
-            string encPublicKeyName = KeyGenerator.KeyType.PublicTestNodeEncryptionKey.ToString();
-
-            byte[] privateEncKeyBlob = null;
-            byte[] publicEncKeyBlob = null;
-
-
-            if (CngKey.Exists(encPrivateKeyName))
-            {
-                Console.WriteLine($"🔑 Using existing encryption key: {encPrivateKeyName}");
-                using var encKey = CngKey.Open(encPrivateKeyName);
-                privateEncKeyBlob = encKey.Export(CngKeyBlobFormat.Pkcs8PrivateBlob);
-               // publicEncKeyBlob = encKey.Export(CngKeyBlobFormat.EccPublicBlob);
-            }
-            else
-            {
-                Console.WriteLine($"🔑 Creating new exportable encryption key: {encPrivateKeyName}");
-                var encCreationParams = new CngKeyCreationParameters
-                {
-                    Provider = CngProvider.MicrosoftSoftwareKeyStorageProvider,
-                    ExportPolicy = CngExportPolicies.AllowPlaintextExport, // Allow export in test mode
-                    KeyUsage = CngKeyUsages.KeyAgreement | CngKeyUsages.Decryption,
-
-                };
-
-                using var encKey = CngKey.Create(CngAlgorithm.ECDiffieHellmanP256, encPrivateKeyName, encCreationParams);
-                privateEncKeyBlob = encKey.Export(CngKeyBlobFormat.Pkcs8PrivateBlob);
-               // publicEncKeyBlob = encKey.Export(CngKeyBlobFormat.EccPublicBlob);
-            }
-
-            if (CngKey.Exists(encPublicKeyName))
-            {
-                Console.WriteLine($"🔑 Using existing encryption key: {encPublicKeyName}");
-                using var encKey = CngKey.Open(encPublicKeyName);
-               // privateEncKeyBlob = encKey.Export(CngKeyBlobFormat.Pkcs8PrivateBlob);
-                publicEncKeyBlob = encKey.Export(CngKeyBlobFormat.EccPublicBlob);
-            }
-            else
-            {
-                Console.WriteLine($"🔑 Creating new exportable encryption key: {encPublicKeyName}");
-                var encCreationParams = new CngKeyCreationParameters
-                {
-                    Provider = CngProvider.MicrosoftSoftwareKeyStorageProvider,
-                    ExportPolicy = CngExportPolicies.AllowPlaintextExport, // Allow export in test mode
-                    KeyUsage = CngKeyUsages.KeyAgreement | CngKeyUsages.Decryption,
-
-                };
-
-                using var encKey = CngKey.Create(CngAlgorithm.ECDiffieHellmanP256, encPublicKeyName, encCreationParams);
-               // privateEncKeyBlob = encKey.Export(CngKeyBlobFormat.Pkcs8PrivateBlob);
-                publicEncKeyBlob = encKey.Export(CngKeyBlobFormat.EccPublicBlob);
-            }
-
-
-
-            // ----- Store the Keys -----
-            Console.WriteLine(" Storing the keys...");
-            StoreTestSignaturePrivateKey(privateSigKeyBlob);
-            StoreTestSignaturePublicKey( publicSigKeyBlob);
-            StoreEncryptionPrivateKey( privateEncKeyBlob);
-            StoreEncryptionPublicKey(publicEncKeyBlob);
-
-            Console.WriteLine(" Test node key pairs verified and stored (with exportable private keys)!");
-        }
-
-        public static void DeleteTestKeys()
-        {
-            Console.WriteLine(" Checking for test keys to delete...");
-
-            foreach (KeyGenerator.KeyType keyType in Enum.GetValues(typeof(KeyGenerator.KeyType)))
-            {
-                string keyName = keyType.ToString();
-
-                if (keyName.Contains("Test", StringComparison.OrdinalIgnoreCase))
-                {
-                    try
-                    {
-                        if (CngKey.Exists(keyName, CngProvider.MicrosoftSoftwareKeyStorageProvider))
-                        {
-                            Console.WriteLine($" Deleting test key: {keyName}");
-                            using (var key = CngKey.Open(keyName, CngProvider.MicrosoftSoftwareKeyStorageProvider))
-                            {
-                                key.Delete();
-                            }
-
-                            if (!CngKey.Exists(keyName, CngProvider.MicrosoftSoftwareKeyStorageProvider))
-                            {
-
-                                Console.WriteLine($" Test key '{keyName}' deleted successfully.");
-                            }
-                            else
-                            {
-
-                                Console.WriteLine($" Test key '{keyName}' deletion failed it still exists.");
-                            }
-                        }
-                        else
-                        {
-                            Console.WriteLine($" Test key '{keyName}' does not exist, skipping...");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($" Error deleting test key '{keyName}': {ex.Message}");
-                    }
-                }
-            }
-
-            Console.WriteLine(" Finished deleting test keys.");
-        }
-
         // This is used to allow for retries on sending out messages to other nodes.
         private static async Task<T> TestRetryAsync<T>(Func<Task<T>> action, int maxRetries = 3, int delayMilliseconds = 1000)
         {
@@ -896,8 +576,6 @@ namespace SPHERE.TestingLib
             var localSymmetricKey = testLocalSymmetricKey;
 
             var encryptedLocalSymmetricKey = testLocalEncryptedSymmetricKey;
-
-            var GNCCert = testCNGCertificate;
 
             ContactKeys keys = new ContactKeys
             {

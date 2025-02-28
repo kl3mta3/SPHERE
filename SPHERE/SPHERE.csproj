@@ -26,28 +26,6 @@
     <PackageReference Include="System.Drawing.Common" Version="9.0.2" />
   </ItemGroup>
 
-  <!-- <ItemGroup>
-    <ProjectReference Include="..\Packet\Packet.csproj" />
-  </ItemGroup>
 
- <Target Name="RemovePacketReference" BeforeTargets="Build">
-    <ItemGroup>
-      <ProjectReference Remove="..\Packet\Packet.csproj" />
-    </ItemGroup>
-  </Target>
-
-
-  <ItemGroup>
-    <None Include="..\Packet\bin\Release\net8.0\win-x64\Packet.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-  
-  <Target Name="CopyPacketDll" AfterTargets="Build">
-    <Copy
-        SourceFiles="..\Packet\bin\Release\net8.0\win-x64\Packet.dll"
-        DestinationFolder="$(OutputPath)"
-        Condition="Exists('..\Packet\bin\Release\net8.0\win-x64\Packet.dll')" />
-  </Target>-->
 
 </Project>

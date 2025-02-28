@@ -66,12 +66,12 @@ namespace SPHERE.Networking
                         try
                         {
                             // Encrypt the packet using the recipient's public communication key
-                            byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(data, peer.PublicEncryptKey);
+                            byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(node, data, peer.PublicEncryptKey);
                             SystemLogger.Log($"Debug-BrodcastConnectionToNetwork: Packet encrypted. Encrypted Data Length: {encryptedData.Length} bytes");
 
                             // Send the encrypted data and signature to the recipient
                             SystemLogger.Log($"Debug-BrodcastConnectionToNetwork: Sending packet to NODE: {peer.NodeId.Substring(0, 6)} at {peer.NodeIP}:{peer.NodePort}...");
-                            bool success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedData);
+                            bool success = await Client.SendPacketToPeerAsync(node, peer.NodeIP, peer.NodePort, encryptedData);
 
                             if (!success)
                             {
@@ -115,7 +115,6 @@ namespace SPHERE.Networking
 
         }
 
-
         //-----Pings-----\\
 
         //Ping a single peer. Returns True or false based on successful ping. 
@@ -137,11 +136,12 @@ namespace SPHERE.Networking
                         TTL = "1"
                     },
                     Content = Convert.ToBase64String(Encoding.UTF8.GetBytes("PingRequest")),
-                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Encoding.UTF8.GetBytes("PingRequest")))
+                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(node, Encoding.UTF8.GetBytes("PingRequest")))
                 };
 
                 // Send the ping and wait for a response
                 bool success = await Client.SendPacketToPeerAsync(
+                    node,
                     peer.NodeIP,
                     peer.NodePort,
                     Encoding.UTF8.GetBytes(pingPacket.Content)
@@ -209,24 +209,25 @@ namespace SPHERE.Networking
                         NodeId = node.Peer.NodeId,
                         IPAddress = node.Client.clientIP.ToString(),
                         Port = node.Client.clientListenerPort.ToString(),
-                        PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
-                        PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
+                        PublicSignatureKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicNodeSignatureKey),
+                        PublicEncryptKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicNodeEncryptionKey),
                         Packet_Type = "Pong",
                         TTL = "1"
                     },
                     Content = Convert.ToBase64String(Encoding.UTF8.GetBytes("Pong")),
-                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Encoding.UTF8.GetBytes("Pong")))
+                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(node, Encoding.UTF8.GetBytes("Pong")))
                 };
 
                 // Serialize and send the response packet
                 byte[] encryptedResponseData = Encryption.EncryptPacketWithPublicKey(
+                    node,
                     Encoding.UTF8.GetBytes(responsePacket.Content),
                     node.Peer.PublicEncryptKey
 
                 );
                 await RetryAsync<bool>(async () =>
                 {
-                    bool success = await Client.SendPacketToPeerAsync(senderIPAddress, senderPort, encryptedResponseData);
+                    bool success = await Client.SendPacketToPeerAsync(node, senderIPAddress, senderPort, encryptedResponseData);
 
                     if (success)
                     {
@@ -304,21 +305,22 @@ namespace SPHERE.Networking
                         NodeId = node.Peer.NodeId,
                         IPAddress = node.Client.clientIP.ToString(),
                         Port = node.Client.clientListenerPort.ToString(),
-                        PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
-                        PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
+                        PublicSignatureKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicNodeSignatureKey),
+                        PublicEncryptKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicNodeEncryptionKey),
                         Packet_Type = Packet.PacketBuilder.PacketType.PingPal.ToString(),
                         TTL = "1"
                     },
                     Content = Convert.ToBase64String(Encoding.UTF8.GetBytes("PingPal")),
-                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Encoding.UTF8.GetBytes("PingPal")))
+                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(node, Encoding.UTF8.GetBytes("PingPal")))
                 };
 
                 byte[] data = Packet.PacketBuilder.SerializePacket(responsePacket);
 
-                byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(data, peer.PublicEncryptKey);
+                byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(node, data, peer.PublicEncryptKey);
 
                 // Send the ping and wait for a response
                 bool success = await Client.SendPacketToPeerAsync(
+                    node,
                     peer.NodeIP,
                     peer.NodePort,
                     encryptedData
@@ -386,17 +388,17 @@ namespace SPHERE.Networking
                         NodeId = node.Peer.NodeId,
                         IPAddress = node.Client.clientIP.ToString(),
                         Port = node.Client.clientListenerPort.ToString(),
-                        PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
-                        PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
+                        PublicSignatureKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicNodeSignatureKey),
+                        PublicEncryptKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicNodeEncryptionKey),
                         Packet_Type = Packet.PacketBuilder.PacketType.PongPal.ToString(),
                         TTL = "1"
                     },
                     Content = Convert.ToBase64String(Encoding.UTF8.GetBytes("PongPal")),
-                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Encoding.UTF8.GetBytes("Pong")))
+                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(node, Encoding.UTF8.GetBytes("Pong")))
                 };
 
                 // Serialize and send the response packet
-                byte[] encryptedResponseData = Encryption.EncryptPacketWithPublicKey(
+                byte[] encryptedResponseData = Encryption.EncryptPacketWithPublicKey(node,
                     Encoding.UTF8.GetBytes("PongPal"),
                     node.Peer.PublicEncryptKey
 
@@ -409,7 +411,7 @@ namespace SPHERE.Networking
                     {
                         node.TokenManager.pingPals.Add(senderPeer, DateTime.UtcNow);
 
-                        bool success = await Client.SendPacketToPeerAsync(senderIPAddress, senderPort, encryptedResponseData);
+                        bool success = await Client.SendPacketToPeerAsync(node, senderIPAddress, senderPort, encryptedResponseData);
 
                         if (success)
                         {
@@ -432,7 +434,7 @@ namespace SPHERE.Networking
                         if (DateTime.UtcNow - lastPing > TimeSpan.FromHours(24))
                         {
                             node.TokenManager.pingPals.Remove(senderPeer);
-                            TokenManager.PushToken token = node.TokenManager.CreatePushToken(node.Peer.NodeId, senderPeer.NodeId);
+                            TokenManager.PushToken token = node.TokenManager.CreatePushToken(node, senderPeer.NodeId);
                             await node.NetworkManager.SendTokenToPeer(node, senderPeer, token);
                             node.TokenManager.AddIssuedPushToken(token); 
                         }
@@ -510,21 +512,21 @@ namespace SPHERE.Networking
                         NodeId = node.Peer.NodeId,
                         IPAddress = node.Client.clientIP.ToString(),
                         Port = node.Client.clientListenerPort.ToString(),
-                        PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
-                        PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
+                        PublicSignatureKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicNodeSignatureKey),
+                        PublicEncryptKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicNodeEncryptionKey),
                         Packet_Type = Packet.PacketBuilder.PacketType.PongPal.ToString(),
                         TTL = "1"
                     },
                     Content = serilizedToken,
-                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Encoding.UTF8.GetBytes("Pong")))
+                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(node, Encoding.UTF8.GetBytes("Pong")))
                 };
 
                 byte[] bytes = Packet.PacketBuilder.SerializePacket(responsePacket);
-                byte[] encryptedResponseData = Encryption.EncryptPacketWithPublicKey(bytes, senderPeer.PublicEncryptKey);
+                byte[] encryptedResponseData = Encryption.EncryptPacketWithPublicKey(node, bytes, senderPeer.PublicEncryptKey);
 
                 await node.NetworkManager.RetryAsync<bool>(async () =>
                 {
-                   bool success= await Client.SendPacketToPeerAsync(senderPeer.NodeIP, senderPeer.NodePort, encryptedResponseData);
+                   bool success= await Client.SendPacketToPeerAsync(node, senderPeer.NodeIP, senderPeer.NodePort, encryptedResponseData);
 
                     if (success)
                         {
@@ -696,11 +698,11 @@ namespace SPHERE.Networking
 
 
 
-                    byte[] encryptedResponseData = Encryption.EncryptPacketWithPublicKey(responseData, recipientPublicEncryptKey);
+                    byte[] encryptedResponseData = Encryption.EncryptPacketWithPublicKey(node, responseData, recipientPublicEncryptKey);
 
                     // Send the encrypted response data and signature to the recipient
                     SystemLogger.Log($"Debug-PeerListResponse: Sending response to {recipientIPAddress}:{recipientPort}...");
-                    success = await Client.SendPacketToPeerAsync(recipientIPAddress, recipientPort, encryptedResponseData);
+                    success = await Client.SendPacketToPeerAsync(node, recipientIPAddress, recipientPort, encryptedResponseData);
 
 
 
@@ -768,10 +770,10 @@ namespace SPHERE.Networking
                 byte[] serializedResponse = Packet.PacketBuilder.SerializePacket(responsePacket);
 
                 // Encrypt with the requester's public key
-                byte[] encryptedResponse = Encryption.EncryptPacketWithPublicKey(serializedResponse, peer.PublicEncryptKey);
+                byte[] encryptedResponse = Encryption.EncryptPacketWithPublicKey(node, serializedResponse, peer.PublicEncryptKey);
 
                 // Send the response to the requester
-                bool success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedResponse);
+                bool success = await Client.SendPacketToPeerAsync(node, peer.NodeIP, peer.NodePort, encryptedResponse);
 
                 if (success)
                     SystemLogger.Log($"Successfully sent PushToken to {peer.NodeIP}:{peer.NodePort}");
@@ -907,10 +909,10 @@ namespace SPHERE.Networking
                     try
                     {
 
-                        byte[] encryptedPacket = Encryption.EncryptPacketWithPublicKey(serializedPacket, peer.PublicEncryptKey);
+                        byte[] encryptedPacket = Encryption.EncryptPacketWithPublicKey(node, serializedPacket, peer.PublicEncryptKey);
 
 
-                        bool success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedPacket);
+                        bool success = await Client.SendPacketToPeerAsync(node, peer.NodeIP, peer.NodePort, encryptedPacket);
 
                         if (!success)
                         {
@@ -1015,10 +1017,10 @@ namespace SPHERE.Networking
                         byte[] serializedResponse = Packet.PacketBuilder.SerializePacket(responsePacket);
 
                         // Encrypt with the requester's public key
-                        byte[] encryptedResponse = Encryption.EncryptPacketWithPublicKey(serializedResponse, packet.Header.PublicEncryptKey);
+                        byte[] encryptedResponse = Encryption.EncryptPacketWithPublicKey(node, serializedResponse, packet.Header.PublicEncryptKey);
 
                         // Send the response to the requester
-                        bool success = await Client.SendPacketToPeerAsync(packet.Header.IPAddress, int.Parse(packet.Header.Port), encryptedResponse);
+                        bool success = await Client.SendPacketToPeerAsync(node, packet.Header.IPAddress, int.Parse(packet.Header.Port), encryptedResponse);
                         if (success)
                             SystemLogger.Log($"Successfully sent GetResponse for {requestedBlockIds.Count} Blocks to {packet.Header.IPAddress}:{packet.Header.Port}");
                         else
@@ -1054,8 +1056,8 @@ namespace SPHERE.Networking
 
                             try
                             {
-                                byte[] encryptedPacket = Encryption.EncryptPacketWithPublicKey(serializedPacket, peer.PublicEncryptKey);
-                                 success = await Client.SendPacketToPeerAsync(peer.NodeIP, peer.NodePort, encryptedPacket);
+                                byte[] encryptedPacket = Encryption.EncryptPacketWithPublicKey(node, serializedPacket, peer.PublicEncryptKey);
+                                 success = await Client.SendPacketToPeerAsync(node, peer.NodeIP, peer.NodePort, encryptedPacket);
                             }
                             catch (Exception ex)
                             {
@@ -1126,7 +1128,7 @@ namespace SPHERE.Networking
 
                 if (senderPeer != null)
                 {
-                    TokenManager.PushToken token = node.TokenManager.CreatePushToken(node.Peer.NodeId, senderPeer.NodeId);
+                    TokenManager.PushToken token = node.TokenManager.CreatePushToken(node, senderPeer.NodeId);
                     await node.NetworkManager.SendTokenToPeer(node, senderPeer, token);
                     node.TokenManager.AddIssuedPushToken(token);
 
@@ -1395,7 +1397,7 @@ namespace SPHERE.Networking
                 try
                 {
                     Reputation reputation = new();
-                    reputation.CreateReputation(node.Peer.NodeId, peer.NodeId, reason);
+                    reputation.CreateReputation(node, peer.NodeId, reason);
 
                     string content = JsonSerializer.Serialize(reputation);
 
@@ -1407,13 +1409,13 @@ namespace SPHERE.Networking
                             NodeId = node.Peer.NodeId,
                             IPAddress = node.Client.clientIP.ToString(),
                             Port = node.Client.clientListenerPort.ToString(),
-                            PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
-                            PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
+                            PublicSignatureKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicNodeSignatureKey),
+                            PublicEncryptKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicNodeEncryptionKey),
                             Packet_Type = Packet.PacketBuilder.PacketType.ReputationUpdate.ToString(),
                             TTL = "1"
                         },
                         Content = content,
-                        Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Convert.FromBase64String(content))),
+                        Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(node, Convert.FromBase64String(content))),
                     };
 
                     // Send the response to the requester
@@ -1478,7 +1480,7 @@ namespace SPHERE.Networking
 
                 //Check is we have the Reputation Block in the ReputationDHT.
                 Block block = node.ReputationDHT.GetBlock(reputation.UpdateIssuedByNodeId);
-                Reputation newReputation = Reputation.UpdatedReputation(reputation, reputation.UpdateIssuedByNodeId, Reputation.GetReputationReasonFromString(reputation.Reason));
+                Reputation newReputation = Reputation.UpdatedReputation(node, reputation, reputation.UpdateIssuedByNodeId, Reputation.GetReputationReasonFromString(reputation.Reason));
 
                 if (block != null)
                 {
@@ -1496,7 +1498,7 @@ namespace SPHERE.Networking
                         Reputation.ReputationReason reason= Reputation.GetReputationReasonFromString(reputation.Reason);
                         string serialiszedNewReputation = JsonSerializer.Serialize(newReputation);
                         Block newBlock = Block.CreateReputationBlock(
-                            senderPeer.NodeId,
+                            node,
                             "UNKNOWN",
                             serialiszedNewReputation,
                             EncryptionAlgorithm.AES256
@@ -1583,12 +1585,12 @@ namespace SPHERE.Networking
                 byte[] serializedResponse = Packet.PacketBuilder.SerializePacket(responsePacket);
 
                 // Encrypt with the requester's public key
-                byte[] encryptedResponse = Encryption.EncryptPacketWithPublicKey(serializedResponse, packet.Header.PublicEncryptKey);
+                byte[] encryptedResponse = Encryption.EncryptPacketWithPublicKey(node, serializedResponse, packet.Header.PublicEncryptKey);
 
                 // Send the response to the requester
                 await node.NetworkManager.RetryAsync<bool>(async () =>
                 {
-                    bool success = await Client.SendPacketToPeerAsync(packet.Header.IPAddress, int.Parse(packet.Header.Port), encryptedResponse);
+                    bool success = await Client.SendPacketToPeerAsync(node, packet.Header.IPAddress, int.Parse(packet.Header.Port), encryptedResponse);
                     if (success)
                     {
                         SystemLogger.Log($"Successfully sent ReputationResponse for {requestedNodeId} to {packet.Header.IPAddress}:{packet.Header.Port}");

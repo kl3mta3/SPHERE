@@ -45,8 +45,10 @@ namespace SPHERE.Configure
             public string Signature { get; set; }
         }
 
-        public PushToken CreatePushToken(string issuerId, string receiverId)
+        public PushToken CreatePushToken(Node node, string receiverId)
         {
+            string issuerId=node.Peer.NodeId;
+
             PushToken token = new PushToken
             {
                 IssuerId = issuerId,
@@ -55,7 +57,7 @@ namespace SPHERE.Configure
             };
 
             token.TokenId = GenerateTokenId(token.IssuerId, token.ReceiverId, token.Timestamp);
-            token.Signature = SignatureGenerator.SignPushToken(token);
+            token.Signature = SignatureGenerator.SignPushToken(node, token);
 
             return token;
         }

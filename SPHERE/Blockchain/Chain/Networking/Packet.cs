@@ -253,7 +253,7 @@ namespace SPHERE.Networking
                     writer.Write(packet.Header.NodeId);
 
                     if (string.IsNullOrEmpty(packet.Header.Node_Type))
-                        throw new ArgumentNullException(nameof(packet.Header.Node_Type), "NodeId cannot be null or empty.");
+                        throw new ArgumentNullException(nameof(packet.Header.Node_Type), "NodeType cannot be null or empty.");
                     writer.Write(packet.Header.Node_Type);
 
                     if (string.IsNullOrEmpty(packet.Header.IPAddress))

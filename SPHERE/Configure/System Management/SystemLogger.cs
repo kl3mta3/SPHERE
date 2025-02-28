@@ -39,6 +39,12 @@ namespace SPHERE.Configure.Logging
                     Console.WriteLine($"Logging failed: {ex.Message}");
                 }
             }
+            else
+            {
+               // Console.WriteLine(message);
+
+            }
+            
         }
 
     }

@@ -69,8 +69,7 @@ namespace SPHERE.Blockchain
         internal ConcurrentDictionary<string, DateTime> issuedTokens = new();
         internal ConcurrentDictionary<string, Reputation.RepPacketEntry> seenRepPackets = new();
 
-
-
+        internal PrivateKeyManager KeyManager = new PrivateKeyManager();
         internal TokenManager TokenManager = new TokenManager();
         internal NetworkManager NetworkManager = new NetworkManager();
         internal ScheduledTaskManager ScheduledTasks = new ScheduledTaskManager();
@@ -102,17 +101,22 @@ namespace SPHERE.Blockchain
 
             //create a node.
             Node node = new Node();
-
+            string nodeId = GenerateKademliaId();
             //Create a client for the node using STUN. 
 
-            // Thread-safe key generation
-            lock (stateLock)
+            try
             {
+                node.KeyManager.SetNodeEncryptionFilePath(node);
+                NodeKeyStorageFile keyFile = node.KeyManager.LoadKeyFile();
                 //Check to see if Keys exist.
-                if (!ServiceAccountManager.KeyContainerExists(KeyGenerator.KeyType.PublicNodeSignatureKey) || !ServiceAccountManager.KeyContainerExists(KeyGenerator.KeyType.PublicNodeEncryptionKey))
+                if (keyFile==null)
                 {
-                    KeyGenerator.GenerateNodeKeyPairs();
+                    KeyGenerator.GenerateNodeKeyPairs(node);
                 }
+            }
+            catch (Exception ex)
+            {
+                SystemLogger.Log($"Error- CreateNode: Error checking for Node Key File. Reason: {ex.Message}");
             }
 
             try
@@ -122,12 +126,12 @@ namespace SPHERE.Blockchain
                 Peer peer = new Peer
                 {
                     Node_Type = nodeType,
-                    NodeId = ServiceAccountManager.GenerateKademliaId(),
+                    NodeId = nodeId,
                     NodeIP = client.clientIP.ToString(),
                     NodePort = client.clientListenerPort,
                     PreviousNodesHash = DefaultPreviousHash, // Placeholder value
-                    PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
-                    PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
+                    PublicSignatureKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicNodeSignatureKey),
+                    PublicEncryptKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicNodeEncryptionKey),
                 };
 
                 // Assign header to node
@@ -199,7 +203,9 @@ namespace SPHERE.Blockchain
 
             //create a node.
             Node node = new Node();
-
+            node.Peer.NodeId = Node.GenerateKademliaId();
+            node.KeyManager = new();
+            node.KeyManager.SetNodeEncryptionFilePath(node);
             //Create a client get listeners using STUN. 
 
             Client client = new Client();
@@ -208,10 +214,16 @@ namespace SPHERE.Blockchain
             // Thread-safe key generation
             lock (stateLock)
             {
-                //Check to see if Keys exist.
-                if (!ServiceAccountManager.KeyContainerExists(KeyGenerator.KeyType.PublicNodeSignatureKey) || !ServiceAccountManager.KeyContainerExists(KeyGenerator.KeyType.PublicNodeEncryptionKey))
+                try
                 {
-                    KeyGenerator.GenerateNodeKeyPairs();
+                    Console.WriteLine("Generating Test Keys...");
+                    KeyGenerator.GenerateNodeKeyPairs(node);
+
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error-CreateTestNodeWithFakeSTUNAsync: Generating Key pairs. Reason: {ex.Message}");
+                    throw;
                 }
             }
             client.StartClientListenerWithSTUNSync(node, client);
@@ -223,12 +235,11 @@ namespace SPHERE.Blockchain
                 Peer peer = new Peer
                 {
                     Node_Type = nodeType,
-                    NodeId = ServiceAccountManager.GenerateKademliaId(),
                     NodeIP = client.clientIP.ToString(),
                     NodePort = client.clientListenerPort,
                     PreviousNodesHash = DefaultPreviousHash, // Placeholder value
-                    PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
-                    PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
+                    PublicSignatureKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicNodeSignatureKey),
+                    PublicEncryptKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicNodeEncryptionKey),
                 };
 
                 // Assign header to node
@@ -366,6 +377,18 @@ namespace SPHERE.Blockchain
                 SystemLogger.Log($"Error requesting block: {ex.Message}");
                 return false;
             }
+        }
+
+        //Generate Node and Block Id's
+        internal static string GenerateKademliaId()
+        {
+            byte[] randomBytes = new byte[32]; // 256 bits = 32 bytes
+
+            // Use the modern RandomNumberGenerator.Fill method
+            System.Security.Cryptography.RandomNumberGenerator.Fill(randomBytes);
+
+            // Convert the random bytes to a 64-character string
+            return BitConverter.ToString(randomBytes).Replace("-", "").ToLower();
         }
 
     }

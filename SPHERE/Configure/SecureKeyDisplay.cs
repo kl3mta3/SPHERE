@@ -1,7 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 using SPHERE.Security;
 using SPHERE.Configure.Logging;
-
+using SPHERE.Blockchain;
 namespace SPHERE.Configure
 {
     public class SecureKeyDisplay
@@ -25,7 +25,7 @@ namespace SPHERE.Configure
    
         }
 
-        public static void ShowPrivateKeySecureWindow(KeyGenerator.KeyType keyType, Password password)
+        public static void ShowPrivateKeySecureWindow(Node node, KeyGenerator.KeyType keyType, Password password)
         {
             
             try
@@ -36,14 +36,9 @@ namespace SPHERE.Configure
                     throw new ArgumentNullException(nameof(password),"Password can not be null");
                 }
 
-                if (keyType==null)
-                {
-                    throw new ArgumentNullException( "A Key Type is required.");
-
-                }
 
                 // Retrieve the private key securely, validating with the password if necessary
-                string privateKeyString = ServiceAccountManager.ExportPrivateKeyFromContainer(keyType, password.Value);
+                string privateKeyString = Convert.ToBase64String(node.KeyManager.UseKeyInStorageContainer(node, keyType));
 
                 // Show the private key securely using a native Windows dialog
                 SecureKeyDisplay.ShowPrivateKeySecurely(privateKeyString);

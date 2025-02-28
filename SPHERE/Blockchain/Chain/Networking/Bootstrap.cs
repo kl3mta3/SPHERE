@@ -72,13 +72,13 @@ namespace SPHERE.Networking
                     bool success = new bool();
 
                     // Encrypt the packet using the recipient's public communication key
-                    byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(data, recipientsPublicEncryptKey);
+                    byte[] encryptedData = Encryption.EncryptPacketWithPublicKey(node, data, recipientsPublicEncryptKey);
                     SystemLogger.Log($"Debug-SendBootstrapRequest: Packet encrypted. Encrypted Data Length: {encryptedData.Length} bytes");
 
 
                     // Send the encrypted data and signature to the recipient
                     SystemLogger.Log($"Debug-SendBootstrapRequest: Sending packet to {iPAddress}:{port}...");
-                    success = await Client.SendPacketToPeerAsync(iPAddress, port, encryptedData);
+                    success = await Client.SendPacketToPeerAsync(node, iPAddress, port, encryptedData);
 
                     // If the send operation fails, throw an exception to trigger a retry
                     if (!success)
@@ -383,12 +383,12 @@ namespace SPHERE.Networking
                     bool success = new bool();
 
                     // Encrypt the response data using the recipient's public communication key
-                    byte[] encryptedResponseData = Encryption.EncryptPacketWithPublicKey(serializedPacket, recipientPublicEncryptKey);
+                    byte[] encryptedResponseData = Encryption.EncryptPacketWithPublicKey(node, serializedPacket, recipientPublicEncryptKey);
                     SystemLogger.Log($"Debug-SendBootstrapResponse: Encrypted response data. Encrypted size: {encryptedResponseData.Length} bytes");
 
                     // Send the encrypted response data and signature to the recipient
                     SystemLogger.Log($"Debug-SendBootstrapResponse: Sending response to {recipientIPAddress}:{recipientPort}...");
-                    success = await Client.SendPacketToPeerAsync(recipientIPAddress, recipientPort, encryptedResponseData);
+                    success = await Client.SendPacketToPeerAsync(node, recipientIPAddress, recipientPort, encryptedResponseData);
 
 
                     // If the send operation fails, throw an exception to trigger a retry

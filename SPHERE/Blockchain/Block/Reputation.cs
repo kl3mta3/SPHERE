@@ -83,9 +83,9 @@ namespace SPHERE.Blockchain
             }
         }
 
-        public Reputation CreateReputation(string receivingNodeId, string issuingNodeId, Reputation.ReputationReason reason)
+        public Reputation CreateReputation(Node node, string receivingNodeId, Reputation.ReputationReason reason)
         {
-
+            string issuingNodeId = node.Peer.NodeId;
 
             Reputation reputation = new Reputation
             {
@@ -96,13 +96,13 @@ namespace SPHERE.Blockchain
                 TotalUpdates = 1,
                 LastUpdated = DateTime.UtcNow,
                 Reason = reason.ToString(),
-                Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Encoding.UTF8.GetBytes(NodeId + ReputationScore + ReputationChange + UpdateNumber + TotalUpdates + LastUpdated + Reason + UpdateIssuedByNodeId))),
+                Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(node, Encoding.UTF8.GetBytes(NodeId + ReputationScore + ReputationChange + UpdateNumber + TotalUpdates + LastUpdated + Reason + UpdateIssuedByNodeId))),
                 UpdateIssuedByNodeId = issuingNodeId
             };
             return reputation;
         }
 
-        public static Reputation UpdatedReputation(Reputation reputation, string issuingNodeId, Reputation.ReputationReason reason)
+        public static Reputation UpdatedReputation(Node node, Reputation reputation, string issuingNodeId, Reputation.ReputationReason reason)
         {
 
 
@@ -111,7 +111,7 @@ namespace SPHERE.Blockchain
             reputation.ReputationScore += Reputation.ParseReputationReason(reason);
             reputation.UpdateNumber += 1;
             reputation.TotalUpdates += 1;
-            reputation.Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Encoding.UTF8.GetBytes(reputation.NodeId + reputation.ReputationScore + reputation.ReputationChange + reputation.UpdateNumber + reputation.TotalUpdates + reputation.LastUpdated + reputation.Reason + reputation.UpdateIssuedByNodeId)));
+            reputation.Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(node, Encoding.UTF8.GetBytes(reputation.NodeId + reputation.ReputationScore + reputation.ReputationChange + reputation.UpdateNumber + reputation.TotalUpdates + reputation.LastUpdated + reputation.Reason + reputation.UpdateIssuedByNodeId)));
             reputation.UpdateIssuedByNodeId = reputation.NodeId;
             return reputation;
 
@@ -142,13 +142,13 @@ namespace SPHERE.Blockchain
                         NodeId = node.Peer.NodeId,
                         IPAddress = node.Client.clientIP.ToString(),
                         Port = node.Client.clientListenerPort.ToString(),
-                        PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeSignatureKey),
-                        PublicEncryptKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicNodeEncryptionKey),
+                        PublicSignatureKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicNodeSignatureKey),
+                        PublicEncryptKey = node.KeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicNodeEncryptionKey),
                         Packet_Type = Packet.PacketBuilder.PacketType.ReputationRequest.ToString(),
                         TTL = "1"
                     },
                     Content = nodeIdToGet,
-                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(Convert.FromBase64String(nodeIdToGet))),
+                    Signature = Convert.ToBase64String(SignatureGenerator.SignByteArray(node, Convert.FromBase64String(nodeIdToGet))),
                 };
 
                 // Send the response to the requester

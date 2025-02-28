@@ -91,9 +91,6 @@ namespace SPHERE.Blockchain
             [JsonPropertyName("PublicEncryptionKey")]
             public required byte[] PublicEncryptionKey { get; set; }                  // This is the public key for encrypt messages to the user.
 
-            [JsonPropertyName("GNCCertificate")]
-            public  byte[] CNGCertificate { get; set; }                      // GNC Container Certificate for the Private Key, Used to validate application used correct security when storing privatekey. 
-
             [JsonPropertyName("CreatorNodeId")]
             public required string CreatorNodeId { get; set; } = "";                      // Node ID of the creator of the block
             
@@ -131,15 +128,12 @@ namespace SPHERE.Blockchain
 
 
         // Creating a Contact Block
-        public static Block CreateContactBlock(string nodeId, string previousHash, string encryptedContactData, EncryptionAlgorithm encryptionAlgorithm)
+        public static Block CreateContactBlock(Node node, string nodeId, string previousHash, string encryptedContactData, EncryptionAlgorithm encryptionAlgorithm)
         {
 
                 //Check to see if Keys exist.
-                if (!ServiceAccountManager.KeyContainerExists(KeyGenerator.KeyType.PublicPersonalSignatureKey) || !ServiceAccountManager.KeyContainerExists(KeyGenerator.KeyType.PrivatePersonalSignatureKey) || !ServiceAccountManager.KeyContainerExists(KeyGenerator.KeyType.PublicPersonalEncryptionKey) || !ServiceAccountManager.KeyContainerExists(KeyGenerator.KeyType.PrivatePersonalEncryptionKey))
-                {
-                  throw new ArgumentException(nameof(ServiceAccountManager), "One or more Key was Missing You should run KeyGenerator.GeneratePersonalKeyPairSets(string exportPassword). A password will be needed to be included for exporting private keys later.");
-                }
-
+           
+                PrivateKeyManager PrivateKeyManager = new();
                 DateTime creationTime = DateTime.Now;
 
                 var header = new BlockHeader
@@ -152,10 +146,9 @@ namespace SPHERE.Blockchain
                     LastUpdateTime = creationTime,
                     EncryptionAlgorithm = encryptionAlgorithm.ToString(),
                     KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
-                    PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalSignatureKey),
-                    PublicEncryptionKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalEncryptionKey),
+                    PublicSignatureKey = PrivateKeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicPersonalSignatureKey),
+                    PublicEncryptionKey = PrivateKeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicPersonalEncryptionKey),
                     CreatorNodeId = nodeId,
-                    CNGCertificate = SignatureGenerator.CreateSphereCNGCertificate(KeyGenerator.KeyType.PrivatePersonalEncryptionKey),
                 };
 
                 // Serialize and store contact data
@@ -168,7 +161,7 @@ namespace SPHERE.Blockchain
                 {
                     Header = header,
                     EncryptedContact = serializedContactData,
-                    EncryptedLocalSymmetricKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.EncryptedLocalSymmetricKey),
+                    EncryptedLocalSymmetricKey = PrivateKeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.EncryptedLocalSymmetricKey),
                 };
         }
 
@@ -180,10 +173,11 @@ namespace SPHERE.Blockchain
         }
 
         // Creating a Reputation Block
-        public static Block CreateReputationBlock(string nodeId, string previousHash, string reputationData, EncryptionAlgorithm encryptionAlgorithm)
+        public static Block CreateReputationBlock(Node node, string previousHash, string reputationData, EncryptionAlgorithm encryptionAlgorithm)
         {
             DateTime creationTime = DateTime.UtcNow;
-
+            PrivateKeyManager PrivateKeyManager = new();
+            string nodeId=node.Peer.NodeId;
             var header = new BlockHeader
             {
                 BlockId = BlockHeader.GenerateBlockID(),
@@ -194,10 +188,9 @@ namespace SPHERE.Blockchain
                 LastUpdateTime = creationTime,
                 EncryptionAlgorithm = encryptionAlgorithm.ToString(),
                 KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
-                PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalSignatureKey),
-                PublicEncryptionKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalEncryptionKey),
+                PublicSignatureKey =PrivateKeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicPersonalSignatureKey),
+                PublicEncryptionKey =PrivateKeyManager.UseKeyInStorageContainer(node,KeyGenerator.KeyType.PublicPersonalEncryptionKey),
                 CreatorNodeId = nodeId,
-                CNGCertificate = SignatureGenerator.CreateSphereCNGCertificate(KeyGenerator.KeyType.PrivatePersonalEncryptionKey),
             };
             header.BlockHash = header.CalculateBlockHash();
 
@@ -209,7 +202,7 @@ namespace SPHERE.Blockchain
             {
                 Header = header,
                 ReputationBlock = reputationData,
-                EncryptedLocalSymmetricKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.EncryptedLocalSymmetricKey),
+                EncryptedLocalSymmetricKey =PrivateKeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.EncryptedLocalSymmetricKey),
             };
         }
 
@@ -221,10 +214,11 @@ namespace SPHERE.Blockchain
         }
 
         // Creating a Reputation Block
-        public static Block CreateTransactionBlock(string nodeId, string previousHash, string transactionData, EncryptionAlgorithm encryptionAlgorithm)
+        public static Block CreateTransactionBlock(Node node, string previousHash, string transactionData, EncryptionAlgorithm encryptionAlgorithm)
         {
             DateTime creationTime = DateTime.UtcNow;
-
+            PrivateKeyManager PrivateKeyManager = new();
+            string nodeId = node.Peer.NodeId;
             var header = new BlockHeader
             {
                 BlockId = BlockHeader.GenerateBlockID(),
@@ -235,10 +229,9 @@ namespace SPHERE.Blockchain
                 LastUpdateTime = creationTime,
                 EncryptionAlgorithm = encryptionAlgorithm.ToString(),
                 KeyUsagePolicies = "MESSAGE_ENCRYPTION_ONLY",
-                PublicSignatureKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalSignatureKey),
-                PublicEncryptionKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.PublicPersonalEncryptionKey),
+                PublicSignatureKey =PrivateKeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicPersonalSignatureKey),
+                PublicEncryptionKey =PrivateKeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.PublicPersonalEncryptionKey),
                 CreatorNodeId = nodeId,
-                CNGCertificate = SignatureGenerator.CreateSphereCNGCertificate(KeyGenerator.KeyType.PrivatePersonalEncryptionKey),
             };
 
             header.BlockHash = header.CalculateBlockHash();
@@ -248,7 +241,7 @@ namespace SPHERE.Blockchain
             {
                 Header = header,
                 TransactionBlock = transactionData,
-                EncryptedLocalSymmetricKey = ServiceAccountManager.UseKeyInStorageContainer(KeyGenerator.KeyType.EncryptedLocalSymmetricKey),
+                EncryptedLocalSymmetricKey =PrivateKeyManager.UseKeyInStorageContainer(node, KeyGenerator.KeyType.EncryptedLocalSymmetricKey),
             };
         }
 

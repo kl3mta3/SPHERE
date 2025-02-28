@@ -1,9 +1,12 @@
-﻿using System;
+﻿using SPHERE.Configure;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using SPHERE.Blockchain;
+using SPHERE.Configure.Logging;
 
 namespace SPHERE.Security
 {
@@ -53,17 +56,17 @@ namespace SPHERE.Security
             LocalSymmetricKey,
             SemiPublicKey,
             CNGCert,
-            PublicTestNodeSignatureKey,
-            PrivateTestNodeSignatureKey,
-            PublicTestNodeEncryptionKey,
-            PrivateTestNodeEncryptionKey,
+            //PublicTestNodeSignatureKey,
+            //PrivateTestNodeSignatureKey,
+            //PublicTestNodeEncryptionKey,
+            //PrivateTestNodeEncryptionKey,
 
         }
         internal static void GeneratePersonalKeyPairSets(Password exportPassword)
         {
             using var signaturePair = ECDsa.Create(ECCurve.NamedCurves.nistP256);
             using var encryptPair = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
-
+            PrivateKeyManager PrivateKeyManager = new();
             if (signaturePair == null || encryptPair == null)
             {
                 throw new InvalidOperationException("Failed to create cryptographic key pairs.");
@@ -76,11 +79,16 @@ namespace SPHERE.Security
 
             try
             {
+                PrivateKeyManager.SetPrivatePersonalKey(privateSignatureKey, KeyType.PrivatePersonalSignatureKey);
+                PrivateKeyManager.SetPrivatePersonalKey(publicSignatureKey, KeyType.PublicPersonalSignatureKey);
+                PrivateKeyManager.SetPrivatePersonalKey(privateEncryptionKey, KeyType.PrivatePersonalEncryptionKey);
+                PrivateKeyManager.SetPrivatePersonalKey(publicEncryptionKey, KeyType.PublicPersonalEncryptionKey);
 
-                ServiceAccountManager.StorePrivateKeyInContainerWithExportPlainText(privateSignatureKey, KeyType.PrivatePersonalSignatureKey, exportPassword);
-                ServiceAccountManager.StoreKeyInContainerWithExport(publicSignatureKey, KeyType.PublicPersonalSignatureKey);
-                ServiceAccountManager.StorePrivateKeyInContainerWithExportPlainText(privateEncryptionKey, KeyType.PrivatePersonalEncryptionKey, exportPassword);
-                ServiceAccountManager.StoreKeyInContainerWithExport(publicEncryptionKey, KeyType.PublicPersonalEncryptionKey);
+
+                //ServiceAccountManager.StorePrivateKeyInContainerWithExportPlainText(privateSignatureKey, KeyType.PrivatePersonalSignatureKey, exportPassword);
+                //ServiceAccountManager.StoreKeyInContainerWithExport(publicSignatureKey, KeyType.PublicPersonalSignatureKey);
+                //ServiceAccountManager.StorePrivateKeyInContainerWithExportPlainText(privateEncryptionKey, KeyType.PrivatePersonalEncryptionKey, exportPassword);
+                //ServiceAccountManager.StoreKeyInContainerWithExport(publicEncryptionKey, KeyType.PublicPersonalEncryptionKey);
 
             }
             catch (Exception ex)
@@ -103,11 +111,14 @@ namespace SPHERE.Security
 
         }
 
-        internal static void GenerateNodeKeyPairs()
+        internal static void GenerateNodeKeyPairs(Node node)
         {
+            SystemLogger.Log($"Debug-GenerateNodeKeyPairs :Generating Node Key Pair.");
 
             using var nodeSigPair = ECDsa.Create(ECCurve.NamedCurves.nistP256);
             using var nodeEncPair = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+
+            PrivateKeyManager privateKeyManager = node.KeyManager;
 
             if (nodeSigPair == null || nodeEncPair == null)
             {
@@ -121,12 +132,10 @@ namespace SPHERE.Security
 
             try
             {
-
-                ServiceAccountManager.StoreKeyInContainerWithoutExport(privateSigKey, KeyType.PrivateNodeSignatureKey);
-                ServiceAccountManager.StorePublicKeyInContainerWithExportPlainText(publicSigKey, KeyType.PublicNodeSignatureKey);
-
-                ServiceAccountManager.StoreKeyInContainerWithoutExport(privateEncKey, KeyType.PrivateNodeEncryptionKey);
-                ServiceAccountManager.StoreKeyInContainerWithExport(privateEncKey, KeyType.PublicNodeEncryptionKey);
+                privateKeyManager.StoreNodeKeyLocally(privateSigKey, KeyType.PrivateNodeSignatureKey);
+                privateKeyManager.StoreNodeKeyLocally(publicSigKey, KeyType.PublicNodeSignatureKey);
+                privateKeyManager.StoreNodeKeyLocally(privateEncKey, KeyType.PrivateNodeEncryptionKey);
+                privateKeyManager.StoreNodeKeyLocally(publicEncKey, KeyType.PublicNodeEncryptionKey);           
             }
             catch (Exception ex)
             {
@@ -144,6 +153,7 @@ namespace SPHERE.Security
                 publicEncKey = null;
                 privateSigKey = null;
                 publicSigKey = null;
+                SystemLogger.Log($"Debug-GenerateNodeKeyPairs :Node Key Pairs Generated Successfully.");
             }
         }
 
